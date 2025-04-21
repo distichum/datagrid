@@ -275,10 +275,10 @@ Other common predicate function examples using lambdas:
     ;; the heading and should always be t.
     (vconcat (cons t (cdr mask)))))
 
-(defun datagrid--filter-vector-by-mask (vector mask)
-  "Filter a column by boolean MASK.
-This currently includes the heading, which should always get a t
-from the mask. It returns a filtered vector."
+(defun datagrid-filter-vector-by-mask (vector mask)
+  "Filter a vector by boolean MASK.
+The vector should include the heading and the mask should have a
+t in the first place. It returns a filtered vector."
   (let ((index 0))
     (vconcat
      (seq-filter (lambda (elmt)
@@ -289,19 +289,16 @@ from the mask. It returns a filtered vector."
 		 vector))))
 
 (defun datagrid-filter-by-mask (datagrid mask)
-  "Use a boolean MASK to filter DATAGRID columns.
-MASK must be a vector. The first element in the vector should be
-t since that is the heading and the mask should never remove a
-heading."
+  "Use a boolean MASK to filter DATAGRID.
+MASK must be a vector with the same length as datagrid columns
+and values must only be t or nil. The first element in the vector
+should be t since that is the heading and the mask should never
+remove headings. The functions returns a datagrid."
   (vconcat
    (cl-loop for vec across datagrid
-	    collect (datagrid--filter-vector-by-mask vec mask))))
+	    collect (datagrid-filter-vector-by-mask vec mask))))
 
-(defun datagrid-filter-by-column (pred column-index datagrid)
-  "Filter a DATAGRID column according to PRED.
-Base the filter operation off of data in COLUMN-INDEX."
-  (let* ((column (datagrid-get-column column-index datagrid))
-	 (pred-list (mapcar #'pred column)))))
+
 (defun datagrid-group-by (datagrid col-values)
   "Group data in DATAGRID according to COL-VALUES.
 The resulting structure is a 3D vector. The first dimension is a vector
@@ -313,8 +310,8 @@ contains the data from one column for one group. REWORD."
 	   vconcat (vector
 		    item
 		    (datagrid-filter-by-mask
-  		   datagrid
-  		   (datagrid-create-mask (lambda (x) (string-equal item x))
+  		     datagrid
+  		     (datagrid-create-mask (lambda (x) (string-equal item x))
 					   col-values datagrid)))))
 
 ;;;; Creating data grids from other data.
@@ -388,16 +385,40 @@ SEQ-REDUCE."
 				  (append vec-coded-vec nil)))))
     (when coded-vec (seq-reduce function coded-vec 0))))
 
-(defun datagrid-reduce-coded-vec-calc (func-abbrev index datagrid &optional var-list code)
-  "Reduce the FUNCTION across DATAGRID at INDEX.
-Return the result of calling FUNCTION with INIT and the first
-element of the indexed vector in DATAGRID, then calling FUNCTION
-with that result and the second element of that vector, then with
-that result and the third element of the vector, etc. FUNCTION
-will be called with INIT (and then the accumulated value) as the
-first argument, and the elements from the vector as the second
-argument. If DATAGRID is empty, return INIT and FUNCTION is not
-called.
+(defun datagrid-calc-function-wrapper (func-abbrev var1)
+  "Call a Calc function with variables.
+FUNC-ABBREV is a string for the Calc abbreviation for a function.
+VAR1 is a list or a vector. This function only handles
+single-variable statistics for vectors.
+
+You can find these functions by doing C-h f and typing calcFunc-
+and viewing completions. You can also find the functions in the
+Calc documentations in many places. Find the single-variable
+statistics at 10.7.1 - Single Variable Statistics. That list
+includes:
+
+vcount, vsum, vprod, vmax, vmean, vmeane, vmedian, vhmean,
+vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
+
+Also see the Calc function index. Usually you will find the Emacs
+lisp function name followed by the abbreviation. For
+example (calc-vector-mean) [vmean].
+
+Example: (datagrid-calc-function-wrapper \"vmax\" '(1 2 3 4 5 5000))"
+  (let* ((func-name (intern (concat "calcFunc-" func-abbrev)))
+	 (result (funcall func-name (cons 'vec var1))))
+    (string-to-number (math-format-number result))))
+
+(defun datagrid-reduce-coded-vec-calc (func-abbrev index datagrid &optional code)
+  "Reduce the FUNC-ABBREV across DATAGRID at INDEX using CODE.
+Return the result of calling the Calc function FUNC-ABBREV with
+INIT and the first element of the indexed vector in DATAGRID,
+then calling FUNC-ABBREV with that result and the second element
+of that vector, then with that result and the third element of
+the vector, etc. FUNC-ABBREV will be called with INIT (and then
+the accumulated value) as the first argument, and the elements
+from the vector as the second argument. If DATAGRID is empty,
+return INIT and FUNC-ABBREV is not called.
 
 This function and documentation string are derived from
 SEQ-REDUCE."
@@ -415,7 +436,37 @@ SEQ-REDUCE."
 	 (coded-vec (delq nil (or vec-coded-alist
 				  (append vec-coded-vec nil)
 				  vec))))
-    (when coded-vec (datagrid-calc-function-wrapper func-abbrev coded-vec var-list))))
+    (when coded-vec (datagrid-calc-function-wrapper func-abbrev coded-vec))))
+
+(defun datagrid-code-column (index datagrid code)
+  "Change data based on a code alist.
+DATAGRID is the vector of vectors. INDEX is the column to code.
+It is zero based counting. CODE is an alist where the keys are
+what is in datagrid and the values are the values. A Lickert
+scale may be coded as follows.
+
+'((\"Strongly Disagree\" 1)
+  (\"Disagree\"	2)
+  (\"Neither Agree nor Disagree\" 3)
+  (\"Agree\" 4)
+  (\"Strongly Agree\" 5))
+
+TODO: Provide better feedback regarding data values which are not
+found in the coding alist. I'm not sure what kind of feedback at
+this point. I should probably create a function that returns the
+original data values that return nil."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid."))
+  (let* ((vec (seq-subseq (aref datagrid index) 1))
+	 (vec-coded-alist (when (and (listp code)
+				     (cl-every #'consp code))
+			    (seq-map (lambda (x) (cadr (assoc x code #'string-equal))) vec)))
+	 (vec-coded-vec (when (datagridp code)
+			  (let ((key (seq-map (lambda (x) (aref code 0))))
+				(value (seq-map (lambda (x) (aref code 1))))))
+			  (seq-map (lambda (x) (aref value (seq-position key x))) vec))))
+    (or vec-coded-alist
+	(append vec-coded-vec nil))))
 
 (defun datagrid-column-max (index datagrid)
   "Find the maximum value in a specific column.
@@ -444,6 +495,30 @@ number."
   (let ((vec (seq-subseq (aref datagrid index) 1)))
     (/ (seq-reduce #'+ vec 0) (length vec))))
 
+(defun datagrid-column-frequencies (index datagrid)
+  "Find the frequency of elements occuring in a column.
+DATAGRID is the vector of vectors. INDEX is the zero based column
+number. The elements are compared using equal."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid."))
+  (let ((vec (seq-subseq (aref datagrid index) 1))
+	(counts (make-hash-table :test 'equal)))
+    (cl-loop for item across vec do
+	     (puthash item (1+ (gethash item counts 0)) counts))
+    ;; Convert to alist for easier viewing
+    (let (result)
+      (maphash (lambda (k v) (push (cons k v) result)) counts)
+      result)))
+
+(defun datagrid-column-mode (index datagrid)
+  "Find the statistical mode of a column.
+DATAGRID is the vector of vectors. INDEX is the zero based column
+number. The elements are compared using equal. Therefore, data
+does not have to be numeric to find the mode."
+  (let ((sorted-frequencies (sort (datagrid-column-frequencies index datagrid)
+				  (lambda (a b) (> (cdr a) (cdr b))))))
+    (caar sorted-frequencies)))
+
 (defun datagrid-column-unique (index datagrid)
   "Return unique items from a column."
   (interactive)
@@ -452,30 +527,30 @@ number."
   (let ((vec (seq-subseq (aref datagrid index) 1)))
     (seq-uniq vec)))
 
-(defun datagrid-calc-function-wrapper (func-abbrev var1 &rest var-list)
-  "Call a Calc function with variables.
-FUNC-ABBREV is a string for the Calc abbreviation for a function. VAR1
-is a list or a vector. VAR-LIST is a list of any other arguments that
-Calc functions may need.
 
- You can find these functions by doing C-h f and typing calcFunc- and
-viewing completions. You can also find the functions in the Calc
-documentations in many places. Find the single-variable statistics at
-9.7.1. Usually you will find the Emacs lisp function name followed by
-the abbreviation. For example (calc-vector-mean) [vmean].
+;;;; Summary reports
+(defun datagrid-report-lickert (datagrid index &optional code)
+  "Display statistic related to Lickert scales from a column.
+Use this only for ordinal data. DATAGRID is the vector of
+vectors. INDEX is the column to analyze. It uses zero based
+counting."
+  ;; Get rid of the mean and stdev and add quartile related measures.
+  ;; TODO: Pass coded data to the mode function.
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid."))
+  (let* ((stats-name '("vcount" "vmin" "vmax" "vmedian" "vmean" "vsdev"))
+	 (vec (if code
+		  (datagrid-code-column index datagrid code)
+		(datagrid-get-column index datagrid)))
+	 (stats (cl-loop for statn in stats-name
+			 ;; TODO: This is redoing the separating of the
+			 ;; vector out of the datagrid. Change later.
+			 collect (datagrid-reduce-coded-vec-calc statn index datagrid code))))
+    (append (cl-mapcar #'cons stats-name stats)
+	    (list (cons "mode" (datagrid-column-mode index datagrid))))))
 
-Example: (datagrid-calc-function-wrapper \"vmax\" '(1 2 3 4 5 5000))
+;;;; Misc work
+(cl-loop for col from 1 to 44
+	 collect (datagrid-report-lickert mysurvey col datagrid-coding-key1))
 
-TODO: VAR-LIST is not used. Make it work when I have a reason to."
-  (let* ((func-name (intern (concat "calcFunc-" func-abbrev)))
-	 (result (funcall func-name (cons 'vec var1))))
-    (string-to-number (math-format-number result))))
-
-;;;; I/O operations
-(defun datagrid-from-csv ()
-  "Import from CSV"
-  (interactive))
-
-(defun datagrid-to-csv ()
-  "Export to CSV"
-  (interactive))
+;; TODO: Create functions to gather quartile information.
