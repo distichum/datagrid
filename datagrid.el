@@ -274,18 +274,21 @@ REQUIRES: csv-mode"
 	  (forward-line))
 	(vconcat (apply #'cl-mapcar #'vector (nreverse data)))))))
 
-(defun datagrid-from-csv-s (buff)
+(defun datagrid-from-csv-s (buffer-or-name)
   "Return a datagrid from an open csv buffer.
 BUFF is the buffer name. If no buffer is given, use the current
 buffer.
 
 REQUIRES: csv-mode"
-  (interactive)
+  (interactive
+   (list
+    (read-buffer "Buffer: " (current-buffer) t)))
   (save-current-buffer
-    (set-buffer buff)
+    (set-buffer buffer-or-name)
     (save-excursion
       (let ((data nil)
-	    (2d-by-columns nil))
+	    (2d-by-column nil)
+	    (struct nil))
 	(beginning-of-buffer)
 	(while (not (eobp))
 	  ;; Build a list of lists of row data. Building a list using
@@ -298,7 +301,8 @@ REQUIRES: csv-mode"
 	(setq 2d-by-column (apply #'cl-mapcar #'list (nreverse data)))
 	(car 2d-by-column)
 	(vconcat (cl-loop for item in 2d-by-column
-			  collect (datagrid-seq-to-column-struct item t)))))))
+			  collect (datagrid-seq-to-column-struct
+				   item t)))))))
 
 ;; Use datagrid-add-columns and datagrid-add-row as alternative
 ;; datagrid building methods.
@@ -387,7 +391,15 @@ elements from the specified column, including the heading."
   (interactive)
   (aref datagrid index))
 
-(defun datagrid-get-row (row-num datagrid)
+(defun datagrid-get-column-s (datagrid index)
+  "Extract a column vector from DATAGRID at INDEX.
+DATAGRID is a vector of vectors. INDEX is the column to extract,
+with zero based counting. Returns a new vector containing all
+elements from the specified column, including the heading."
+  (interactive)
+  (datagrid-column-data (aref datagrid index)))
+
+(defun datagrid-get-row (datagrid row-num)
   "Extract an entire row from DATAGRID.
 DATAGRID is a vector of vectors. ROW-IDX is the index of the row to
 extract, with zero based counting. Row 0 contains the headings.
@@ -396,10 +408,26 @@ row."
   (interactive)
   (vconcat (seq-map (lambda (vec) (aref vec row-num)) datagrid)))
 
+(defun datagrid-get-row-s (datagrid row-num)
+  "Extract an entire row from DATAGRID.
+DATAGRID is a vector of vectors. ROW-IDX is the index of the row to
+extract, with zero based counting. Row 0 contains the headings.
+Returns a new vector containing all elements from the specified
+row."
+  (interactive)
+  (vconcat (seq-map (lambda (vec) (aref (datagrid-column-data vec)
+					row-num)) datagrid)))
+
 (defun datagrid-head (datagrid &optional num)
   "Return the first NUM elements of each DATAGRID column."
   (cl-loop for elt across datagrid
 	   vconcat (vector (seq-take elt (or num 5)))))
+
+(defun datagrid-head-s (datagrid &optional num)
+  "Return the first NUM elements of each DATAGRID column."
+  (cl-loop for x from 1 to num
+	   collect (datagrid-get-row-s datagrid num)))
+
 
 ;;;; Manipulation of data grids; they return a datagrid
 (defun datagrid-add-columns (datagrid seq)
@@ -474,7 +502,7 @@ the column to sort by. Created with the help of Claude.ai."
     result))
 
 ;;;; Filters and masks
-(defun datagrid-create-mask (pred index datagrid)
+(defun datagrid-create-mask (datagrid pred index)
   "Create a mask for a DATAGRID column at INDEX.
 PRED is a function of one argument. It will operate on the
 datagrid column/vector at INDEX. INDEX is zero based.
@@ -549,8 +577,9 @@ contains the data from one column for one group. REWORD."
 		    item
 		    (datagrid-filter-by-mask
   		     datagrid
-  		     (datagrid-create-mask (lambda (x) (string-equal item x))
-					   col-values datagrid)))))
+  		     (datagrid-create-mask datagrid
+					   (lambda (x) (string-equal item x))
+					   col-values)))))
 
 ;;;; Data analysis
 (defun datagrid-reduce-vec (function index datagrid &optional init)
@@ -624,7 +653,7 @@ Example: (datagrid-calc-function-wrapper \"vmax\" '(1 2 3 4 5 5000))"
 	 (result (funcall func-name (cons 'vec var1))))
     (string-to-number (math-format-number result))))
 
-(defun datagrid-reduce-coded-vec-calc (func-abbrev index datagrid &optional code)
+(defun datagrid-reduce-coded-vec-calc (datagrid func-abbrev index &optional code)
   "Reduce the FUNC-ABBREV across DATAGRID at INDEX using CODE.
 Return the result of calling the Calc function FUNC-ABBREV with
 INIT and the first element of the indexed vector in DATAGRID,
@@ -786,7 +815,7 @@ standard deviation."
 	 (stats (cl-loop for statn in stats-name
 			 ;; TODO: This is redoing the separating of the
 			 ;; vector out of the datagrid. Change later.
-			 collect (datagrid-reduce-coded-vec-calc statn index datagrid code))))
+			 collect (datagrid-reduce-coded-vec-calc datagrid statn index code))))
     (append (cl-mapcar #'cons stats-name stats)
 	    (list (cons "mode" (datagrid-column-mode index datagrid)))
 	    (list (cons "quartiles" (datagrid-column-quartiles index datagrid))))))
