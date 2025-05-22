@@ -73,9 +73,12 @@
                                (:copier datagrid-column-copy)
                                (:predicate datagrid-column-p))
   "A datagrid column contains a vector and attributes of that
-vector. Attributes include heading, data, lom, and code.
+vector. The vector may contain anything an Emacs vector may
+contain, but some functions in datagrid.el expect a single
+dimensional vector and consistent data types per vector.
+Attributes include heading, data, lom, and code.
 
-The levels of measurement (LOM) come from Stanley Smith Stevens
+The LOM, levels of measurement, come from Stanley Smith Stevens
 and may be one of the following:
 
   nominal
@@ -105,7 +108,7 @@ sorted and counted by computer programs."
   (lom nil :type string :documentation "Stanley Steven's levels of measurement.")
   (code nil :type list :documentation "An alist used to code or decode values."))
 
-(defvar datagrid-test-defstruct
+(defvar datagrid-example
   (vector (datagrid-column-make
 	   :heading "date"
 	   :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
@@ -125,6 +128,17 @@ sorted and counted by computer programs."
 	  (datagrid-column-make
 	   :heading "rating"
 	   :lom "ordinal")))
+
+(defvar datagrid-column-example
+  (datagrid-column-make :heading "I like Emacs."
+			:data [5 5 5 5 5]
+			:lom "ordinal"
+			:code  '(("Strongly disagree" . 1)
+				 ("Disagree"          . 2)
+				 ("Neutral"           . 3)
+				 ("Agree"             . 4)
+				 ("Strongly agree"    . 5)))
+  "An example datagrid-column structure.")
 
 ;;;; Making and changing data grids.
 (defun datagrid-from-alist (alist &optional extend-uneven)
@@ -146,6 +160,9 @@ a vector. X is the length of the shortest list value."
 	     else vconcat
 	     (vector (vconcat (seq-take item min-length))))))
 
+length))))))
+
+;; This function is wrong.
 (defun datagrid-seq-to-column-struct (seq &optional headingp lom code-struct)
   "Create a datagrid-column struct from a sequence.
 SEQ is the sequence of data. HEADINGP indicates whether to use the
@@ -153,14 +170,19 @@ first element in the sequence as a heading. If HEADINGP is nil then
 the first element is considered data. LOM is one of the
 datagrid-column lom: nominal, ordinal, interval, ratio,
 nil."
-  (datagrid-column-make :heading (when headingp (elt seq 0))
-			:data (if headingp
-				  (vconcat (seq-rest seq))
-				(vconcat seq))
-			:lom code-struct
-			:code code-struct))
+  (if-let* ((nothing-to-do (and (or (eq seq nil)
+				    (eq 0 (length seq)))
+				(eq t headingp))))
+      (error (concat "There cannot be a heading with no"
+		     "sequence or a sequence of length zero."))
+    (datagrid-column-make :heading (when headingp (elt seq 0))
+			  :data (if headingp
+				    (vconcat (seq-rest seq))
+				  (vconcat seq))
+			  :lom code-struct
+			  :code code-struct)))
 
-(defun datagrid-struct-from-alist (alist &optional extend-uneven)
+(defun datagrid-from-alist-s (alist &optional extend-uneven)
   "Create a datagrid from an alist using the datagrid-column struct."
   (interactive)
   (let* ((ralist (reverse alist))
@@ -339,7 +361,7 @@ of equal length. Returns nil otherwise."
            (let ((item (aref datagrid i)))
              (unless (and (vectorp item)
                           (= (length item) expected-length))
-               (setq valid nil)))
+	       (setq valid nil)))
            (setq i (1+ i)))
          valid)))
 
@@ -437,7 +459,52 @@ can be changed into a vector."
   (interactive)
   (when (and (datagridp datagrid)
 	     (= (length (aref datagrid 0)) (length seq)))
-    (vconcat datagrid (vector seq))))
+    (vconcat (datagrid-column-data datagrid) (vector seq))))
+
+(defun datagrid-column-set-length (dg-c N)
+  "Set the data in a datagrid column to N elements.
+Data may be truncated, extended with nils, or left the same."
+  (when-let* ((datagrid-column-p dg-c)
+	      (vec (datagrid-column-data dg-c))
+	      (len (length (datagrid-column-data dg-c))))
+    (if (= len N)
+	dg-c
+      (datagrid-column-make
+       :data (if (< N len)
+		 (seq-take vec N)
+	       ((seq-concatenate 'vector vec (make-vector (- N len) nil))))
+       :heading (datagrid-column-heading dg-c)
+       :lom (datagrid-column-lom dg-c)
+       :code (datagrid-column-code dg-c)))))
+
+(defun datagrid-add-column-s (datagrid &rest datagrid-columns)
+  "Add one datagrid-column struct to a datagrid.
+DATAGRID is a datagrid. DG-COL is one datagrid-column struct. The
+new column is always expanded or truncated to fit the length of
+the existing columns. All datagrid columns must have the same length."
+  (interactive)
+  (when-let*
+      ((datagridp (datagridp-s datagrid))
+       (datagrid-cols-p (not (member nil (mapcar #'datagrid-column-p
+						 datagrid-columns))))
+       ;; Get the length of the data in datagrid columns. This
+       ;; is the length the new sequences must conform to.
+       (col-len (length (datagrid-column-data (aref datagrid 0))))
+       ;; Truncate the data in each item of datagrid-columns.
+       (truncd (let ((truncall nil))
+		 (dolist (dg-c datagrid-columns trunc-all)
+		   (if (= (length (datagrid-column-data dg-c))
+			  (col-len))
+		       (setq trunc-all (cons dg-c trunc-all))
+		     (setq trunc-all (cons (datagrid-seq-to-column-struct
+					    (seq-take
+					     (datagrid-column-data dg-c)
+					     col-len)
+					    (datagrid-column-heading dg-c)
+					    (datagrid-column-lom dg-c)
+					    (datagrid-column-code dg-c))
+					   trunc-all)))))))
+    (seq-concatenate 'vector datagrid truncd)))
 
 (defun datagrid-add-row (datagrid seq)
   "Add one row with values.
@@ -824,6 +891,102 @@ standard deviation."
 ;; (cl-loop for col from 1 to 44
 ;; 	 collect (datagrid-report-lickert mysurvey col datagrid-coding-key1))
 
+;;;; --- ERT Tests ---
+;;;;; Written with the help of Google Gemini
+(ert-deftest test-datagrid-seq-to-column-struct-basic-with-heading ()
+  "Test basic creation with a list sequence and headingp = t."
+  (let* ((test-seq '("ColumnTitle" 10 20 30 40))
+         (column (datagrid-seq-to-column-struct test-seq t)))
+    (should (datagrid-column-p column))
+    (should (equal (datagrid-column-heading column) "ColumnTitle"))
+    (should (equal (datagrid-column-data column) [10 20 30 40]))
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-basic-no-heading ()
+  "Test basic creation with a list sequence and headingp = nil."
+  (let* ((test-seq '("Data1" "Data2" "Data3"))
+         (column (datagrid-seq-to-column-struct test-seq nil)))
+    (should (datagrid-column-p column))
+    (should (null (datagrid-column-heading column)))
+    (should (equal (datagrid-column-data column) ["Data1" "Data2" "Data3"]))
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-vector-input-with-heading ()
+  "Test with a vector sequence and headingp = t."
+  (let* ((test-seq ["VectorTitle" 100 200 300])
+         (column (datagrid-seq-to-column-struct test-seq t)))
+    (should (datagrid-column-p column))
+    (should (equal (datagrid-column-heading column) "VectorTitle"))
+    (should (equal (datagrid-column-data column) [100 200 300]))
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-with-code-struct-argument ()
+  "Test providing the code-struct argument.
+This tests the current behavior where code-struct sets both :lom and :code."
+  (let* ((test-seq '("Responses" "Yes" "No" "Yes"))
+         (coding '(("Yes" . 1) ("No" . 0)))
+         ;; The 'lom' argument ("nominal") here is effectively ignored by the function
+         ;; for setting the column's LOM, due to current implementation.
+         (column (datagrid-seq-to-column-struct test-seq t "nominal" coding)))
+    (should (datagrid-column-p column))
+    (should (equal (datagrid-column-heading column) "Responses"))
+    (should (equal (datagrid-column-data column) ["Yes" "No" "Yes"]))
+    ;; Actual behavior: lom slot is set by code-struct
+    (should (equal (datagrid-column-lom column) coding))
+    (should (equal (datagrid-column-code column) coding))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-lom-argument-effect ()
+  "Test the effect of the 'lom' argument when 'code-struct' is nil.
+As per current implementation, if code-struct is nil, the LOM slot also becomes nil,
+regardless of the 'lom' argument to the function."
+  (let* ((test-seq '("Measurements" 1.0 2.5))
+         ;; Providing "ratio" as lom argument, but code-struct is nil.
+         (column (datagrid-seq-to-column-struct test-seq t "ratio" nil)))
+    (should (datagrid-column-p column))
+    (should (equal (datagrid-column-heading column) "Measurements"))
+    (should (equal (datagrid-column-data column) [1.0 2.5]))
+    ;; Actual behavior: lom slot is nil because code-struct was nil.
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-empty-sequence-no-heading ()
+  "Test with an empty list sequence and headingp = nil."
+  (let* ((test-seq '())
+         (column (datagrid-seq-to-column-struct test-seq nil)))
+    (should (datagrid-column-p column))
+    (should (null (datagrid-column-heading column)))
+    (should (equal (datagrid-column-data column) [])) ; (vconcat nil) -> []
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-empty-sequence-with-heading ()
+  "Test with an empty list sequence and headingp = t. Expects error."
+  ;; (elt '() 0) will signal an args-out-of-range error.
+  (should-error (datagrid-seq-to-column-struct '() t))) ;:type 'args-out-of-range
+
+(ert-deftest test-datagrid-seq-to-column-struct-single-element-seq-with-heading ()
+  "Test with a single-element list sequence and headingp = t."
+  (let* ((test-seq '("OnlyHeader"))
+         (column (datagrid-seq-to-column-struct test-seq t)))
+    (should (datagrid-column-p column))
+    (should (equal (datagrid-column-heading column) "OnlyHeader"))
+    ;; (seq-rest '("OnlyHeader")) is nil, (vconcat nil) is []
+    (should (equal (datagrid-column-data column) []))
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
+
+(ert-deftest test-datagrid-seq-to-column-struct-single-element-seq-no-heading ()
+  "Test with a single-element list sequence and headingp = nil."
+  (let* ((test-seq '("OnlyData"))
+         (column (datagrid-seq-to-column-struct test-seq nil)))
+    (should (datagrid-column-p column))
+    (should (null (datagrid-column-heading column)))
+    (should (equal (datagrid-column-data column) ["OnlyData"]))
+    (should (null (datagrid-column-lom column)))
+    (should (null (datagrid-column-code column)))))
 ;;;; Extend seq to datagrid
 ;; TODO: Think more about creating a new sequence type that includes
 ;; both a datagrid-column sequence and a datagrid-row sequence. The
