@@ -160,8 +160,6 @@ a vector. X is the length of the shortest list value."
 	     else vconcat
 	     (vector (vconcat (seq-take item min-length))))))
 
-length))))))
-
 ;; This function is wrong.
 (defun datagrid-seq-to-column-struct (seq &optional headingp lom code-struct)
   "Create a datagrid-column struct from a sequence.
