@@ -8,7 +8,7 @@
 ;; Version: 0.1
 ;; Keywords: tools, convenience, sorting
 ;; URL: https://github.com/distichum/datagrid
-;; Package-Requires: (csv-mode calc)
+;; Package-Requires: ((emacs "28.1") (compat "30") (csv-mode) (calc))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -41,6 +41,11 @@
 ;; a csv buffer.
 
 ;;; Code
+(require 'cl-lib)
+(require 'cl-generic)
+(require 'csv-mode)
+(require 'calc)
+
 ;;;; Variables
 
 (defvar datagrid-test-alist '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
