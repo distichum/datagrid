@@ -143,9 +143,23 @@ ROWS is a list of lists that may vary in size."
   (let* ((max-cols (apply #'max (mapcar #'length rows)))
          ;; (padded (mapcar (lambda (r) (datagrid--pad-list r max-cols)) rows))
 	 (padded (cl-loop for row in rows
-			  collect (datagrid-pad-list row max-cols))))
+			  collect (datagrid--pad-list row max-cols))))
     (apply #'cl-mapcar #'list padded)))
 
+
+(defun datagrid-unknown-type-to-number (seq)
+  "Create a sequence of unknown types to numbers.
+Convert a sequence of unknown data types to a sequence of
+numbers."
+  (cl-loop for elt across seq
+	   collect (cond ((stringp elt) (if (equal elt "")
+					    nil
+					  (string-to-number elt)))
+			 ((numberp elt) elt)
+			 (t (error "%s cannot be coerced into a number."
+				   elt)))
+	   into result
+           finally return (vconcat result)))
 
 ;;;; Functions on datagrid columns:
 (defun datagrid-column-set-length (dg-c N)
@@ -575,12 +589,13 @@ REWORD."
 		       index))))))
 
 ;;;; Data analysis:
-(defun datagrid-reduce-vec (datagrid function index &optional code)
+(defun datagrid-reduce-vec (datagrid function index &optional code convert)
   "Reduce a FUNCTION across DATAGRID data at INDEX.
 Return the result of calling FUNCTION on the data vector at INDEX
 from a datagrid column. If CODE is nil, then column data is not
 decoded. If CODE is non-nil then decode data using the alist in
-the code slot of the datagrid column structure.
+the code slot of the datagrid column structure. If CONVERT is t,
+loop over the data to convert strings to numbers as needed.
 
 Example: (datagrid-reduce-vec datagrid-example #'+ 2)
 
@@ -589,9 +604,12 @@ SEQ-REDUCE."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((vec (if code
-		 (datagrid-decode-column datagrid index)
-	       (datagrid-column-data (aref datagrid index)))))
+  (let* ((vec (if code
+		  (datagrid-decode-column datagrid index)
+		(datagrid-column-data (aref datagrid index))))
+	 (vec (if convert
+		  (datagrid-unknown-type-to-number vec)
+		vec)))
     (seq-reduce function vec 0)))
 
 (defun datagrid-reduce-coded-vec (datagrid function index &optional init)
@@ -647,21 +665,41 @@ Example: (datagrid-calc-function-wrapper \"vmax\" '(1 2 3 4 5 5000))"
 	 (result (funcall func-name (cons 'vec seq))))
     (string-to-number (math-format-number result))))
 
-(defun datagrid-reduce-vec-calc (datagrid func-abbrev index &optional code)
+(defun datagrid-reduce-vec-calc (datagrid func-abbrev index &optional code convert)
   "Reduce a function, FUNC-ABBREV, across DATAGRID data.
 Return the result of calling the Calc function FUNC-ABBREV on the
-data vector at INDEX from a datagrid column. If CODE is nil, then column
+data in a datagrid column at INDEX. If CODE is nil, then column
 data is not decoded. If CODE is non-nil then decode data using
-the alist in the code slot of the datagrid column structure.
+the alist in the code slot of the datagrid column structure. If
+CONVERT is t, loop over the data to convert strings to numbers as
+needed.
+
+FUNC-ABBREV is a string for the Calc abbreviation for a function.
+You can find these functions by doing C-h f and typing calcFunc-
+and viewing completions. You can also find the functions in the
+Calc documentation in many places. Find the single-variable
+statistics at 10.7.1 - Single Variable Statistics. That list
+includes:
+
+vcount, vsum, vprod, vmax, vmean, vmeane, vmedian, vhmean,
+vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
+
+Also see the Calc function index. Usually you will find the Emacs
+Lisp function name followed by the abbreviation. For
+example (calc-vector-mean) [vmean].
 
 Nil data values are discarded before the calculation."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (or (when code (datagrid-decode-column datagrid index))
-		  (datagrid-column-data (aref datagrid index))))
-	 (return-vec (delq nil (append vec nil))))
-    (when return-vec (datagrid-calc-function-wrapper func-abbrev return-vec))))
+  (let* ((vec (if code
+		  (datagrid-decode-column datagrid index)
+		(datagrid-column-data (aref datagrid index))))
+	 (vec (if convert
+		  (datagrid-unknown-type-to-number vec)
+		vec))
+	 (vec (delq nil (append vec nil))))
+    (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
 (defun datagrid-decode-column (datagrid index)
   "Output a decoded datagrid column as a vector.
@@ -702,37 +740,47 @@ original data values that return nil."
 				 vec))))
     (vconcat coded-alist)))
 
-(defun datagrid-column-max (datagrid index &optional code)
+(defun datagrid-column-max (datagrid index &optional code convert)
   "Find the maximum value in a specific column.
 DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code as is."
+number. If CODE is t, then decode data first. If nil, take code
+as is. If CONVERT is t then try to convert strings to numbers
+before reducing."
   (interactive)
-  (datagrid-reduce-vec datagrid #'max index code))
+  (datagrid-reduce-vec datagrid #'max index code convert))
 
-(defun datagrid-column-min (datagrid index &optional code)
+(defun datagrid-column-min (datagrid index &optional code convert)
   "Find the minimum value in a specific column.
 DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code as is."
+number. If CODE is t, then decode data first. If nil, take code
+as is. If CONVERT is t then try to convert strings to numbers
+before reducing."
   (interactive)
-  (datagrid-reduce-vec datagrid #'min index code))
+  (datagrid-reduce-vec datagrid #'min index code convert))
 
-(defun datagrid-column-sum (datagrid index &optional code)
+(defun datagrid-column-sum (datagrid index &optional code convert)
   "Find the sum of a specific column.
 DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code as is."
+number. If CODE is t, then decode data first. If nil, take code
+as is. If CONVERT is t then try to convert strings to numbers
+before reducing."
   (interactive)
-  (datagrid-reduce-vec datagrid #'+ index code))
+  (datagrid-reduce-vec datagrid #'+ index code convert))
 
-(defun datagrid-column-avg (datagrid index &optional code)
+(defun datagrid-column-avg (datagrid index &optional code convert)
   "Find the average (mean) of a specific column.
 DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code as is."
+number. If CODE is t, then decode data first. If nil, take code
+as is. If CONVERT is t then try to convert strings to numbers
+before reducing."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((vec (if code
-		 (datagrid-decode-column datagrid index)
-	       (datagrid-column-data (aref datagrid index)))))
+  (let* ((vec (if code
+		  (datagrid-decode-column datagrid index)
+		(datagrid-column-data (aref datagrid index))))
+	 (vec (when convert
+		(datagrid-unknown-type-to-number vec))))
     (/ (seq-reduce #'+ vec 0) (length vec))))
 
 (defun datagrid-column-frequencies (datagrid index &optional code)
@@ -796,7 +844,7 @@ number. If CODE is t, then decode data first. If nil, take code as is."
     (seq-uniq vec)))
 
 ;;;; Summary reports
-(defun datagrid-report-lickert (datagrid index &optional code)
+(defun datagrid-report-lickert (datagrid index &optional code convert)
   "Display column statistics for Lickert scales.
 DATAGRID is a vector of datagrid structures. INDEX is the column
 to analyze. It uses zero based counting. If CODE is t then decode
@@ -812,18 +860,21 @@ mean and standard deviation."
 	 (vec (if code
 		  (datagrid-decode-column datagrid index)
 		(datagrid-column-data (aref datagrid index))))
+	 (vec (when convert
+		(datagrid-unknown-type-to-number vec)))
 	 ;; Create a temporary datagrid-column struct with one column
 	 ;; where the data has been converted from a string to a
 	 ;; number. Doing this in one of the reduce vector functions
 	 ;; would require it to be repeated so it is better to do
 	 ;; here.
 	 (dg (vector (datagrid-seq-to-column-struct
-		      (seq-map #'string-to-number vec) nil nil nil
-		      (datagrid-column-code (aref datagrid index)))))
+		      vec nil nil nil
+		      (when code (datagrid-column-code
+				  (aref datagrid index))))))
 	 (stats (cl-loop for statn in stats-name
 			 ;; TODO: This is redoing the separating of the
 			 ;; vector out of the datagrid. Change later.
-			 collect (datagrid-reduce-vec-calc dg statn 0 code))))
+			 collect (datagrid-reduce-vec-calc dg statn 0))))
     (append (cl-mapcar #'cons stats-name stats)
 	    ;; Using dg rather than datagrid so 0 index.
 	    (list (cons "mode" (datagrid-column-mode dg 0 code)))
