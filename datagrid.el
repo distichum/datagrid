@@ -45,6 +45,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'calc)
+(require 'calc-vec)
 (require 'csv-mode)
 
 
@@ -418,7 +419,7 @@ numbering."
   (let ((dg-col (aref datagrid column-num)))
     (aref (datagrid-column-data dg-col) row-num)))
 
-(defun datagrid-get-column (datagrid index)
+(defun datagrid-get-col-data (datagrid index)
   "Extract a column vector from DATAGRID at INDEX.
 DATAGRID is a vector of a datagrid column structure. INDEX is the column
 to extract, with zero based counting. Returns a new vector containing
@@ -426,7 +427,7 @@ all elements from the specified column, including the heading."
   (interactive)
   (datagrid-column-data (aref datagrid index)))
 
-(defun datagrid-get-row (datagrid row-num)
+(defun datagrid-get-row-data (datagrid row-num)
   "Extract an entire row from DATAGRID.
 DATAGRID is a vector of vectors. ROW-NUM is the index of the row to
 extract, with zero based counting. Row 0 contains the headings.
@@ -460,7 +461,7 @@ of rows (default 5)."
 	 (row-num (or row-num 5))
 	 (data
 	  (cl-loop for x from 0 below col-num
-		   collect (append (seq-take (datagrid-get-column datagrid x)
+		   collect (append (seq-take (datagrid-get-col-data datagrid x)
 					     row-num)
 				   nil))))
     ;; Transpose the output.
@@ -922,7 +923,7 @@ What should this not do?
 	 ;; list.
 	 (lst (if convert
 		  (seq-keep #'datagrid--prep-for-calc vec)
-		vec))
+		(seq-keep #'identity vec)))
 	 (stats (cl-loop for statn in stats-name
 			 collect (datagrid-calc-function-wrapper statn lst)))
 	 ;; Non-calc functions cannot use Calc format so reuse vec
