@@ -7,19 +7,8 @@ This GNU Emacs package provides functions to work with column oriented two dimen
 This package is very young and may change often.
 
 * Installation
-** Package-vc
-For the latest version, place the following code in your Emacs init.el file.
-
-#+begin_src emacs-lisp
-;; Requires Emacs 29 and git
-(unless (package-installed-p 'datagrid)
-   (package-vc-install "https://github.com/distichum/datagrid.el" nil nil 'datagrid))
-
-(require 'datagrid)
-#+end_src
-
 ** Manually
-Add cgpcallnums.el to your load-path and require.
+Add datagrid.el to your load-path and require.
 
 #+begin_src emacs-lisp
 (add-to-list 'load-path "path/to/datagrid.el")
