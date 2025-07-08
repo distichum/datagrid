@@ -1,0 +1,228 @@
+#+TITLE: datagrid.el - Manipulate 2d data grids
+#+AUTHOR: Joshua Lambert <jlambert@missouristate.edu>
+
+* Overview
+This GNU Emacs package provides functions to work with column oriented two dimensional data. The first dimension is a vector. The second dimension uses a custom data type to hold column data. Datagrids have some similarities to database tables, spreadsheets, and dataframes.
+
+This package is very young and may change often.
+
+* Installation
+** Package-vc
+For the latest version, place the following code in your Emacs init.el file.
+
+#+begin_src emacs-lisp
+;; Requires Emacs 29 and git
+(unless (package-installed-p 'datagrid)
+   (package-vc-install "https://github.com/distichum/datagrid.el" nil nil 'datagrid))
+
+(require 'datagrid)
+#+end_src
+
+** Manually
+Add cgpcallnums.el to your load-path and require.
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "path/to/datagrid.el")
+(require 'datagrid)
+#+end_src
+
+* What is a datagrid
+A datagrid is similar to a table of data where all table columns have an equal number of elements in them. Technically, a datagrid is a vector of datagrid-columns. Datagrid-columns are structures created with =cl-defstruct= that hold the column data and characteristics of that data. A datagrid-column structure has slots for column heading, the data, the level of measurement, and the column data's coding information.
+
+#+begin_src emacs-lisp
+  (vector (datagrid-column-make
+  	 :heading "date"
+  	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+  	 :lom nil)
+  	(datagrid-column-make
+  	 :heading "location"
+  	 :data ["somewhere" "out" "there" "far"]
+  	 :lom "ordinal"
+  	 :code  '(("somewhere" . 1)
+  		  ("out"       . 2)
+  		  ("there"     . 3)
+  		  ("far"       . 4))))
+#+end_src
+
+It evaluates to the following. See the documentation for =cl-defstruct= for details about the printed representation (structure reader syntax). =#s(...)= 
+
+#+begin_src emacs-lisp
+  [#s(datagrid-column "date"
+  		    ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+  		    "nominal"
+  		    nil)
+   #s(datagrid-column "location"
+  		    ["somewhere" "out" "there" "far"]
+  		    "ordinal"
+  		    (("somewhere" . 1) ("out" . 2) ("there" . 3) ("far" . 4)))]
+#+end_src
+
+** The heading
+- =(datagrid-column-heading datagrid-name)=: Access the heading of a datagrid column.
+** The data
+- =(datagrid-column-data datagrid-name)=: Access the data vector of a datagrid column.
+  - There must be N elements in each datagrid-column-data slot. In this documentation "data columns" typically means the (datagrid-column-data) slot of a structure.
+** Data coding information
+A datagrid-column may hold textual data such as: Strongly disagree, Disagree, Neutral, Agree, Strongly agree. Such data may be ranked from smallest to largest. Coding that data into numbers allows computers to more easily find statistics such as minimum, maximum, and median. The coding data must be provided in an alist such as the following one.
+
+#+begin_src emacs-lisp
+ '(('Strongly disagree' . 1)
+   ('Disagree'          . 2)
+   ('Neutral'           . 3)
+   ('Agree'             . 4)
+   ('Strongly agree'    . 5))
+#+end_src
+
+- =datagrid-column-add-code (datagrid index code)=: Set the coding for one or more datagrid columns. =Index= can be a number of a column or a list of column numbers. The coding will be added to the datagrid-column's structure for each of those columns.
+- =datagrid-column-decode (datagrid index)=: Return a vector where each element in the vector has been changed to the appropriate value based on the mapping in the datagrid-column code slot. Use this in conjunction with other functions.
+
+** Level of measurement
+The Level Of Measurement (LOM) may be one of the following:
+- nominal
+- ordinal
+- interval
+- ratio
+- nil
+
+The levels determine what statistics that datagrid reports return for that column of data: =datagrid-report-nominal=, =datagrid-report-ordinal=, =datagrid-report-interval=, =datagrid-report-ratio=.
+
+(The author recognizes that the reports will not be suitable for all cases and that some people disagree with using the four levels of measurement. Feel free to provide constructive feedback.)
+
+* Create a datagrid
+There are a number of ways to create a datagrid.
+- =datagrid-from-alist (alist &optional extend-uneven)=: Create a datagrid from a list of lists. The keys of the alist are the heading text and the values of the alist are the data. The values must be in a list.
+
+  #+begin_src emacs-lisp
+    (datagrid-from-alist '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
+    		       ("location" . ("somewhere" "out" "there" "far"))
+    		       ("precipitation" . (0.5 0 .25 1))
+    		       ("high-temp" . (15 20 32 22)))
+    		     t)
+  #+end_src
+  
+- =datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors.
+
+  #+begin_src emacs-lisp
+    (datagrid-from-vectors ["date" "2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+    		       ["location" "somewhere" "out" "there" "far"]
+    		       ["precipitation" 0.5 0 .25 1]
+    		       ["high-temp" 15 20 32 22])
+  #+end_src
+  
+- =datagrid-from-csv-file (file-path)=: Create a datagrid from a CSV file. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode set up.
+
+  #+begin_src emacs-lisp
+  (datagrid-from-csv-file "file-path")
+  #+end_src
+
+Create a datagrid-column on its own.
+- =datagrid-column-make (heading data lom code)=: Create a datagrid-column.
+
+  #+begin_src emacs-lisp
+    (datagrid-column-make :heading "date"
+    		      :data [0.5 0 .25 1]
+    		      :lom "ratio"
+    		      :code nil)
+  #+end_src
+
+Then, create a datagrid by making that datagrid-column structure the only element of a vector.
+
+  #+begin_src emacs-lisp
+    (vector (datagrid-column-make :heading "date"
+    			      :data [0.5 0 .25 1]
+    			      :lom "ratio"
+    			      :code nil))
+  #+end_src
+
+If you create a datagrid-column structure on its own, it is better to use datagrid-add-column than make all datagrid-column structures separately. All datagrid columns must have the same number of elements or =(datagridp)= will return nil so datagrid-add-column automatically extends data columns with nil values as needed.
+* Get information from or about datagrids
+- =datagridp (thing)=: Return t if thing is a datagrid, nil if not.
+- =datagrid-dimensions (datagrid)=: Return the two dimensions of the DATAGRID.
+- =datagrid-get-elt (datagrid column-num row-num)=: Return a value at a specific column and row.
+- =datagrid-get-col-data (datagrid index)=: Return the data slot of a datagrid column.
+- =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row of data.
+- =datagrid-col-index-by-header (datagrid header-text)=: Return the index number of the datagrid-column structure that has a heading of =header-text=. This is best used in conjunction with functions that require an "index" parameter.
+* Manipulate datagrids
+Emacs Lisp Vectors are immutable so all of these recreate datagrids based on the changes called for.
+
+- =datagrid-head (datagrid &optional column-num row-num)=: Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
+- =datagrid-add-column (datagrid &rest datagrid-columns)=: Add one or more datagrid-column structs to a datagrid.
+- =datagrid-add-row (datagrid seq)=: Add elements to the end of each datagrid-column. Datagrids are not meant for frequent insertions of row data. Such operations are possible but inefficient.
+- =datagrid-remove-column (datagrid index)=: Remove the DATAGRID column at INDEX. 
+- =datagrid-remove-row (datagrid index)=: Remove the DATAGRID row at INDEX.
+- =datagrid-sort (datagrid index)=: Sort a datagrid by a specific column. This assumes all data in a column is of the same data type.
+* Filters and masks
+- =datagrid-create-mask (datagrid pred index)=: Create a mask for a DATAGRID column at INDEX. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
+- =datagrid-filter-by-mask (column-struct mask)=: Use a boolean MASK to filter DATAGRID.
+- =datagrid-group-by (datagrid index)=: Group data in DATAGRID according to INDEX. This function will be slow for medium to large datasets that have many groupings. Filter the datagrid by what is needed first and then group. See the examples later in this document.
+* Data analysis
+- =datagrid-reduce-vec (datagrid function index &optional code convert)=: Reduce a FUNCTION using DATAGRID data at INDEX. As an example, the following code finds the sum of all data values from the column indexed at 2.
+  #+begin_src emacs-lisp
+    (datagrid-reduce-vec datagrid-example #'+ 2)
+  #+end_src
+- =datagrid-reduce-vec-calc (datagrid func-abbrev index &optional code convert)=: Reduce an Emacs Calc function, FUNC-ABBREV, using DATAGRID data. It operates only on single vector Calc functions. See the function document string for more details. The following example duplicates the results above.
+  #+begin_src emacs-lisp
+    (datagrid-reduce-vec-calc datagrid-example "vsum" 2)
+  #+end_src
+  
+* Statistical functions
+Some statistical measures of survey data are not included in Emacs. Therefore, datagrid.el includes the following:
+- =datagrid-column-frequencies (datagrid index &optional code)=: Find the frequency of elements occuring in a column.
+- =datagrid-column-quartiles (datagrid index &optional code)=: Find the first, second, and third quartile of data in a column.
+- =datagrid-column-mode (datagrid index &optional code)=: Find the mode, most often occurring item, of a column.
+- =datagrid-column-unique (datagrid index &optional code)=: Return unique items from a column.
+- =datagrid-column-mad (datagrid index &optional code)=: Calculate the median absolute deviation.
+
+* Reports
+The following functions return an opinionated list of statistical measures for each level of measurement. The measures are returned in a cons structure.
+
+- =datagrid-report-nominal (datagrid index)= 
+- =datagrid-report-ordinal (datagrid index &optional code convert)=
+- =datagrid-report-interval (datagrid index &optional code convert)=
+- =datagrid-report-ratio (datagrid index &optional code convert)=
+
+- =datagrid-report-all-lom (datagrid)=: Loop through each datagrid column and create a report based on the level of measurement.
+* Examples
+datagrid.el includes an example datagrid named =datagrid-example=. The following code will use that but it is small enough that the examples will be trivial.
+
+#+begin_src emacs-lisp
+  (datagrid-head datagrid-example)
+  (elt datagrid-example 0)
+  (datagrid-dimensions datagrid-example)
+  (datagrid-column-decode datagrid-example 1)
+  (datagrid-head datagrid-example)
+  (datagrid-sort datagrid-example 2)
+
+  (datagrid-add-row datagrid-example '(["2025-04-04" "far" 2 25 "ugliest"]
+    				     ["2025-04-05" "farrer" 3 26 "gooder"]))
+
+  (let ((col1 (datagrid-column-make
+    	     :heading "low-temp"
+    	     :data [5 0 4 -5]
+    	     :lom "interval"))
+        (col2 (datagrid-column-make
+    	     :heading "perception"
+    	     :data ["hot" "hotter" "hottest" "global-warming"]
+    	     :lom "interval"
+    	     :code '(("hot" . 0)
+    		     ("hotter" . 1)
+    		     ("hottest" . 2)
+    		     ("global-warming" . 3))))
+        (col3 (datagrid-column-make
+    	     :data [1 2 3 4])))
+    (datagrid-report-all-lom (datagrid-add-column datagrid-example col1 col2)))
+
+#+end_src
+
+Threading functions may make multiple steps more readable.
+
+#+begin_src emacs-lisp
+  (let ((mask (datagrid-create-mask
+      	     mygrid
+      	     (lambda (x) (string-prefix-p "lib" x))
+      	     (datagrid-row-index-by-header mygrid "group"))))
+    (thread-first
+      mygrid
+      (datagrid-filter-by-mask mask)
+      (datagrid-head 10 100)))
+#+end_src
