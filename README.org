@@ -47,9 +47,9 @@ It evaluates to the following. See the documentation for =cl-defstruct= for deta
 #+end_src
 
 ** The heading
-- =(datagrid-column-heading datagrid-name)=: Access the heading of a datagrid column.
+- =datagrid-column-heading (datagrid-name)=: Access the heading of a datagrid column.
 ** The data
-- =(datagrid-column-data datagrid-name)=: Access the data vector of a datagrid column.
+- =datagrid-column-data (datagrid-name)=: Access the data vector of a datagrid column.
   - There must be N elements in each datagrid-column-data slot. In this documentation "data columns" typically means the (datagrid-column-data) slot of a structure.
 ** Data coding information
 A datagrid-column may hold textual data such as: Strongly disagree, Disagree, Neutral, Agree, Strongly agree. Such data may be ranked from smallest to largest. Coding that data into numbers allows computers to more easily find statistics such as minimum, maximum, and median. The coding data must be provided in an alist such as the following one.
