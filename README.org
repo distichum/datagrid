@@ -172,7 +172,7 @@ The following functions return an opinionated list of statistical measures for e
 
 - =datagrid-report-all-lom (datagrid)=: Loop through each datagrid column and create a report based on the level of measurement.
 * Examples
-datagrid.el includes an example datagrid named =datagrid-example=. The following code will use that but it is small enough that the examples will be trivial.
+datagrid.el includes an example datagrid named =datagrid-example=.
 
 #+begin_src emacs-lisp
   (datagrid-head datagrid-example)
