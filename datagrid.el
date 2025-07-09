@@ -346,6 +346,21 @@ This is a lossy function."
 
 
 
+(defun datagrid-to-alist (datagrid &optional headings)
+  "Create a vector of vectors from a DATAGRID.
+If HEADINGS is non-nil, return headings as the first item in each
+list. Otherwise return only data."
+  (let ((hdngs (and headings
+		    (append (datagrid-get-headings datagrid) nil)))
+	(data (datagrid-to-vec-of-vec datagrid)))
+    (cl-loop for x from 0 below (length hdngs)
+	     collect (append (list (elt hdngs x))
+			     (append (elt data x) nil)))))
+
+(defun datagrid-to-org-table (datagrid)
+  "Return data to create an Org table."
+  (datagrid-safe-transpose (datagrid-to-alist datagrid t)))
+
 (defun datagrid-column-decode (datagrid index)
   "Output a decoded datagrid column as a vector.
 DATAGRID is the vector of structs. INDEX is the column number to
@@ -453,6 +468,11 @@ row."
   (vconcat (seq-map (lambda (vec) (aref (datagrid-column-data vec)
 					row-num))
 		    datagrid)))
+
+(defun datagrid-get-headings (datagrid)
+  "Create a vector from all DATAGRID headings."
+  (vconcat (cl-loop for elt across datagrid
+		    collect (datagrid-column-heading elt))))
 
 (defun datagrid-col-index-by-header (datagrid header-text)
   "Return the DATAGRID column number with HEADER-TEXT.
