@@ -421,6 +421,7 @@ of the research data and the value is another. For example:
 	       do (setf (datagrid-column-code (aref datagrid elt)) code))
     (setf (datagrid-column-code (aref datagrid index)) code)))
 
+
 ;;;; Datagrid utilities; results are not datagrids:
 (defun datagridp (datagrid)
   "Check if DATAGRID is a valid vector of datagrid-columns.
@@ -495,14 +496,15 @@ Return nil if the header is not found."
 COLUMN-NUM is the number of columns (default 5). ROW-NUM is the number
 of rows (default 5)."
   (let* ((col-num (or column-num 5))
-	 (row-num (or row-num 5))
-	 (data
-	  (cl-loop for x from 0 below col-num
-		   collect (append (seq-take (datagrid-get-col-data datagrid x)
-					     row-num)
-				   nil))))
-    ;; Transpose the output.
-    (apply #'cl-mapcar #'list data)))
+	 (row-num (or row-num 5)))
+    (cl-loop for x from 0 below col-num
+	     vconcat (vector (datagrid-column-make
+			      :heading (datagrid-column-heading
+					(elt datagrid x))
+			      :data (seq-take (datagrid-get-col-data datagrid x)
+					      row-num)
+			      :lom (datagrid-column-lom (elt datagrid x))
+			      :code (datagrid-column-code (elt datagrid x)))))))
 
 (defun datagrid-add-column (datagrid &rest datagrid-columns)
   "Add one or more datagrid-column structs to a datagrid.
@@ -1034,6 +1036,7 @@ measurement are treated as nominal data."
 			    (t
 			     (datagrid-report-nominal datagrid x)))))))
 
+
 ;;;; Create datagrid methods for seq
 ;; TODO: Think more about creating a new sequence type that includes
 ;; both a datagrid-column sequence and a datagrid-row sequence. The
