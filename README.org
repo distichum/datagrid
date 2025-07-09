@@ -215,3 +215,9 @@ Threading functions may make multiple steps more readable.
       (datagrid-filter-by-mask mask)
       (datagrid-head 10 100)))
 #+end_src
+
+In Org Mode, you can create tables from datagrids.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table datagrid-example)
+#+end_src
