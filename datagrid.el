@@ -319,8 +319,10 @@ REQUIRES: CSV-MODE"
 				   :heading (elt item 0)
 				   :data (seq-drop item 1))))))))
 
-(defun datagrid-from-csv-file (file-path)
+(defun datagrid-from-csv-file (file-path &optional headings)
   "Return a datagrid from a CSV file at FILE-PATH.
+If HEADINGS is nil, then there is not a headings row. If t, then there
+is. The default is t.
 
 REQUIRES: CSV-MODE"
   (with-temp-buffer
@@ -335,8 +337,10 @@ REQUIRES: CSV-MODE"
       (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
       (vconcat (cl-loop for item in 2d-by-column
                         collect (datagrid-column-make
-				 :heading (elt item 0)
-				 :data (seq-drop item 1)))))))
+				 :heading (when headings (elt item 0))
+				 :data (vconcat (if headings
+						    (seq-drop item 1)
+						  item))))))))
 
 (defun datagrid-to-vec-of-vec (datagrid)
   "Create a vector of vectors from a DATAGRID.
