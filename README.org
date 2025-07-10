@@ -1,4 +1,4 @@
-#+TITLE: datagrid.el - Emacs Lisp 2d data grids
+#+TITLE: datagrid.el - Emacs Lisp 2d data grid library
 #+AUTHOR: Joshua Lambert <jlambert@missouristate.edu>
 
 * Overview
