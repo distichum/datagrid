@@ -2,9 +2,9 @@
 #+AUTHOR: Joshua Lambert <jlambert@missouristate.edu>
 
 * Overview
-This GNU Emacs package provides functions to work with column oriented two dimensional data. The first dimension is a vector. The second dimension uses a custom data type to hold column data. Datagrids have some similarities to database tables, spreadsheets, and dataframes.
+This GNU Emacs package is an Elisp library for two dimensional data. The first dimension is a vector. The second dimension uses a custom data type to hold column data. Datagrids have some similarities to database tables, spreadsheets, and dataframes.
 
-This package is very young and may change often.
+This package is very young and may change often. *It does not provide a buffer user interface* but datagrid-to-org-table makes this possible from Org Mode code blocks.
 
 * Installation
 ** Manually
@@ -16,18 +16,19 @@ Add datagrid.el to your load-path and require.
 #+end_src
 
 * What is a datagrid
-A datagrid is similar to a table of data where all table columns have an equal number of elements in them. Technically, a datagrid is a vector of datagrid-columns. Datagrid-columns are structures created with =cl-defstruct= that hold the column data and characteristics of that data. A datagrid-column structure has slots for column heading, the data, the level of measurement, and the column data's coding information.
+A datagrid is conceptually similar to a table of data where all table columns have an equal number of elements in them. Technically, it is a vector of datagrid-columns. Datagrid-columns are Elisp structures created with =cl-defstruct= that hold the column data and characteristics of that data. A datagrid-column structure has slots for column heading, the data, the level of measurement, and the column data's coding information. The following example is a datagrid with two columns.
 
 #+begin_src emacs-lisp
-  (vector (datagrid-column-make
-  	 :heading "date"
-  	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  	 :lom nil)
+  (vector 
+    (datagrid-column-make
+  	  :heading "date"
+  	  :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+  	  :lom ordinal)
   	(datagrid-column-make
-  	 :heading "location"
-  	 :data ["somewhere" "out" "there" "far"]
-  	 :lom "ordinal"
-  	 :code  '(("somewhere" . 1)
+  	  :heading "location"
+  	  :data ["somewhere" "out" "there" "far"]
+  	  :lom "ordinal"
+  	  :code  '(("somewhere" . 1)
   		  ("out"       . 2)
   		  ("there"     . 3)
   		  ("far"       . 4))))
@@ -36,14 +37,16 @@ A datagrid is similar to a table of data where all table columns have an equal n
 It evaluates to the following. See the documentation for =cl-defstruct= for details about the printed representation (structure reader syntax). =#s(...)= 
 
 #+begin_src emacs-lisp
-  [#s(datagrid-column "date"
-  		    ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  		    "nominal"
-  		    nil)
-   #s(datagrid-column "location"
-  		    ["somewhere" "out" "there" "far"]
-  		    "ordinal"
-  		    (("somewhere" . 1) ("out" . 2) ("there" . 3) ("far" . 4)))]
+  [#s(datagrid-column
+        "date"
+  		  ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+  		  "nominal"
+  		  nil)
+   #s(datagrid-column
+        "location"
+  		  ["somewhere" "out" "there" "far"]
+  		  "ordinal"
+  		  (("somewhere" . 1) ("out" . 2) ("there" . 3) ("far" . 4)))]
 #+end_src
 
 ** The heading
