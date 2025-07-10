@@ -148,14 +148,17 @@ This example can be used for testing.")
 The default is nil."
   (append lst (make-list (- len (length lst)) filler)))
 
-(defun datagrid-safe-transpose (rows)
-  "Transpose a list of lists and pad short rows if needed.
-ROWS is a list of lists whose lengths may vary in size."
-  (let* ((max-cols (apply #'max (mapcar #'length rows)))
-	 (padded (cl-loop for row in rows
+(defun datagrid-safe-transpose (seq-of-seqs)
+  "Transpose a sequence of sequences and pad short rows if needed.
+ROWS is a sequence of sequences whose lengths may vary in size."
+  (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
+	 (listed (seq-map (lambda (seq) (if (listp seq)
+					    seq
+					  (append seq nil)))
+			  seq-of-seqs))
+	 (padded (cl-loop for row in listed
 			  collect (datagrid--pad-list row max-cols))))
     (apply #'cl-mapcar #'list padded)))
-
 
 (defun datagrid-unknown-type-to-number (seq)
   "Convert a sequence of unknown types to numbers.
@@ -552,6 +555,33 @@ datagrid-columns in datagrid."
   (let ((trans-seq (apply #'cl-mapcar #'list seq)))
     (cl-loop for struct across datagrid
 	     vconcat (vector (datagrid--column-add-data struct (pop trans-seq))))))
+
+(defun datagrid--add-data-by-column (datagrid seqs)
+  "Add data to DATAGRID columns.
+SEQS is a sequence of sequences. Each sub-sequence is one column's data.
+The sequences of data to add must be in the same order as the
+datagrid-columns in DATAGRID. The length of SEQS must be equal to the
+length of datagrid."
+  (let ((max-len (seq-map #'length seqs)))
+    (cl-loop for x from 0 below (length seqs)
+	     vconcat (vector (datagrid--column-add-data (elt datagrid x)
+							(elt seqs x))))))
+
+(defun datagrid-add-data (datagrid seqs &optional horizontal)
+  "Add elements to each datagrid-column.
+DATAGRID a datagrid structure. SEQS is a sequence of sequences. If
+HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil,
+then each sequence is one row's data. The default is nil. The sequences
+are extended to keep datagrid-column-data lengths equal.
+
+The sequences of data to add must be in the same order as the
+datagrid-columns in DATAGRID."
+  (interactive)
+  (unless (datagridp datagrid)
+    (error "DATAGRID is not a datagrid structure"))
+  (if horizontal
+      (datagrid--add-data-by-column datagrid (datagrid-safe-transpose seqs))
+    (datagrid--add-data-by-column datagrid seqs)))
 
 (defun datagrid-remove-column (datagrid index)
   "Remove the DATAGRID column at INDEX.
