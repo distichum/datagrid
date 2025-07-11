@@ -610,6 +610,8 @@ DATAGRID is a vector of vectors. INDEX is the zero based index of the
 column to sort by. This function assumes that elements in one column are
 of like data type and will cause errors if they are not. Created with
 the help of Claude.ai."
+  ;; TODO: Recreate this with an indirect sorting method as suggested at
+  ;; https://www.reddit.com/r/emacs/comments/1lv24a7/comment/n22kkbp/?context=3
   (let* ((new-dg (copy-sequence datagrid))
 	 ;; Collect the datagrid-column to sort by
 	 (sort-column (aref new-dg index))
@@ -714,8 +716,10 @@ contains the original datagrid vectors filtered for only that group. The
 3rd dimension vector contains the data from one column for one group.
 REWORD.
 
-This function will work very slowly if INDEX indicates a column with
-many unique data points."
+This function is slow for a datagrid with columns longer than
+5,000 elements."
+  ;; TODO: Provile this and see where it is slow. Research other
+  ;; processes.
   (cl-loop for item in (datagrid-column-unique datagrid index)
 	   vconcat (vector
 		    item
@@ -944,11 +948,11 @@ DATAGRID is a vector of datagrid structures. INDEX is the column
 to analyze. It uses zero based counting."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((freq (datagrid-column-frequencies datagrid index)))
+  (let ((freq (seq-take (datagrid-column-frequencies datagrid index) 5)))
     (append
      (list (cons "cardinality" (length freq)))
      (list (cons "mode" (datagrid-column-mode datagrid index)))
-     (list (cons "frequency" freq)))))
+     (list (cons "frequency - five or fewer" freq)))))
 
 
 (defun datagrid-report-ordinal (datagrid index &optional code convert)
