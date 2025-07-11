@@ -340,8 +340,8 @@ REQUIRES: CSV-MODE"
       (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
       (vconcat (cl-loop for item in 2d-by-column
                         collect (datagrid-column-make
-				 :heading (when headings (elt item 0))
-				 :data (vconcat (if headings
+				 :heading (when (not headings) (elt item 0))
+				 :data (vconcat (if (not headings)
 						    (seq-drop item 1)
 						  item))))))))
 
@@ -494,7 +494,6 @@ Return nil if the header is not found."
       (unless head
 	(setq col (1+ col))))
     (when head col)))
-
 
 
 ;;;; Inspection and manipulation of datagrids; return a datagrid:
