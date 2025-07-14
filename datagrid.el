@@ -1091,26 +1091,58 @@ measurement are treated as nominal data."
 
 
 ;;;; Create datagrid methods for seq
-;; TODO: Think more about creating a new sequence type that includes
-;; both a datagrid-column sequence and a datagrid-row sequence. The
-;; datagrid-row sequence type would probably be slow since it would
-;; handle many vectors, but build it and find out.
-;;
-;; Use streams.el and ordered-set.el as examples of extending
-;; sequences.
-;;
-;; seq.el can be extended to support new type of sequences.  Here are
-;; the generic functions that must be implemented by new seq types:
-;; - `seq-elt'
-;; - `seq-length'
-;; - `seq-do'
-;; - `seqp'
-;; - `seq-subseq'
-;; - `seq-into-sequence'
-;; - `seq-copy'
-;; - `seq-into'
+;; streams.el and ordered-set.el are good examples.
+(cl-defmethod seq-elt ((datagrid-column datagrid-column) n)
+  "Return the Nth element of the DATAGRID-COLUMN data."
+  (elt (datagrid-column-data datagrid-column)))
+
+(cl-defmethod seq-length ((datagrid-column datagrid-column))
+  "Return the length of the DATAGRID-COLUMN data."
+  (length (datagrid-column-data datagrid-column)))
+
+(cl-defmethod seq-do (function (datagrid-column datagrid-column))
+  "Apply FUNCTION to each element of DATAGRID-COLUMN data.
+Return the original DATAGRID-COLUMN. Presumably, FUNCTION has
+useful side effects."
+  (mapc function (datagrid-column-data datagrid-column))
+  datagrid-column)
+
+(cl-defmethod seqp ((datagrid-column datagrid-column))
+  "DATAGRID-COLUMNS are sequences."
+  t)
+
+(cl-defmethod seq-subseq ((datagrid-column datagrid-column) start &optional end)
+  "Return a new DATAGRID-COLUMN containing a range of elements.
+START is the first element to select and END is the last. END is
+exclusive."
+  (datagrid-column-make
+   :heading (datagrid-column-heading datagrid-column)
+   :data (seq-take (seq-drop (datagrid-column-data datagrid-column) start)
+		   (- end start))
+   :lom (datagrid-column-lom datagrid-column)
+   :code (datagrid-column-code datagrid-column)))
+
+(cl-defmethod seq-into-sequence ((datagrid-column datagrid-column))
+  "Return datagrid-column as a sequence."
+  ;; Since a datagrid-column is a record data type, this does nothing
+  ;; but expose the sequence part of datagrid-column.
+  (datagrid-column-data datagrid-column))
+
+(cl-defmethod seq-copy ((datagrid-column datagrid-column))
+  "Return a shallow copy of DATAGRID-COLUMN."
+  (datagrid-column-copy datagrid-column))
+
+(cl-defmethod seq-into ((datagrid-column datagrid-column) type)
+  "Convert DATAGRID-COLUMN into a sequence of type TYPE.
+This is lossy because other DATAGRID-COLUMN slots are not copied."
+  (seq-into (seq-into-sequence datagrid-column) type))
+
+(cl-defmethod seq-into (sequence (_type (eql datagrid-column)))
+  "Convert SEQUENCE into a DATAGRID-COLUMN."
+  (datagrid-column-make :data (seq-into sequence 'vector)))
 
 
+
 ;;; Provide
 (provide 'datagrid)
 ;;; datagrid.el ends here
