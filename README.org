@@ -19,16 +19,15 @@ Add datagrid.el to your load-path and require.
 A datagrid is conceptually similar to a table of data where all table columns have an equal number of elements in them. Technically, it is a vector of datagrid-columns. Datagrid-columns are Elisp structures created with =cl-defstruct= that hold the column data and characteristics of that data. A datagrid-column structure has slots for column heading, the data, the level of measurement, and the column data's coding information. All sequence functions will work on the data slot of a datagrid-column. The following example is a datagrid with two columns.
 
 #+begin_src emacs-lisp
-  (vector 
-    (datagrid-column-make
-  	  :heading "date"
-  	  :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  	  :lom ordinal)
+  (vector (datagrid-column-make
+  	 :heading "date"
+  	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+  	 :lom ordinal)
   	(datagrid-column-make
-  	  :heading "location"
-  	  :data ["somewhere" "out" "there" "far"]
-  	  :lom "ordinal"
-  	  :code  '(("somewhere" . 1)
+  	 :heading "location"
+  	 :data ["somewhere" "out" "there" "far"]
+  	 :lom "ordinal"
+  	 :code  '(("somewhere" . 1)
   		  ("out"       . 2)
   		  ("there"     . 3)
   		  ("far"       . 4))))
@@ -38,15 +37,15 @@ It evaluates to the following. See the documentation for =cl-defstruct= for deta
 
 #+begin_src emacs-lisp
   [#s(datagrid-column
-        "date"
-  		  ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  		  "nominal"
-  		  nil)
+      "date"
+      ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+      "nominal"
+      nil)
    #s(datagrid-column
-        "location"
-  		  ["somewhere" "out" "there" "far"]
-  		  "ordinal"
-  		  (("somewhere" . 1) ("out" . 2) ("there" . 3) ("far" . 4)))]
+      "location"
+      ["somewhere" "out" "there" "far"]
+      "ordinal"
+      (("somewhere" . 1) ("out" . 2) ("there" . 3) ("far" . 4)))]
 #+end_src
 
 ** The heading
@@ -84,47 +83,49 @@ The levels determine what statistics that datagrid reports return for that colum
 There are a number of ways to create a datagrid.
 - =datagrid-from-alist (alist &optional extend-uneven)=: Create a datagrid from a list of lists. The keys of the alist are the heading text and the values of the alist are the data. The values must be in a list.
 
-  #+begin_src emacs-lisp
-    (datagrid-from-alist '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
-    		       ("location" . ("somewhere" "out" "there" "far"))
-    		       ("precipitation" . (0.5 0 .25 1))
-    		       ("high-temp" . (15 20 32 22)))
-    		     t)
-  #+end_src
+#+begin_src emacs-lisp
+  (datagrid-from-alist
+   '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
+     ("location" . ("somewhere" "out" "there" "far"))
+     ("precipitation" . (0.5 0 .25 1))
+     ("high-temp" . (15 20 32 22)))
+   t)
+#+end_src
   
 - =datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors.
 
-  #+begin_src emacs-lisp
-    (datagrid-from-vectors ["date" "2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-    		       ["location" "somewhere" "out" "there" "far"]
-    		       ["precipitation" 0.5 0 .25 1]
-    		       ["high-temp" 15 20 32 22])
-  #+end_src
+#+begin_src emacs-lisp
+  (datagrid-from-vectors
+   ["date" "2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+   ["location" "somewhere" "out" "there" "far"]
+   ["precipitation" 0.5 0 .25 1]
+   ["high-temp" 15 20 32 22])
+#+end_src
   
 - =datagrid-from-csv-file (file-path)=: Create a datagrid from a CSV file. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode set up.
 
-  #+begin_src emacs-lisp
+#+begin_src emacs-lisp
   (datagrid-from-csv-file "file-path")
-  #+end_src
+#+end_src
 
 Create a datagrid-column on its own.
 - =datagrid-column-make (heading data lom code)=: Create a datagrid-column.
 
-  #+begin_src emacs-lisp
-    (datagrid-column-make :heading "date"
-    		      :data [0.5 0 .25 1]
-    		      :lom "ratio"
-    		      :code nil)
-  #+end_src
+#+begin_src emacs-lisp
+  (datagrid-column-make :heading "date"
+  		      :data [0.5 0 .25 1]
+  		      :lom "ratio"
+  		      :code nil)
+#+end_src
 
 Then, create a datagrid by making that datagrid-column structure the only element of a vector.
 
-  #+begin_src emacs-lisp
-    (vector (datagrid-column-make :heading "date"
-    			      :data [0.5 0 .25 1]
-    			      :lom "ratio"
-    			      :code nil))
-  #+end_src
+#+begin_src emacs-lisp
+  (vector (datagrid-column-make :heading "date"
+  			      :data [0.5 0 .25 1]
+  			      :lom "ratio"
+  			      :code nil))
+#+end_src
 
 If you create a datagrid-column structure on its own, it is better to use datagrid-add-column than make all datagrid-column structures separately. All datagrid columns must have the same number of elements or =(datagridp)= will return nil so datagrid-add-column automatically extends data columns with nil values as needed.
 * Get information from or about datagrids
@@ -203,7 +204,6 @@ datagrid.el includes an example datagrid named =datagrid-example=.
         (col3 (datagrid-column-make
     	     :data [1 2 3 4])))
     (datagrid-report-all-lom (datagrid-add-column datagrid-example col1 col2)))
-
 #+end_src
 
 Threading functions may make multiple steps more readable.
@@ -213,10 +213,9 @@ Threading functions may make multiple steps more readable.
       	     mygrid
       	     (lambda (x) (string-prefix-p "lib" x))
       	     (datagrid-row-index-by-header mygrid "group"))))
-    (thread-first
-      mygrid
-      (datagrid-filter-by-mask mask)
-      (datagrid-head 10 100)))
+    (thread-first     mygrid
+  		    (datagrid-filter-by-mask mask)
+  		    (datagrid-head 10 100)))
 #+end_src
 
 In Org Mode, you can create tables from datagrids.
