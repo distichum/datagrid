@@ -376,46 +376,6 @@ list. Otherwise return only data."
   "Return data to create an Org table."
   (datagrid-safe-transpose (datagrid-to-alist datagrid t)))
 
-(defun datagrid-column-decode (datagrid index)
-  "Output a decoded datagrid column as a vector.
-DATAGRID is the vector of structs. INDEX is the column number to
-code. It is zero based counting. The datagrid-column must have
-DATAGRID-COLUMN-CODE to decode the data. If not, then the output
-is simply DATAGRID-COLUMN-DATA.
-
- A Lickert scale DATAGRID-COLUMN-CODE may be coded as follows.
-
-\\='((\"Strongly Disagree\" 1)
-     (\"Disagree\"	2)
-     (\"Neither Agree nor Disagree\" 3)
-     (\"Agree\" 4)
-     (\"Strongly Agree\" 5))
-
-The DATAGRID-COLUMN-DATA may look like the following.
-
- [\"Strongly Disagree\" \"Agree\" \"Disagree\"]
-
-This function will output the following.
-
- [1 4 2]
-
-TODO: Provide better feedback regarding data values which are not
-found in the coding alist. I'm not sure what kind of feedback at
-this point. I should probably create a function that returns the
-original data values that return nil."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
-  (let* ((vec (datagrid-column-data (aref datagrid index)))
-	 (code (datagrid-column-code (aref datagrid index)))
-	 (coded-alist (when (and code ;; code must exist
-				 (listp code) ;; it must be a list
-				 (cl-every #'consp code)) ; it is an alist
-			(seq-map (lambda (x)
-				   (cdr (assoc x code #'string-equal)))
-				 vec))))
-    (vconcat coded-alist)))
-
-
 (defun datagrid-column-add-code (datagrid index code)
   "Add coding data to a datagrid-column.
 DATAGRID is the vector of structs. INDEX is a number or a list of
@@ -503,6 +463,45 @@ Return nil if the header is not found."
 	(setq col (1+ col))))
     (when head col)))
 
+(defun datagrid-column-decode (datagrid index)
+  "Output a decoded datagrid column as a vector.
+DATAGRID is the vector of structs. INDEX is the column number to
+code. It is zero based counting. The datagrid-column must have
+DATAGRID-COLUMN-CODE to decode the data. If not, then the output
+is simply DATAGRID-COLUMN-DATA.
+
+ A Lickert scale DATAGRID-COLUMN-CODE may be coded as follows.
+
+\\='((\"Strongly Disagree\" 1)
+     (\"Disagree\"	2)
+     (\"Neither Agree nor Disagree\" 3)
+     (\"Agree\" 4)
+     (\"Strongly Agree\" 5))
+
+The DATAGRID-COLUMN-DATA may look like the following.
+
+ [\"Strongly Disagree\" \"Agree\" \"Disagree\"]
+
+This function will output the following.
+
+ [1 4 2]
+
+TODO: Provide better feedback regarding data values which are not
+found in the coding alist. I'm not sure what kind of feedback at
+this point. I should probably create a function that returns the
+original data values that return nil."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let* ((vec (datagrid-column-data (aref datagrid index)))
+	 (code (datagrid-column-code (aref datagrid index)))
+	 (coded-alist (when (and code ;; code must exist
+				 (listp code) ;; it must be a list
+				 (cl-every #'consp code)) ; it is an alist
+			(seq-map (lambda (x)
+				   (cdr (assoc x code #'string-equal)))
+				 vec))))
+    (vconcat coded-alist)))
+
 
 ;;;; Inspection and manipulation of datagrids; return a datagrid:
 (defun datagrid-head (datagrid &optional column-num row-num)
@@ -568,11 +567,14 @@ datagrid-columns in datagrid."
 SEQS is a sequence of sequences. Each sub-sequence is one column's data.
 The sequences of data to add must be in the same order as the
 datagrid-columns in DATAGRID. The length of SEQS must be equal to the
-length of datagrid."
-  (let ((max-len (seq-map #'length seqs)))
+length of datagrid. If the sequences added are not of equal length, then nil will be padded onto other columns to make the data equal."
+  (let ((max-len (seq-max (seq-map #'length seqs))))
     (cl-loop for x from 0 below (length seqs)
+	     for new-seq = (seq-concatenate
+			    'vector (elt seqs x)
+			    (make-list (- max-len (length (elt seqs x))) nil))
 	     vconcat (vector (datagrid--column-add-data (elt datagrid x)
-							(elt seqs x))))))
+							new-seq)))))
 
 (defun datagrid-add-data (datagrid seqs &optional horizontal)
   "Add elements to each datagrid-column.
@@ -1094,7 +1096,7 @@ measurement are treated as nominal data."
 ;; streams.el and ordered-set.el are good examples.
 (cl-defmethod seq-elt ((datagrid-column datagrid-column) n)
   "Return the Nth element of the DATAGRID-COLUMN data."
-  (elt (datagrid-column-data datagrid-column)))
+  (elt (datagrid-column-data datagrid-column) n))
 
 (cl-defmethod seq-length ((datagrid-column datagrid-column))
   "Return the length of the DATAGRID-COLUMN data."
