@@ -22,7 +22,7 @@ A datagrid is conceptually similar to a table of data where all table columns ha
   (vector (datagrid-column-make
   	 :heading "date"
   	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  	 :lom ordinal)
+  	 :lom nil)
   	(datagrid-column-make
   	 :heading "location"
   	 :data ["somewhere" "out" "there" "far"]
@@ -81,7 +81,8 @@ The levels determine what statistics that datagrid reports return for that colum
 
 * Create a datagrid
 There are a number of ways to create a datagrid.
-- =datagrid-from-alist (alist &optional extend-uneven)=: Create a datagrid from a list of lists. The keys of the alist are the heading text and the values of the alist are the data. The values must be in a list.
+** From an alist
+=datagrid-from-alist (alist &optional extend-uneven)=: Create a datagrid from a list of lists. The keys of the alist are the heading text and the values of the alist are the data. The values must be in a list.
 
 #+begin_src emacs-lisp
   (datagrid-from-alist
@@ -91,8 +92,9 @@ There are a number of ways to create a datagrid.
      ("high-temp" . (15 20 32 22)))
    t)
 #+end_src
-  
-- =datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors.
+
+** From vectors
+=datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors.
 
 #+begin_src emacs-lisp
   (datagrid-from-vectors
@@ -101,15 +103,16 @@ There are a number of ways to create a datagrid.
    ["precipitation" 0.5 0 .25 1]
    ["high-temp" 15 20 32 22])
 #+end_src
-  
-- =datagrid-from-csv-file (file-path)=: Create a datagrid from a CSV file. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode set up.
+
+** From a csv file
+=datagrid-from-csv-file (file-path)=: Create a datagrid from a CSV file. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode set up.
 
 #+begin_src emacs-lisp
-  (datagrid-from-csv-file "file-path")
+  (datagrid-from-csv-file "file-path" t)
 #+end_src
 
-Create a datagrid-column on its own.
-- =datagrid-column-make (heading data lom code)=: Create a datagrid-column.
+** From datagrid-column structures
+ =datagrid-column-make (heading data lom code)=: Create a datagrid-column.
 
 #+begin_src emacs-lisp
   (datagrid-column-make :heading "date"
@@ -136,8 +139,6 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 - =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row of data.
 - =datagrid-col-index-by-header (datagrid header-text)=: Return the index number of the datagrid-column structure that has a heading of =header-text=. This is best used in conjunction with functions that require an "index" parameter.
 * Manipulate datagrids
-Emacs Lisp Vectors are immutable so all of these recreate datagrids based on the changes called for.
-
 - =datagrid-head (datagrid &optional column-num row-num)=: Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
 - =datagrid-add-column (datagrid &rest datagrid-columns)=: Add one or more datagrid-column structs to a datagrid.
 - =datagrid-add-row (datagrid seq)=: Add elements to the end of each datagrid-column. Datagrids are not meant for frequent insertions of row data. Such operations are possible but inefficient.
