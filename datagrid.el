@@ -143,22 +143,18 @@ This example can be used for testing.")
 
 
 ;;;; Helper functions:
-(defun datagrid--pad-list (lst len &optional filler)
-  "Pad LST with FILLER to reach length LEN.
-The default is nil."
-  (append lst (make-list (- len (length lst)) filler)))
-
 (defun datagrid-safe-transpose (seq-of-seqs)
   "Transpose a sequence of sequences and pad short rows if needed.
-ROWS is a sequence of sequences whose lengths may vary in size. The
-result is a list of lists."
+The result is a list of lists."
   (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
 	 (listed (seq-map (lambda (seq) (if (listp seq)
 					    seq
 					  (append seq nil)))
 			  seq-of-seqs))
 	 (padded (cl-loop for row in listed
-			  collect (datagrid--pad-list row max-cols))))
+			  collect (append row
+					  (make-list (- max-cols (length row))
+						     nil)))))
     (apply #'cl-mapcar #'list padded)))
 
 (defun datagrid-unknown-type-to-number (seq)
@@ -633,10 +629,8 @@ the help of Claude.ai."
   ;; TODO: Recreate this with an indirect sorting method as suggested at
   ;; https://www.reddit.com/r/emacs/comments/1lv24a7/comment/n22kkbp/?context=3
   (let* ((new-dg (copy-sequence datagrid))
-	 ;; Collect the datagrid-column to sort by
-	 (sort-column (aref new-dg index))
 	 ;; Get the data from the column to sort by
-	 (sort-col-data (datagrid-column-data sort-column))
+	 (sort-col-data (datagrid-column-data (aref new-dg index)))
 	 (sort-col-length (length sort-col-data))
 	 ;; Create indices and pair with values from sort column
 	 (indexed-vals (cl-loop for i from 0 below sort-col-length
@@ -694,7 +688,7 @@ Other common predicate function examples using lambdas:
 		    (> (length datagrid) 0)
 		    (vectorp vec)
 		    (seq-map pred vec))))
-    mask))
+    (vconcat mask)))
 
 
 (defun datagrid-filter-vector-by-mask (column-struct mask)
@@ -705,19 +699,15 @@ or nil. It is typically created by datagrid-create-mask-s. This is a
 helper function for DATAGRID-FILTER-BY-MASK. It returns a
 datagrid-column structure that copies the original but with the data
 slot filtered."
-  (let* ((index 0)
-	 (vec (vconcat
-	       (seq-filter (lambda (elmt)
-			     (prog1
-				 (and (elt mask index)
-				      elmt)
-			       (setq index (1+ index))))
-			   (datagrid-column-data column-struct)))))
+  (let* ((mask2 (vconcat mask))
+	 (vec (datagrid-column-data column-struct))
+	 (vec2 (cl-loop for x from 0 below (length vec)
+			collect (and (aref mask2 x)
+				     (aref vec x)))))
     (datagrid-column-make :heading (datagrid-column-heading column-struct)
-			  :data vec
+			  :data (vconcat (delq nil vec2))
 			  :lom (datagrid-column-lom column-struct)
 			  :code (datagrid-column-code column-struct))))
-
 
 (defun datagrid-filter-by-mask (datagrid mask)
   "Use a boolean MASK to filter DATAGRID.
@@ -1144,7 +1134,6 @@ This is lossy because other DATAGRID-COLUMN slots are not copied."
   (datagrid-column-make :data (seq-into sequence 'vector)))
 
 
-
 ;;; Provide
 (provide 'datagrid)
 ;;; datagrid.el ends here
