@@ -344,8 +344,8 @@ REQUIRES: CSV-MODE"
       (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
       (vconcat (cl-loop for item in 2d-by-column
                         collect (datagrid-column-make
-				 :heading (when (not headings) (elt item 0))
-				 :data (vconcat (if (not headings)
+				 :heading (when headings (elt item 0))
+				 :data (vconcat (if headings
 						    (seq-drop item 1)
 						  item))))))))
 
@@ -724,10 +724,7 @@ first dimension is a vector of groups which were formed by grouping rows
 of the datagrid by unique values in COL-VALUES. The 2nd dimension vector
 contains the original datagrid vectors filtered for only that group. The
 3rd dimension vector contains the data from one column for one group.
-REWORD.
-
-This function is slow and inefficient."
-  ;; TODO: Profile this and see where it is slow.
+REWORD."
   (cl-loop for item in (datagrid-column-unique datagrid index)
 	   vconcat (vector
 		    item
