@@ -941,8 +941,10 @@ as is."
 				    (datagrid-column-decode datagrid index)
 				  (datagrid-column-data (aref datagrid index)))
 				nil)))
-	 (lst (seq-keep #'datagrid-prep-for-calc lst))
-	 (median1 (datagrid-calc-function-wrapper "vmedian" lst))
+	 (lst-calc (seq-keep #'datagrid-prep-for-calc lst))
+	 (median1 (datagrid-calc-function-wrapper "vmedian" lst-calc))
+	 ;; It would be nice to do this in Calc formulas so the prep
+	 ;; for Calc function doesn't have to done again.
 	 (lst2 (mapcar (lambda (x) (abs (- x median1))) lst)))
     (datagrid-calc-function-wrapper
      "vmedian" (seq-keep #'datagrid-prep-for-calc lst2))))
