@@ -498,6 +498,7 @@ original data values that return nil."
     (vconcat coded-alist)))
 
 
+
 ;;;; Inspection and manipulation of datagrids; return a datagrid:
 (defun datagrid-head (datagrid &optional column-num row-num)
   "Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
@@ -654,6 +655,33 @@ the help of Claude.ai."
 
 
 
+(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 dg2-col)
+  "Join DATAGRID1 and DATAGRID2 to create a new datagrid column.
+Create a new datagrid with a new DATAGRID-COLUMN by doing a left
+outter join where DATAGRID1 is left and DATAGRID2 is right. Join
+on column index JOIN-ON-1 and JOIN-ON-2, which are simply index
+numbers indicating a column from each datagrid. DG2-col is the
+column from datagrid two that contains the new vector's data.
+
+Unlike SQL, it is only possible to specify one column of data to
+collect."
+  (let* ((dg1-col (datagrid-column-data
+		   (elt datagrid1 join-on-1)))
+	 (dg2-col-a (datagrid-column-data
+		     (elt datagrid2 join-on-2)))
+	 (dg2-col-b (datagrid-column-data
+		     (elt datagrid2 dg2-col)))
+	 ;; Using cl-loop instead of seq-map or cl-flet provides much
+	 ;; better performance here.
+	 (new-list (cl-loop
+		    for elt across dg1-col
+		    collect (funcall (lambda (lelt)
+				       (elt dg2-col-b
+					    (seq-position dg2-col-a lelt)))
+				     elt))))
+    (datagrid-add-column
+     datagrid-example (datagrid-column-make :data (vconcat new-list)))))
+
 ;;;; Filters and masks:
 (defun datagrid-create-mask (datagrid pred index)
   "Create a mask for a DATAGRID column at INDEX.
