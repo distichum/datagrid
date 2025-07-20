@@ -7,7 +7,8 @@
 ;; Version: 0.1
 ;; Keywords: tools, convenience, sorting
 ;; URL: https://github.com/distichum/datagrid
-;; Package-Requires: (csv-mode calc)
+;; Package-Requires: (seq calc cl-lib)
+;; CSV functions require: (csv-mode)
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -48,7 +49,6 @@
 (require 'seq)
 (require 'calc)
 (require 'calc-vec)
-(require 'csv-mode)
 
 
 ;;;; Variables:
@@ -363,6 +363,7 @@ BUFFER-OR-NAME is the buffer name. If HEADINGS is nil, then there
 is not a headings row. If t, then there is. The default is t.
 
 REQUIRES: CSV-MODE"
+  (require 'csv-mode)
   (save-current-buffer
     (set-buffer buffer-or-name)
     (save-excursion
@@ -387,6 +388,7 @@ If HEADINGS is nil, then there is not a headings row. If t, then
 there is. The default is nil.
 
 REQUIRES: CSV-MODE"
+  (require 'csv-mode)
   (with-temp-buffer
     (insert-file-contents file-path)
     (csv-mode)
