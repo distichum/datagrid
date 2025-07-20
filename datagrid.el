@@ -300,9 +300,10 @@ heading."
 				    :data (seq-drop item 1))))))
     (vconcat (cons v1 vother))))
 
-(defun datagrid-from-csv-buffer (buffer-or-name)
+(defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
-BUFFER-OR-NAME is the buffer name.
+BUFFER-OR-NAME is the buffer name. If HEADINGS is nil, then there
+is not a headings row. If t, then there is. The default is t.
 
 REQUIRES: CSV-MODE"
   (save-current-buffer
@@ -312,24 +313,21 @@ REQUIRES: CSV-MODE"
 	    (2d-by-column nil))
 	(goto-char (point-min))
 	(while (not (eobp))
-	  ;; Build a list of lists of row data. Building a list using
-	  ;; cons and then reversing it and turning it into a vector is
-	  ;; faster than repetitively vconcating vectors, I assume,
-	  ;; because cons doesn't have to recreate the whole list each
-	  ;; time while vconcat does.
 	  (setq data (cons (csv-parse-current-row) data))
 	  (forward-line))
 	;; Transpose the list of lists to make it a column store.
 	(setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
 	(vconcat (cl-loop for item in 2d-by-column
-			  collect (datagrid-column-make
-				   :heading (elt item 0)
-				   :data (seq-drop item 1))))))))
+                          collect (datagrid-column-make
+				   :heading (when headings (elt item 0))
+				   :data (vconcat (if headings
+						      (seq-drop item 1)
+						    item)))))))))
 
 (defun datagrid-from-csv-file (file-path &optional headings)
   "Return a datagrid from a CSV file at FILE-PATH.
-If HEADINGS is nil, then there is not a headings row. If t, then there
-is. The default is t.
+If HEADINGS is nil, then there is not a headings row. If t, then
+there is. The default is nil.
 
 REQUIRES: CSV-MODE"
   (with-temp-buffer
@@ -344,8 +342,8 @@ REQUIRES: CSV-MODE"
       (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
       (vconcat (cl-loop for item in 2d-by-column
                         collect (datagrid-column-make
-				 :heading (when (not headings) (elt item 0))
-				 :data (vconcat (if (not headings)
+				 :heading (when headings (elt item 0))
+				 :data (vconcat (if headings
 						    (seq-drop item 1)
 						  item))))))))
 
