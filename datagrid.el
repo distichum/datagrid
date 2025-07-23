@@ -360,7 +360,7 @@ heading."
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
 BUFFER-OR-NAME is the buffer name. If HEADINGS is nil, then there
-is not a headings row. If t, then there is. The default is t.
+is not a headings row. If t, then there is. The default is nil.
 
 REQUIRES: CSV-MODE"
   (require 'csv-mode)
@@ -499,8 +499,8 @@ row."
 
 (defun datagrid-get-headings (datagrid)
   "Create a vector from all DATAGRID headings."
-  (vconcat (cl-loop for elt across datagrid
-		    collect (datagrid-column-heading elt))))
+  ;; Benchmarking shows similar numbers for cl-loop version.
+  (vconcat (seq-map #'datagrid-column-heading datagrid)))
 
 (defun datagrid-col-index-by-header (datagrid header-text)
   "Return the DATAGRID column number with HEADER-TEXT.
@@ -798,9 +798,18 @@ slot filtered."
 			  :code (datagrid-column-code column-struct))))
 
 (defun datagrid-filter-by-mask (datagrid mask)
-  "Use a boolean MASK to filter DATAGRID.
-MASK must be a vector with the same length as datagrid columns and the
-values must only be t or nil. The function returns a datagrid."
+  "Use a boolean MASK to filter a DATAGRID.
+MASK must be a vector with the same length as datagrid columns
+and the values must only be t or nil. The function returns a
+DATAGRID. You can use DATAGRID-CREATE-MASK to create a mask.
+
+The following code show an example workflow when using masks.
+
+ (let* ((mygrid (datagrid-from-csv-buffer \"name-of-file.csv\" t))
+        (index (datagrid-col-index-by-header mygrid \"heading-name\"))
+        (func (lambda (x) (string-equal x \"filter-string\")))
+        (mask (datagrid-create-mask mygrid func index)))
+   (datagrid-filter-by-mask mygrid mask))"
   (vconcat
    (cl-loop for vec across datagrid
 	    collect (datagrid-filter-vector-by-mask vec mask))))
