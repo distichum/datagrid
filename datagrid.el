@@ -164,16 +164,16 @@ The result is a list of lists."
   "Convert a sequence of unknown types to numbers.
 Convert a SEQ of unknown data types to a sequence of
 numbers. Leave nil values in place."
-  (cl-loop for elt across seq
-	   collect (cond ((stringp elt) (if (equal elt "")
-					    nil
-					  (string-to-number elt)))
-			 ((numberp elt) elt)
-			 ((null elt) elt)
-			 (t (error "%s cannot be coerced into a number"
-				   elt)))
-	   into result
-           finally return (vconcat result)))
+  (let ((seqnow (seq-into seq 'list)))
+    (vconcat
+     (cl-loop for item in seqnow
+	      collect (cond ((stringp item) (if (equal item "")
+						nil
+					      (string-to-number item)))
+			    ((numberp item) item)
+			    ((null item) item)
+			    (t (error "%s cannot be coerced into a number"
+				      item)))))))
 
 (defun datagrid-unknown-type-sort (a b)
   "Predicate sort function when type is unknown.
@@ -1084,7 +1084,7 @@ ordinal data."
 	 (stats (cl-loop for statn in stats-name
 			 collect (datagrid-calc-function-wrapper statn lst)))
 	 ;; Non-calc functions cannot use Calc format so reuse vec
-	 ;; above. Also reconvert strings to numbers.
+	 ;; above plus convert strings to numbers.
 	 (new-dg (vector (datagrid-column-make
 			  :data (datagrid-unknown-type-to-number vec)))))
     (append
