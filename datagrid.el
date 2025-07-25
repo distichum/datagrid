@@ -1,4 +1,4 @@
-;;; datagrid.el --- Functions for a vector of vectors data structure. -*- lexical-binding: t; -*-
+;;; datagrid.el --- Functions to manipulate a 2d data structure. -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025 Joshua Lambert
 ;; Author: Joshua Lambert <jlambert@missouristate.edu>
@@ -148,8 +148,7 @@ This example can be used for testing.")
 ;;;; Helper functions:
 (defun datagrid-safe-transpose (seq-of-seqs)
   "Transpose a sequence of sequences and pad short rows if needed.
-SEQ-OF-SEQS is a sequence of sequences. The result is a list of
-lists."
+SEQ-OF-SEQS is a sequence of sequences. The result is a list of lists."
   (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
 	 (listed (seq-map (lambda (seq) (if (listp seq)
 					    seq
@@ -391,13 +390,13 @@ there is. The default is nil.
 
 REQUIRES: CSV-MODE
 
-PCSV is a package in MELPA that can handle multiline CSV fields.
-You can use it with datagrid.el as follows:
+PCSV is a package in MELPA that can correctly parse multiline CSV
+fields. Use it with datagrid.el as follows:
 
- (datagrid-from-alist
-  (datagrid-safe-transpose (pcsv-parse-file FILE))
-  HEADINGS
-  EXTEND-UNEVEN)"
+  (datagrid-from-alist
+   (datagrid-safe-transpose (pcsv-parse-file FILE))
+   HEADINGS
+   EXTEND-UNEVEN)"
   (require 'csv-mode)
   (with-temp-buffer
     (insert-file-contents file-path)
@@ -647,7 +646,7 @@ nil will be padded onto other columns to make the data equal."
 DATAGRID a datagrid structure. SEQS is a sequence of sequences. If
 HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil,
 then each sequence is one row's data. The default is nil. The sequences
-are extended to keep DATAGRID-COLUMN-DATA lengths equal.
+are extended to keep datagrid-column-data lengths equal.
 
 The sequences of data to add must be in the same order as the
 datagrid-columns in DATAGRID."
@@ -875,12 +874,12 @@ SEQ-REDUCE."
 
 (defun datagrid-prep-for-calc (item)
   "Prepare the ITEM for use in a Calc function.
-ITEM should be a string or number. The following steps will be
-taken in order: all data values will be converted to a number or
-return an error; floating point numbers will be converted to a
-format Calc functions can understand.
+ITEM should be a string or number. The following steps will be taken in
+order: all data values will be converted to a number or return an error;
+floating point numbers will be converted to a format Calc functions can
+understand. Calc floating points must look like (float 25 -2).
 
-Use the following to prepare a sequence of items.
+Use this to prepare a sequence of items.
 
 Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)"
   (let* ((it (cond ((stringp item) (if (equal item "")
