@@ -148,7 +148,8 @@ This example can be used for testing.")
 ;;;; Helper functions:
 (defun datagrid-safe-transpose (seq-of-seqs)
   "Transpose a sequence of sequences and pad short rows if needed.
-The result is a list of lists."
+SEQ-OF-SEQS is a sequence of sequences. The result is a list of
+lists."
   (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
 	 (listed (seq-map (lambda (seq) (if (listp seq)
 					    seq
@@ -240,11 +241,12 @@ datagrid column lengths in sync."
 
 
 ;;;; Create datagrid-column methods for seq
-;; This ignores datagrid-column slots other than the :data slot.
-;; streams.el and ordered-set.el are good examples.
 (cl-defmethod seq-elt ((datagrid-column datagrid-column) n)
   "Return the Nth element of the DATAGRID-COLUMN data."
   (elt (datagrid-column-data datagrid-column) n))
+
+;; These methods ignore datagrid-column slots other than the :data
+;; slot. streams.el and ordered-set.el are good examples.
 
 (cl-defmethod seq-length ((datagrid-column datagrid-column))
   "Return the length of the DATAGRID-COLUMN data."
@@ -258,7 +260,7 @@ useful side effects."
   datagrid-column)
 
 (cl-defmethod seqp ((datagrid-column datagrid-column))
-  "DATAGRID-COLUMNS are sequences."
+  "DATAGRID-COLUMN is a sequence or sequences."
   t)
 
 (cl-defmethod seq-subseq ((datagrid-column datagrid-column) start &optional end)
@@ -273,7 +275,7 @@ exclusive."
    :code (datagrid-column-code datagrid-column)))
 
 (cl-defmethod seq-into-sequence ((datagrid-column datagrid-column))
-  "Return datagrid-column as a sequence."
+  "Return DATAGRID-COLUMN as a sequence."
   ;; Since a datagrid-column is a record data type, this does nothing
   ;; but expose the sequence part of datagrid-column.
   (datagrid-column-data datagrid-column))
@@ -293,7 +295,7 @@ This is lossy because other DATAGRID-COLUMN slots are not copied."
 
 
 
-;;;; Making and changing data grids:
+;;;; Making and changing data grids
 (defun datagrid-from-alist (alist &optional headings extend-uneven)
   "Create a datagrid from an ALIST using the datagrid-column struct.
 If HEADINGS is nil, the alist has no headings. If HEADINGS is non-nil,
@@ -387,7 +389,15 @@ REQUIRES: CSV-MODE"
 If HEADINGS is nil, then there is not a headings row. If t, then
 there is. The default is nil.
 
-REQUIRES: CSV-MODE"
+REQUIRES: CSV-MODE
+
+PCSV is a package in MELPA that can handle multiline CSV fields.
+You can use it with datagrid.el as follows:
+
+ (datagrid-from-alist
+  (datagrid-safe-transpose (pcsv-parse-file FILE))
+  HEADINGS
+  EXTEND-UNEVEN)"
   (require 'csv-mode)
   (with-temp-buffer
     (insert-file-contents file-path)
@@ -425,7 +435,7 @@ list. Otherwise return only data."
 			     (append (elt data x) nil)))))
 
 (defun datagrid-to-org-table (datagrid)
-  "Return data to create an Org table."
+  "Manipulate DATAGRID to create an Org table."
   (datagrid-safe-transpose (datagrid-to-alist datagrid t)))
 
 (defun datagrid-column-add-code (datagrid index code)
@@ -449,7 +459,7 @@ of the research data and the value is another. For example:
     (setf (datagrid-column-code (aref datagrid index)) code)))
 
 
-;;;; Datagrid utilities; results are not datagrids:
+;;;; Datagrid utilities; results are not datagrids
 (defun datagridp (datagrid)
   "Check if DATAGRID is a valid vector of datagrid-columns.
 The datagrid-columns must have DATAGRID-COLUMN-DATA fields with equal
@@ -556,7 +566,7 @@ original data values that return nil."
 
 
 
-;;;; Inspection and manipulation of datagrids; return a datagrid:
+;;;; Inspection and manipulation of datagrids; return a datagrid
 (defun datagrid-head (datagrid &optional column-num row-num)
   "Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
 COLUMN-NUM is the number of columns (default 5). ROW-NUM is the number
@@ -637,7 +647,7 @@ nil will be padded onto other columns to make the data equal."
 DATAGRID a datagrid structure. SEQS is a sequence of sequences. If
 HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil,
 then each sequence is one row's data. The default is nil. The sequences
-are extended to keep datagrid-column-data lengths equal.
+are extended to keep DATAGRID-COLUMN-DATA lengths equal.
 
 The sequences of data to add must be in the same order as the
 datagrid-columns in DATAGRID."
@@ -739,7 +749,7 @@ collect."
     (datagrid-add-column
      datagrid-example (datagrid-column-make :data (vconcat new-list)))))
 
-;;;; Filters and masks:
+;;;; Filters and masks
 (defun datagrid-create-mask (datagrid pred index)
   "Create a mask for a DATAGRID column at INDEX.
 PRED is a function of one argument. It will operate on the
@@ -836,7 +846,7 @@ This function is slow and inefficient."
 				  index)))))))
 
 
-;;;; Data analysis:
+;;;; Data analysis
 (defun datagrid-reduce-vec (datagrid function index &optional code convert)
   "Reduce a FUNCTION across DATAGRID data at INDEX.
 Return the result of calling FUNCTION on the data vector at INDEX
