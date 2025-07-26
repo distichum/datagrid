@@ -82,7 +82,7 @@ The levels determine what statistics that datagrid reports return for that colum
 * Create a datagrid
 There are a number of ways to create a datagrid.
 ** From an alist
-=datagrid-from-alist (alist &optional extend-uneven)=: Create a datagrid from a list of lists. The keys of the alist are the heading text and the values of the alist are the data. The values must be in a list.
+=datagrid-from-alist (alist &optional headings extend-uneven)=: Create a datagrid from a list of lists. If =headings= is non-nill, the keys of the alist are the heading text and the values of the alist are the data. If =headings= is nil, then the key and value are both considered data.
 
 #+begin_src emacs-lisp
   (datagrid-from-alist
@@ -94,7 +94,7 @@ There are a number of ways to create a datagrid.
 #+end_src
 
 ** From vectors
-=datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors.
+=datagrid-from-vectors (vec1 &rest other-vectors)=: Create a datagrid from vectors. Each vector given as an argument is considered another datagrid column.
 
 #+begin_src emacs-lisp
   (datagrid-from-vectors
@@ -105,14 +105,14 @@ There are a number of ways to create a datagrid.
 #+end_src
 
 ** From a csv file
-=datagrid-from-csv-file (file-path)=: Create a datagrid from a CSV file. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode set up.
+=datagrid-from-csv-file (file-path &optional headings)=: Create a datagrid from a CSV file. If headings is non-nil, then the first row in the CSV fill will be considered headings. If headings is nil, then no headings are added to the datagrid column structures. This requires Emacs csv-mode. It will interpret a CSV file in whatever way you have csv-mode configured. Datagrid column data vectors can contain any data type an Emacs vector can but if your CSV file has fields with line breaks, csv-mode will not process it correctly. View the documentation for this function for an alternative.
 
 #+begin_src emacs-lisp
   (datagrid-from-csv-file "file-path" t)
 #+end_src
 
 ** From datagrid-column structures
- =datagrid-column-make (heading data lom code)=: Create a datagrid-column.
+ =datagrid-column-make (heading data lom code)=: First, create a datagrid-column.
 
 #+begin_src emacs-lisp
   (datagrid-column-make :heading "date"
@@ -121,7 +121,7 @@ There are a number of ways to create a datagrid.
   		      :code nil)
 #+end_src
 
-Then, create a datagrid by making that datagrid-column structure the only element of a vector.
+Then, create a datagrid by making that datagrid-column structure the only element of a vector. It will then return t when checked by =datagridp=.
 
 #+begin_src emacs-lisp
   (vector (datagrid-column-make :heading "date"
@@ -131,23 +131,26 @@ Then, create a datagrid by making that datagrid-column structure the only elemen
 #+end_src
 
 If you create a datagrid-column structure on its own, it is better to use datagrid-add-column than make all datagrid-column structures separately. All datagrid columns must have the same number of elements or =(datagridp)= will return nil so datagrid-add-column automatically extends data columns with nil values as needed.
+
 * Get information from or about datagrids
-- =datagridp (thing)=: Return t if thing is a datagrid, nil if not.
-- =datagrid-dimensions (datagrid)=: Return the two dimensions of the DATAGRID.
+- =datagridp (datagrid)=: Return t if datagrid is a datagrid, nil if not.
+- =datagrid-dimensions (datagrid)=: Return the two dimensions of the DATAGRID in a cons cell. Columns is the car and rows is the cdr.
 - =datagrid-get-elt (datagrid column-num row-num)=: Return a value at a specific column and row.
 - =datagrid-get-col-data (datagrid index)=: Return the data slot of a datagrid column.
-- =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row of data.
+- =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row. A row is the Nth element of each datagrid-column's data in the datagrid.
 - =datagrid-col-index-by-header (datagrid header-text)=: Return the index number of the datagrid-column structure that has a heading of =header-text=. This is best used in conjunction with functions that require an "index" parameter.
+- =datagrid-column-decode (datagrid index)=: Return a vector from DATAGRID and INDEX that has been decoded according to its coding alist.
 * Manipulate datagrids
 - =datagrid-head (datagrid &optional column-num row-num)=: Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
 - =datagrid-add-column (datagrid &rest datagrid-columns)=: Add one or more datagrid-column structs to a datagrid.
 - =datagrid-add-row (datagrid seq)=: Add elements to the end of each datagrid-column. Datagrids are not meant for frequent insertions of row data. Such operations are possible but inefficient.
+- =datagrid-add-data (datagrid seqs &optional horizontal)=: Add elements to each datagrid-column. DATAGRID a datagrid structure. SEQS is a sequence of sequences. If HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil, then each sequence is one row's data. The default is nil. The sequences are extended to keep DATAGRID-COLUMN-DATA lengths equal. The sequences of data to add must be in the same order as the datagrid-columns in DATAGRID.
 - =datagrid-remove-column (datagrid index)=: Remove the DATAGRID column at INDEX. 
 - =datagrid-remove-row (datagrid index)=: Remove the DATAGRID row at INDEX.
 - =datagrid-sort (datagrid index)=: Sort a datagrid by a specific column. This assumes all data in a column is of the same data type.
 * Filters and masks
 - =datagrid-create-mask (datagrid pred index)=: Create a mask for a DATAGRID column at INDEX. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
-- =datagrid-filter-by-mask (column-struct mask)=: Use a boolean MASK to filter DATAGRID.
+- =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID.
 - =datagrid-group-by (datagrid index)=: Group data in DATAGRID according to INDEX. This function will be slow for medium to large datasets that have many groupings. Filter the datagrid by what is needed first and then group. See the examples later in this document.
 * Data analysis
 - =datagrid-reduce-vec (datagrid function index &optional code convert)=: Reduce a FUNCTION using DATAGRID data at INDEX. As an example, the following code finds the sum of all data values from the column indexed at 2.
@@ -158,7 +161,6 @@ If you create a datagrid-column structure on its own, it is better to use datagr
   #+begin_src emacs-lisp
     (datagrid-reduce-vec-calc datagrid-example "vsum" 2)
   #+end_src
-  
 * Statistical functions
 Some statistical measures of survey data are not included in Emacs. Therefore, datagrid.el includes the following:
 - =datagrid-column-frequencies (datagrid index &optional code)=: Find the frequency of elements occuring in a column.
@@ -176,6 +178,10 @@ The following functions return an opinionated list of statistical measures for e
 - =datagrid-report-ratio (datagrid index &optional code convert)=
 
 - =datagrid-report-all-lom (datagrid)=: Loop through each datagrid column and create a report based on the level of measurement.
+
+* Sequence functions on datagrid columns
+You can use any of the sequence functions (=seq-=) to work with datagrid columns. So, =seq-take datagrid-column 5= will return a vector which is the first five items in a datagrid column. Seq ignores all other datagrid-column slots other than the data slot.
+
 * Examples
 datagrid.el includes an example datagrid named =datagrid-example=.
 
@@ -186,6 +192,7 @@ datagrid.el includes an example datagrid named =datagrid-example=.
   (datagrid-column-decode datagrid-example 1)
   (datagrid-head datagrid-example)
   (datagrid-sort datagrid-example 2)
+  (seq-contains-p (elt datagrid-example 0) "2025-04-01")
 
   (datagrid-add-row datagrid-example '(["2025-04-04" "far" 2 25 "ugliest"]
     				     ["2025-04-05" "farrer" 3 26 "gooder"]))
