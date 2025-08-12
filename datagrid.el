@@ -423,15 +423,32 @@ code, or lom slot."
 		    collect (datagrid-column-data elt))))
 
 (defun datagrid-to-alist (datagrid &optional headings)
-  "Create a vector of vectors from a DATAGRID.
+  "Create an alist from a DATAGRID.
 If HEADINGS is non-nil, return headings as the first item in each
 list. Otherwise return only data."
   (let ((hdngs (and headings
 		    (append (datagrid-get-headings datagrid) nil)))
 	(data (datagrid-to-vec-of-vec datagrid)))
-    (cl-loop for x from 0 below (length hdngs)
-	     collect (append (list (elt hdngs x))
-			     (append (elt data x) nil)))))
+    (cl-loop for x from 0 below (length data)
+	     collect (if hdngs
+			 (append (list (elt hdngs x))
+				 (append (elt data x) nil))
+		       (append (elt data x) nil)))))
+
+(defun datagrid-to-vtable (datagrid buffer-name &optional headings)
+  "Create a vtable from a DATAGRID.
+If HEADINGS is non-nil, create a vtable with a headings row."
+  (let ((hdngs (and headings
+		    (append (datagrid-get-headings datagrid) nil)))
+	(data (datagrid-safe-transpose (datagrid-to-alist datagrid))))
+    (get-buffer-create buffer-name)
+    (with-current-buffer buffer-name
+      (erase-buffer)
+      (make-vtable
+       :columns hdngs
+       :objects data)
+      (goto-char (point-min))
+      (pop-to-buffer buffer-name))))
 
 (defun datagrid-to-org-table (datagrid)
   "Manipulate DATAGRID to create an Org table."
@@ -507,7 +524,7 @@ row."
 		    datagrid)))
 
 (defun datagrid-get-headings (datagrid)
-  "Create a vector from all DATAGRID headings."
+  "Create a vector of all DATAGRID headings."
   ;; Benchmarking shows similar numbers for cl-loop version.
   (vconcat (seq-map #'datagrid-column-heading datagrid)))
 
