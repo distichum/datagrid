@@ -23,7 +23,7 @@ A datagrid is conceptually similar to a table of data where all table columns ha
     (datagrid-column-make
   	 :heading "date"
   	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-  	 :lom nil)
+  	 :lom "nominal")
   	(datagrid-column-make
   	 :heading "location"
   	 :data ["somewhere" "out" "there" "far"]
