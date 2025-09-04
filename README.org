@@ -19,7 +19,8 @@ Add datagrid.el to your load-path and require.
 A datagrid is conceptually similar to a table of data where all table columns have an equal number of elements in them. Technically, it is a vector of datagrid-columns. Datagrid-columns are Elisp structures created with =cl-defstruct= that hold the column data and characteristics of that data. A datagrid-column structure has slots for column heading, the data, the level of measurement, and the column data's coding information. All sequence functions will work on the data slot of a datagrid-column. The following example is a datagrid with two columns.
 
 #+begin_src emacs-lisp
-  (vector (datagrid-column-make
+  (vector 
+    (datagrid-column-make
   	 :heading "date"
   	 :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
   	 :lom nil)
@@ -27,10 +28,10 @@ A datagrid is conceptually similar to a table of data where all table columns ha
   	 :heading "location"
   	 :data ["somewhere" "out" "there" "far"]
   	 :lom "ordinal"
-  	 :code  '(("somewhere" . 1)
-  		  ("out"       . 2)
-  		  ("there"     . 3)
-  		  ("far"       . 4))))
+  	 :code '(("somewhere" . 1)
+  		       ("out"       . 2)
+  		       ("there"     . 3)
+  		       ("far"       . 4))))
 #+end_src
 
 It evaluates to the following. See the documentation for =cl-defstruct= for details about the printed representation. =#s(...)= 
