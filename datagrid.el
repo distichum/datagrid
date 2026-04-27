@@ -330,9 +330,9 @@ the number of columns. INIT is the value of each element in each
   (let ((headings (or heading-list (make-list col-num nil))))
     (cl-loop for elt from 1 to col-num
 	     ;; Make a list of ROW-NUM items, all of which are INIT.
-	     for init-list = (make-list row-num init)
-	     ;; Create a datagrid-column struct with init-list as the data.
-	     for dg-col = (datagrid-column-make :data init-list)
+	     for init-vec = (make-vector row-num init)
+	     ;; Create a datagrid-column struct with init-vec as the data.
+             for dg-col = (datagrid-column-make :data init-vec)
 	     ;; Set the heading of the datagrid-column
 	     do (setf (datagrid-column-heading dg-col) (elt headings (1- elt)))
 	     collect dg-col
@@ -482,9 +482,12 @@ The datagrid-columns must have DATAGRID-COLUMN-DATA fields with equal
 length."
   (and (vectorp datagrid)
        (> (length datagrid) 0)
-       (seq-every-p #'datagrid-column-p datagrid)
-       (apply #'= (seq-map (lambda (x) (length (datagrid-column-data x)))
-			   datagrid))))
+       (datagrid-column-p (aref datagrid 0))
+       (let ((first-len (length (datagrid-column-data (aref datagrid 0)))))
+	 (cl-every (lambda (col)
+		     (and (datagrid-column-p col)
+			  (= (length (datagrid-column-data col)) first-len)))
+		   datagrid))))
 
 (defun datagrid-dimensions (datagrid)
   "Return the two dimensions of the DATAGRID's data slot.
@@ -541,6 +544,11 @@ Return nil if the header is not found."
 	(setq col (1+ col))))
     (when head col)))
 
+(defun datagrid-col-data-by-header (datagrid header-text)
+  "Extract column data from DATAGRID by HEADER-TEXT."
+  (datagrid-column-data
+   (elt datagrid (datagrid-col-index-by-header datagrid header-text))))
+
 (defun datagrid-column-decode (datagrid index)
   "Output a decoded datagrid column as a vector.
 DATAGRID is the vector of structs. INDEX is the column number to
@@ -572,13 +580,13 @@ original data values that return nil."
     (error "Argument must be a datagrid"))
   (let* ((vec (datagrid-column-data (aref datagrid index)))
 	 (code (datagrid-column-code (aref datagrid index)))
-	 (coded-alist (when (and code ;; code must exist
+	 (coded-alist (when (and code	      ;; code must exist
 				 (listp code) ;; it must be a list
 				 (cl-every #'consp code)) ; it is an alist
 			(seq-map (lambda (x)
 				   (cdr (assoc x code #'string-equal)))
 				 vec))))
-    (vconcat coded-alist)))
+    (if coded-alist (vconcat coded-alist) vec)))
 
 
 
@@ -587,7 +595,7 @@ original data values that return nil."
   "Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
 COLUMN-NUM is the number of columns (default 5). ROW-NUM is the number
 of rows (default 5)."
-  (let* ((col-num (or column-num 5))
+  (let* ((col-num (min (or column-num 5) (length datagrid)))
 	 (row-num (or row-num 5)))
     (vconcat
      (cl-loop for x from 0 below col-num
@@ -614,11 +622,8 @@ length."
        ;; is the length the new sequences must conform to.
        (col-len (length (datagrid-column-data (aref datagrid 0))))
        ;; Truncate or expand the new data sequence slots.
-       (truncd (let ((trunc-all nil))
-		 (dolist (dg-c datagrid-columns trunc-all)
-		   (setq trunc-all (cons (datagrid-column-set-length
-					  dg-c col-len)
-					 trunc-all))))))
+       (truncd (mapcar (lambda (dg-c) (datagrid-column-set-length dg-c col-len))
+		       datagrid-columns)))
     (seq-concatenate 'vector datagrid truncd)))
 
 (defun datagrid-add-row (datagrid seq)
@@ -715,7 +720,8 @@ of like data type and will cause errors if they are not. Created with
 the help of Claude.ai."
   ;; TODO: Recreate this with an indirect sorting method as suggested at
   ;; https://www.reddit.com/r/emacs/comments/1lv24a7/comment/n22kkbp/?context=3
-  (let* ((new-dg (copy-sequence datagrid))
+  (let* ((new-dg (vconcat (cl-loop for col across datagrid
+				   collect (datagrid-column-copy col))))
 	 ;; Get the data from the column to sort by
 	 (sort-col-data (datagrid-column-data (aref new-dg index)))
 	 (sort-col-length (length sort-col-data))
@@ -725,45 +731,44 @@ the help of Claude.ai."
 	 ;; Sort the pairs by the values
 	 (sorted-pairs
 	  (seq-sort-by #'cdr #'datagrid-unknown-type-sort indexed-vals))
-	 ;; Extract the new order of indices
-	 (new-indices (mapcar #'car sorted-pairs)))
+	 ;; Extract the new order of indices as a vector for O(1) lookup
+	 (new-indices (vconcat (mapcar #'car sorted-pairs))))
     ;; Reorder each column according to the sorted indices
-    (dotimes (col-idx (1- (length new-dg)))
+    (dotimes (col-idx (length new-dg))
       (let* ((col-data (datagrid-column-data (aref new-dg col-idx)))
              (new-col-data (make-vector sort-col-length nil)))
 	(dotimes (i sort-col-length)
-          (setf (aref new-col-data i) (aref col-data (nth i new-indices))))
+          (setf (aref new-col-data i) (aref col-data (aref new-indices i))))
 	(setf (datagrid-column-data (aref new-dg col-idx)) new-col-data)))
     new-dg))
 
 
 
-(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 dg2-col)
+(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 dg2-index)
   "Join DATAGRID1 and DATAGRID2 to create a new datagrid column.
 Create a new datagrid with a new DATAGRID-COLUMN by doing a left
-outter join where DATAGRID1 is left and DATAGRID2 is right. Join
+outer join where DATAGRID1 is left and DATAGRID2 is right. Join
 on column index JOIN-ON-1 and JOIN-ON-2, which are simply index
-numbers indicating a column from each datagrid. DG2-col is the
+numbers indicating a column from each datagrid. DG2-index is the
 column from datagrid two that contains the new vector's data.
 
 Unlike SQL, it is only possible to specify one column of data to
-collect."
-  (let* ((dg1-col (datagrid-column-data
-		   (elt datagrid1 join-on-1)))
-	 (dg2-col-a (datagrid-column-data
-		     (elt datagrid2 join-on-2)))
-	 (dg2-col-b (datagrid-column-data
-		     (elt datagrid2 dg2-col)))
-	 ;; Using cl-loop instead of seq-map or cl-flet provides much
-	 ;; better performance here.
-	 (new-list (cl-loop
-		    for elt across dg1-col
-		    collect (funcall (lambda (lelt)
-				       (elt dg2-col-b
-					    (seq-position dg2-col-a lelt)))
-				     elt))))
+collect.
+
+Now O(n+m) via a hash table lookup on the join column."
+  (let* ((dg1-col (datagrid-column-data (aref datagrid1 join-on-1)))
+	 (dg2-col-a (datagrid-column-data (aref datagrid2 join-on-2)))
+	 (dg2-col-b (datagrid-column-data (aref datagrid2 dg2-index)))
+	 (lookup (let ((ht (make-hash-table :test #'equal)))
+		   (cl-loop for val across dg2-col-a
+			    for i from 0
+			    do (puthash val i ht))
+		   ht))
+	 (new-list (cl-loop for elt across dg1-col
+			    collect (let ((idx (gethash elt lookup)))
+				      (when idx (aref dg2-col-b idx))))))
     (datagrid-add-column
-     datagrid-example (datagrid-column-make :data (vconcat new-list)))))
+     datagrid1 (datagrid-column-make :data (vconcat new-list)))))
 
 ;;;; Filters and masks
 (defun datagrid-create-mask (datagrid pred index)
@@ -771,7 +776,7 @@ collect."
 PRED is a function of one argument. It will operate on the
 datagrid column at INDEX. INDEX is zero based.
 
-This simply returns a vector
+This simply returns a vector.
 
 See the Info Manual for built-in predicates, equality functions,
 and other useful functions to make predicate functions:
@@ -801,31 +806,29 @@ Other common predicate function examples using lambdas:
 	 (mask (and (vectorp datagrid)
 		    (> (length datagrid) 0)
 		    (vectorp vec)
-		    (seq-map pred vec))))
-    (vconcat mask)))
+		    (cl-map 'vector pred vec))))
+    mask))
 
 
 (defun datagrid-filter-vector-by-mask (column-struct mask)
   "Filter a datagrid-column struct by a boolean MASK.
-COLUMN-STRUCT is a datagrid-column structure. MASK must be a sequence
+COLUMN-STRUCT is a datagrid-column structure. MASK must be a vector
 with the same length as datagrid columns and the values must only be t
 or nil. It is typically created by datagrid-create-mask-s. This is a
 helper function for DATAGRID-FILTER-BY-MASK. It returns a
 datagrid-column structure that copies the original but with the data
 slot filtered."
-  (let* ((mask2 (vconcat mask))
-	 (vec (datagrid-column-data column-struct))
-	 (vec2 (cl-loop for x from 0 below (length vec)
-			collect (and (aref mask2 x)
-				     (aref vec x)))))
+  (let* ((vec (datagrid-column-data column-struct)))
     (datagrid-column-make :heading (datagrid-column-heading column-struct)
-			  :data (vconcat (delq nil vec2))
+			  :data (vconcat (cl-loop for m across mask
+						  for v across vec
+						  when m collect v))
 			  :lom (datagrid-column-lom column-struct)
 			  :code (datagrid-column-code column-struct))))
 
 (defun datagrid-filter-by-mask (datagrid mask)
   "Use a boolean MASK to filter a DATAGRID.
-MASK must be a vector with the same length as datagrid columns
+MASK must be a sequence with the same length as datagrid columns
 and the values must only be t or nil. The function returns a
 DATAGRID. You can use DATAGRID-CREATE-MASK to create a mask.
 
@@ -836,9 +839,23 @@ The following code show an example workflow when using masks.
         (func (lambda (x) (string-equal x \"filter-string\")))
         (mask (datagrid-create-mask mygrid func index)))
    (datagrid-filter-by-mask mygrid mask))"
-  (vconcat
-   (cl-loop for vec across datagrid
-	    collect (datagrid-filter-vector-by-mask vec mask))))
+  (let ((mask-vec (vconcat mask)))
+    (vconcat
+     (cl-loop for vec across datagrid
+	      collect (datagrid-filter-vector-by-mask vec mask-vec)))))
+
+(defun datagrid--select-rows (datagrid rows)
+  "Return a vector of vectors from DATAGRID containing only ROWS.
+ROWS is a list of row indices."
+  (let ((n (length rows)))
+    (vconcat
+     (cl-loop for col across datagrid
+	      collect (let* ((data (datagrid-column-data col))
+			     (result (make-vector n nil)))
+			(cl-loop for i from 0
+				 for row in rows
+				 do (aset result i (aref data row)))
+			result)))))
 
 (defun datagrid-group-by (datagrid index)
   "Group data in DATAGRID according to INDEX.
@@ -846,20 +863,18 @@ INDEX is a column number. The resulting structure is a 3D vector. The
 first dimension is a vector of groups which were formed by grouping rows
 of the datagrid by unique values in COL-VALUES. The 2nd dimension vector
 contains the original datagrid vectors filtered for only that group. The
-3rd dimension vector contains the data from one column for one group.
-REWORD.
-
-This function is slow and inefficient."
-  ;; TODO: Profile this and see where it is slow.
-  (vconcat
-   (cl-loop for item in (datagrid-column-unique datagrid index)
-	    collect (list item (datagrid-to-vec-of-vec
-				(datagrid-filter-by-mask
-				 datagrid
-  				 (datagrid-create-mask
-				  datagrid
-				  (lambda (x) (string-equal item x))
-				  index)))))))
+3rd dimension vector contains the data from one column for one group."
+  (let* ((col-data (datagrid-column-data (aref datagrid index)))
+	 (index-map (make-hash-table :test #'equal))
+	 (n (length col-data)))
+    (cl-loop for i from 0 below n
+	     do (push i (gethash (aref col-data i) index-map)))
+    (vconcat
+     (cl-loop for val being the hash-keys of index-map
+	      using (hash-values idxs)
+	      collect (list val
+			    (datagrid--select-rows
+			     datagrid (nreverse idxs)))))))
 
 
 ;;;; Data analysis
@@ -942,7 +957,7 @@ Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean]."
   (let* ((func-name (intern (concat "calcFunc-" func-abbrev)))
 	 (result (funcall func-name (cons 'vec lst))))
-    (string-to-number (math-format-number result))))
+    (string-to-number (math-format-number (math-float result)))))
 
 (defun datagrid-reduce-vec-calc (datagrid func-abbrev index &optional code convert)
   "Reduce an Emacs Calc function, FUNC-ABBREV, across DATAGRID data.
@@ -967,8 +982,8 @@ Also see the Calc function index. Usually you will find the Emacs
 Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean].
 
-Nil data values are discarded before the calculation.
-  (interactive)"
+Nil data values are discarded before the calculation."
+  (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((vec (if code
@@ -1016,6 +1031,7 @@ number. If CODE is t, then decode data first. If nil, take code as is."
 	    (vec (seq-into (seq-filter #'identity vec) 'vector))
 	    (vec (seq-sort #'< vec))
 	    (len (length vec))
+	    ((> len 0))
 	    (1Q (aref vec (/ (+ len 1) 4)))
 	    (2Q (aref vec (/ (+ len 1) 2)))
 	    (3Q (aref vec (/ (* 3 (+ len 1)) 4))))
@@ -1031,14 +1047,11 @@ number. CODE is nil if the data is not coded and non-nil if it
 is. The output is a list of one or more mode values. This works
 for strings or numbers."
   (let ((frequencies (datagrid-column-frequencies datagrid index code)))
-    (if (null frequencies)
-        nil
-      (let* ((sorted-frequencies (sort frequencies
-                                       (lambda (a b) (> (cdr a) (cdr b)))))
-             (high-freq (cdar sorted-frequencies)))
-        (mapcar #'car
-                (seq-filter (lambda (x) (= high-freq (cdr x)))
-                            sorted-frequencies))))))
+    (when frequencies
+      (let ((high-freq (cdar frequencies)))
+	(cl-loop for pair in frequencies
+		 while (= high-freq (cdr pair))
+		 collect (car pair))))))
 
 (defun datagrid-column-unique (datagrid index &optional code)
   "Return unique items from a column.
@@ -1063,9 +1076,13 @@ as is."
 				nil)))
 	 (lst-calc (seq-keep #'datagrid-prep-for-calc lst))
 	 (median1 (datagrid-calc-function-wrapper "vmedian" lst-calc))
+	 (lst-nums (mapcar (lambda (x) (if (stringp x)
+					   (string-to-number x)
+					 x))
+			   lst))
 	 ;; It would be nice to do this in Calc formulas so the prep
 	 ;; for Calc function doesn't have to done again.
-	 (lst2 (mapcar (lambda (x) (abs (- x median1))) lst)))
+	 (lst2 (mapcar (lambda (x) (abs (- x median1))) lst-nums)))
     (datagrid-calc-function-wrapper
      "vmedian" (seq-keep #'datagrid-prep-for-calc lst2))))
 
