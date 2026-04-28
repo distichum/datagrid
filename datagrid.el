@@ -215,13 +215,12 @@ This creates a new vector and replaces the old."
 	      (len (length (datagrid-column-data dg-c))))
     (if (= len N)
 	dg-c
-      (datagrid-column-make
-       :data (if (< N len)
-		 (seq-take vec N)
-	       (seq-concatenate 'vector vec (make-vector (- N len) nil)))
-       :heading (datagrid-column-heading dg-c)
-       :lom (datagrid-column-lom dg-c)
-       :code (datagrid-column-code dg-c)))))
+      (let ((new (datagrid-column-copy dg-c)))
+	(setf (datagrid-column-data new)
+	      (if (< N len)
+		  (seq-take vec N)
+		(seq-concatenate 'vector vec (make-vector (- N len) nil))))
+	new))))
 
 (defun datagrid--column-add-data (dg-c seq)
   "Add one or more elements to a datagrid column's data.
@@ -231,12 +230,10 @@ function is a datagrid-column.
 WARNING. Use only in conjunction with DATAGRID-ADD-ROW which keeps the
 datagrid column lengths in sync."
   (when-let* ((datagrid-column-p dg-c)
-	      (data (datagrid-column-data dg-c)))
-    (datagrid-column-make
-     :data (vconcat data seq)
-     :heading (datagrid-column-heading dg-c)
-     :lom (datagrid-column-lom dg-c)
-     :code (datagrid-column-code dg-c))))
+	      (data (datagrid-column-data dg-c))
+	      (new (datagrid-column-copy dg-c)))
+    (setf (datagrid-column-data new) (vconcat data seq))
+    new))
 
 
 ;;;; Create datagrid-column methods for seq
@@ -266,12 +263,11 @@ useful side effects."
   "Return a new DATAGRID-COLUMN containing a range of elements.
 START is the first element to select and END is the last. END is
 exclusive."
-  (datagrid-column-make
-   :heading (datagrid-column-heading datagrid-column)
-   :data (seq-take (seq-drop (datagrid-column-data datagrid-column) start)
-		   (- end start))
-   :lom (datagrid-column-lom datagrid-column)
-   :code (datagrid-column-code datagrid-column)))
+  (let ((new (datagrid-column-copy datagrid-column)))
+    (setf (datagrid-column-data new)
+	  (seq-take (seq-drop (datagrid-column-data datagrid-column) start)
+		    (- end start)))
+    new))
 
 (cl-defmethod seq-into-sequence ((datagrid-column datagrid-column))
   "Return DATAGRID-COLUMN as a sequence."
@@ -341,22 +337,16 @@ the number of columns. INIT is the value of each element in each
 	     finally return (vconcat parent-vector))))
 
 
-(defun datagrid-from-vectors (vec1 &rest other-vectors)
-  "Create a datagrid from vectors.
-VEC1 is the first vector. OTHER-VECTORS are any other vectors
-passed to the function. The first element in each vector is the
-heading."
+(defun datagrid-from-vectors (&rest vectors)
+  "Create a datagrid from VECTORS.
+The first element in each vector is the heading."
   (interactive)
-  (unless (vectorp vec1)
-    (error "The first argument must be a vector"))
-  (let ((v1 (datagrid-column-make :heading (elt vec1 0)
-				  :data (seq-drop vec1 1)))
-	(vother (when other-vectors
-		  (cl-loop for item in other-vectors
-			   collect (datagrid-column-make
-				    :heading (elt item 0)
-				    :data (seq-drop item 1))))))
-    (vconcat (cons v1 vother))))
+  (unless (and vectors (cl-every #'vectorp vectors))
+    (error "All arguments must be vectors"))
+  (vconcat (cl-loop for v in vectors
+		    collect (datagrid-column-make
+			     :heading (elt v 0)
+			     :data (seq-drop v 1)))))
 
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
@@ -401,19 +391,43 @@ fields. Use it with datagrid.el as follows:
   (with-temp-buffer
     (insert-file-contents file-path)
     (csv-mode)
-    (let ((data nil)
-          (2d-by-column nil))
-      (goto-char (point-min))
-      (while (not (eobp))
-        (setq data (cons (csv-parse-current-row) data))
-        (forward-line))
-      (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
-      (vconcat (cl-loop for item in 2d-by-column
-                        collect (datagrid-column-make
-				 :heading (when headings (elt item 0))
-				 :data (vconcat (if headings
-						    (seq-drop item 1)
-						  item))))))))
+    (datagrid-from-csv-buffer (current-buffer) headings)))
+
+(defun datagrid--csv-quote-field (field)
+  "Return FIELD as a CSV-safe string.
+Quote and escape if FIELD contains a comma, double quote, or newline.
+Nil becomes an empty field."
+  (cond
+   ((null field) "")
+   (t (let ((s (if (stringp field) field (format "%s" field))))
+        (if (string-match-p "[\",\n\r]" s)
+            (concat "\"" (replace-regexp-in-string "\"" "\"\"" s) "\"")
+          s)))))
+
+(defun datagrid-write-csv (datagrid file-path &optional headings)
+  "Write DATAGRID to FILE-PATH as CSV.
+If HEADINGS is non-nil, write a heading row first. This is lossy:
+the LOM and CODE slots are not preserved."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let ((n-rows (cdr (datagrid-dimensions datagrid)))
+        (cols (append datagrid nil))
+        (row 0))
+    (with-temp-file file-path
+      (when headings
+        (insert (mapconcat #'datagrid--csv-quote-field
+                           (append (datagrid-get-headings datagrid) nil)
+                           ","))
+        (insert "\n"))
+      (while (< row n-rows)
+        (insert (mapconcat
+                 (lambda (col)
+                   (datagrid--csv-quote-field
+                    (aref (datagrid-column-data col) row)))
+                 cols
+                 ","))
+        (insert "\n")
+        (setq row (1+ row))))))
 
 (defun datagrid-to-vec-of-vec (datagrid)
   "Create a vector of vectors from a DATAGRID.
@@ -534,15 +548,8 @@ row."
 (defun datagrid-col-index-by-header (datagrid header-text)
   "Return the DATAGRID column number with HEADER-TEXT.
 Return nil if the header is not found."
-  (let ((col 0)
-	(head nil))
-    (while (and (< col (length datagrid))
-		(not head))
-      (when (equal (datagrid-column-heading (aref datagrid col)) header-text)
-        (setq head t))
-      (unless head
-	(setq col (1+ col))))
-    (when head col)))
+  (seq-position datagrid header-text
+		(lambda (col h) (equal (datagrid-column-heading col) h))))
 
 (defun datagrid-col-data-by-header (datagrid header-text)
   "Extract column data from DATAGRID by HEADER-TEXT."
@@ -599,13 +606,10 @@ of rows (default 5)."
 	 (row-num (or row-num 5)))
     (vconcat
      (cl-loop for x from 0 below col-num
-	      collect (datagrid-column-make
-		       :heading (datagrid-column-heading
-				 (elt datagrid x))
-		       :data (seq-take (datagrid-get-col-data datagrid x)
-				       row-num)
-		       :lom (datagrid-column-lom (elt datagrid x))
-		       :code (datagrid-column-code (elt datagrid x)))))))
+	      for new = (datagrid-column-copy (elt datagrid x))
+	      do (setf (datagrid-column-data new)
+		       (seq-take (datagrid-get-col-data datagrid x) row-num))
+	      collect new))))
 
 (defun datagrid-add-column (datagrid &rest datagrid-columns)
   "Add one or more datagrid-column structs to a datagrid.
@@ -753,9 +757,7 @@ numbers indicating a column from each datagrid. DG2-index is the
 column from datagrid two that contains the new vector's data.
 
 Unlike SQL, it is only possible to specify one column of data to
-collect.
-
-Now O(n+m) via a hash table lookup on the join column."
+collect."
   (let* ((dg1-col (datagrid-column-data (aref datagrid1 join-on-1)))
 	 (dg2-col-a (datagrid-column-data (aref datagrid2 join-on-2)))
 	 (dg2-col-b (datagrid-column-data (aref datagrid2 dg2-index)))
@@ -818,13 +820,13 @@ or nil. It is typically created by datagrid-create-mask-s. This is a
 helper function for DATAGRID-FILTER-BY-MASK. It returns a
 datagrid-column structure that copies the original but with the data
 slot filtered."
-  (let* ((vec (datagrid-column-data column-struct)))
-    (datagrid-column-make :heading (datagrid-column-heading column-struct)
-			  :data (vconcat (cl-loop for m across mask
-						  for v across vec
-						  when m collect v))
-			  :lom (datagrid-column-lom column-struct)
-			  :code (datagrid-column-code column-struct))))
+  (let ((vec (datagrid-column-data column-struct))
+	(new (datagrid-column-copy column-struct)))
+    (setf (datagrid-column-data new)
+	  (vconcat (cl-loop for m across mask
+			    for v across vec
+			    when m collect v)))
+    new))
 
 (defun datagrid-filter-by-mask (datagrid mask)
   "Use a boolean MASK to filter a DATAGRID.
@@ -1032,9 +1034,9 @@ number. If CODE is t, then decode data first. If nil, take code as is."
 	    (vec (seq-sort #'< vec))
 	    (len (length vec))
 	    ((> len 0))
-	    (1Q (aref vec (/ (+ len 1) 4)))
-	    (2Q (aref vec (/ (+ len 1) 2)))
-	    (3Q (aref vec (/ (* 3 (+ len 1)) 4))))
+	    (1Q (aref vec (min (1- len) (/ (+ len 1) 4))))
+	    (2Q (aref vec (min (1- len) (/ (+ len 1) 2))))
+	    (3Q (aref vec (min (1- len) (/ (* 3 (+ len 1)) 4)))))
       `(("1Q" . ,1Q)
 	("2Q" . ,2Q)
 	("3Q" . ,3Q)
@@ -1101,6 +1103,35 @@ to analyze. It uses zero based counting."
      (list (cons "mode" (datagrid-column-mode datagrid index)))
      (list (cons "frequency - five or fewer" freq)))))
 
+(defun datagrid--report-numeric (datagrid index stats-name code convert include-mad)
+  "Build a numeric summary report for DATAGRID column at INDEX.
+STATS-NAME is a list of Calc function abbreviations to compute. CODE,
+CONVERT have the same meaning as in the public report functions. If
+INCLUDE-MAD is non-nil, append the mean absolute deviation."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let* ((vec (if code
+		  (datagrid-column-decode datagrid index)
+		(datagrid-column-data (aref datagrid index))))
+	 ;; Calc cannot handle nil or decimal numbers directly; prep
+	 ;; converts and seq-keep drops nils. This also yields a list.
+	 (lst (if convert
+		  (seq-keep #'datagrid-prep-for-calc vec)
+		(seq-keep #'identity vec)))
+	 (stats (cl-loop for statn in stats-name
+			 collect (datagrid-calc-function-wrapper statn lst)))
+	 ;; Non-Calc helpers expect plain numbers.
+	 (new-dg (vector (datagrid-column-make
+			  :data (datagrid-unknown-type-to-number vec)))))
+    (append
+     (list (datagrid-column-heading (elt datagrid index)))
+     (cl-mapcar #'cons stats-name stats)
+     (list (cons "mode" (datagrid-column-mode new-dg 0)))
+     (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
+     (when include-mad
+       (list (cons "mean absolute deviation"
+		   (datagrid-column-mad new-dg 0)))))))
+
 (defun datagrid-report-ordinal (datagrid index &optional code convert)
   "Display column statistics for ordinal data.
 DATAGRID is a vector of datagrid structures. INDEX is the column
@@ -1110,34 +1141,8 @@ is. CONVERT tells the function to convert strings to numbers.
 
 Mean and standard deviation are not included because this is
 ordinal data."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
-  (let* ((stats-name '("vcount" "vmin" "vmax" "vmedian"))
-	 (vec (if code
-		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
-	 ;; Convert string to numbers and decimal numbers to Calc
-	 ;; understandable number. Calc cannot handle nil values. It
-	 ;; cannot divide by decimal numbers, instead it requires
-	 ;; (float 25 -2) or something like that. seq-keep removes
-	 ;; them too. This also converts vec to a list.
-	 (lst (if convert
-		  (seq-keep #'datagrid-prep-for-calc vec)
-		(seq-keep #'identity vec)))
-	 (stats (cl-loop for statn in stats-name
-			 collect (datagrid-calc-function-wrapper statn lst)))
-	 ;; Non-calc functions cannot use Calc format so reuse vec
-	 ;; above plus convert strings to numbers.
-	 (new-dg (vector (datagrid-column-make
-			  :data (datagrid-unknown-type-to-number vec)))))
-    (append
-     (list (datagrid-column-heading (elt datagrid index)))
-     (cl-mapcar #'cons stats-name stats)
-     ;; Using vec rather than datagrid so 0 index.
-     (list (cons "mode" (datagrid-column-mode new-dg 0)))
-     (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
-     (list (cons "mean absolute deviation"
-		 (datagrid-column-mad new-dg 0))))))
+  (datagrid--report-numeric
+   datagrid index '("vcount" "vmin" "vmax" "vmedian") code convert t))
 
 (defun datagrid-report-interval (datagrid index &optional code convert)
   "Display column statistics for interval data.
@@ -1145,27 +1150,9 @@ DATAGRID is a vector of datagrid structures. INDEX is the column
 to analyze. It uses zero based counting. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as
 is. CONVERT tells the function to convert strings to numbers."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
-  (let* ((stats-name '("vcount" "vmin" "vmax" "vmedian" "vmean"
-		       "vsdev"))
-	 (vec (if code
-		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
-	 (lst (if convert
-		  (seq-keep #'datagrid-prep-for-calc vec)
-		(seq-keep #'identity vec)))
-	 (stats (cl-loop for statn in stats-name
-			 collect (datagrid-calc-function-wrapper statn lst)))
-	 (new-dg (vector (datagrid-column-make
-			  :data (datagrid-unknown-type-to-number vec)))))
-    (append
-     (list (datagrid-column-heading (elt datagrid index)))
-     (cl-mapcar #'cons stats-name stats)
-     ;; Using vec rather than datagrid so 0 index.
-     (list (cons "mode" (datagrid-column-mode new-dg 0)))
-     (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
-     )))
+  (datagrid--report-numeric
+   datagrid index '("vcount" "vmin" "vmax" "vmedian" "vmean" "vsdev")
+   code convert nil))
 
 (defun datagrid-report-ratio (datagrid index &optional code convert)
   "Display column statistics for ratio data.
@@ -1175,27 +1162,10 @@ the data before using the data. If CODE is nil take the data as
 is. CONVERT tells the function to convert strings to numbers.
 
 RMS stands for root-mean-square or coefficient of variation."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
-  (let* ((stats-name '("vcount" "vmin" "vmax" "vmedian" "vmean" "vgmean"
-		       "vsdev" "rms"))
-	 (vec (if code
-		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
-	 (lst (if convert
-		  (seq-keep #'datagrid-prep-for-calc vec)
-		(seq-keep #'identity vec)))
-	 (stats (cl-loop for statn in stats-name
-			 collect (datagrid-calc-function-wrapper statn lst)))
-	 (new-dg (vector (datagrid-column-make
-			  :data (datagrid-unknown-type-to-number vec)))))
-    (append
-     (list (datagrid-column-heading (elt datagrid index)))
-     (cl-mapcar #'cons stats-name stats)
-     ;; Using vec rather than datagrid so 0 index.
-     (list (cons "mode" (datagrid-column-mode new-dg 0)))
-     (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
-     )))
+  (datagrid--report-numeric
+   datagrid index
+   '("vcount" "vmin" "vmax" "vmedian" "vmean" "vgmean" "vsdev" "rms")
+   code convert nil))
 
 (defun datagrid-report-all-lom (datagrid)
   "Report on each column of data based on the level of measurement.
