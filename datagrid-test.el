@@ -677,6 +677,13 @@ added columns are appended in the wrong order."
   (let* ((dg (vector (datagrid-column-make :data [nil nil nil]))))
     (should (null (datagrid-column-quartiles dg 0)))))
 
+(ert-deftest datagrid-test-column-quartiles-small-column-no-error ()
+  "Q3 index must be clamped so columns with len < 4 do not error."
+  (let* ((dg (vector (datagrid-column-make :data [1 2 3]))))
+    (should (datagrid-column-quartiles dg 0)))
+  (let* ((dg (vector (datagrid-column-make :data [42]))))
+    (should (datagrid-column-quartiles dg 0))))
+
 (ert-deftest datagrid-test-column-quartiles-ignores-nil-values ()
   ;; Use 8 non-nil values so Q3 index stays in bounds.
   (let* ((dg (vector (datagrid-column-make :data [1 nil 3 5 nil 7 9 11 nil 13 15])))
@@ -763,6 +770,197 @@ added columns are appended in the wrong order."
 		     (datagrid-column-make :heading "b" :data [3 4])))
 	 (result (datagrid-to-alist dg t)))
     (should (equal result '(("a" 1 2) ("b" 3 4))))))
+
+
+;;;; Report functions
+;; These pin the current Calc-backed behavior so refactors can be verified.
+
+(defun dg-test--approx= (a b &optional tol)
+  "Return non-nil if A and B differ by less than TOL (default 1e-6)."
+  (< (abs (- a b)) (or tol 1e-6)))
+
+(defun dg-test--ratio-dg ()
+  "Single ratio column with known values [1 2 3 4 5]."
+  (vector (datagrid-column-make :heading "r"
+				:data [1 2 3 4 5]
+				:lom "ratio")))
+
+(defun dg-test--interval-dg ()
+  "Single interval column with known values [10 20 30 40]."
+  (vector (datagrid-column-make :heading "i"
+				:data [10 20 30 40]
+				:lom "interval")))
+
+(defun dg-test--ordinal-dg ()
+  "Single ordinal column with known values [1 2 2 3 4 5]."
+  (vector (datagrid-column-make :heading "o"
+				:data [1 2 2 3 4 5]
+				:lom "ordinal")))
+
+
+;;;; datagrid-report-nominal
+
+(ert-deftest datagrid-test-report-nominal-heading-first ()
+  (let ((report (datagrid-report-nominal (dg-test--simple) 0)))
+    (should (equal (car report) "name"))))
+
+(ert-deftest datagrid-test-report-nominal-cardinality ()
+  (let ((report (datagrid-report-nominal (dg-test--simple) 2)))
+    ;; "x" "y" "x" "y" → 2 unique
+    (should (= (cdr (assoc "cardinality" report)) 2))))
+
+(ert-deftest datagrid-test-report-nominal-mode ()
+  (let* ((dg (vector (datagrid-column-make :heading "h"
+					   :data ["a" "b" "a" "c" "a"]
+					   :lom "nominal")))
+	 (report (datagrid-report-nominal dg 0)))
+    (should (equal (cdr (assoc "mode" report)) '("a")))))
+
+(ert-deftest datagrid-test-report-nominal-frequency-key-present ()
+  (let ((report (datagrid-report-nominal (dg-test--simple) 2)))
+    (should (assoc "frequency - five or fewer" report))))
+
+
+;;;; datagrid-report-ordinal
+
+(ert-deftest datagrid-test-report-ordinal-heading-first ()
+  (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
+    (should (equal (car report) "o"))))
+
+(ert-deftest datagrid-test-report-ordinal-stats-keys ()
+  (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
+    (dolist (k '("vcount" "vmin" "vmax" "vmedian" "mode" "quartiles"
+		 "mean absolute deviation"))
+      (should (assoc k report)))))
+
+(ert-deftest datagrid-test-report-ordinal-stat-values ()
+  (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
+    (should (= (cdr (assoc "vcount" report)) 6.0))
+    (should (= (cdr (assoc "vmin" report)) 1.0))
+    (should (= (cdr (assoc "vmax" report)) 5.0))
+    (should (= (cdr (assoc "vmedian" report)) 2.5))))
+
+(ert-deftest datagrid-test-report-ordinal-mode-value ()
+  (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
+    (should (equal (cdr (assoc "mode" report)) '(2)))))
+
+(ert-deftest datagrid-test-report-ordinal-no-mean-or-sdev ()
+  "Ordinal report should NOT include vmean or vsdev."
+  (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
+    (should-not (assoc "vmean" report))
+    (should-not (assoc "vsdev" report))))
+
+(ert-deftest datagrid-test-report-ordinal-with-code ()
+  ;; Decoded: [4 2 3 4]
+  (let ((report (datagrid-report-ordinal (dg-test--coded) 0 t)))
+    (should (= (cdr (assoc "vcount" report)) 4.0))
+    (should (= (cdr (assoc "vmin" report)) 2.0))
+    (should (= (cdr (assoc "vmax" report)) 4.0))))
+
+(ert-deftest datagrid-test-report-ordinal-with-convert ()
+  (let* ((dg (vector (datagrid-column-make :heading "s"
+					   :data ["1" "2" "3" "4" "5"]
+					   :lom "ordinal")))
+	 (report (datagrid-report-ordinal dg 0 nil t)))
+    (should (= (cdr (assoc "vcount" report)) 5.0))
+    (should (= (cdr (assoc "vmedian" report)) 3.0))))
+
+
+;;;; datagrid-report-interval
+
+(ert-deftest datagrid-test-report-interval-heading-first ()
+  (let ((report (datagrid-report-interval (dg-test--interval-dg) 0)))
+    (should (equal (car report) "i"))))
+
+(ert-deftest datagrid-test-report-interval-stats-keys ()
+  (let ((report (datagrid-report-interval (dg-test--interval-dg) 0)))
+    (dolist (k '("vcount" "vmin" "vmax" "vmedian" "vmean" "vsdev"
+		 "mode" "quartiles"))
+      (should (assoc k report)))))
+
+(ert-deftest datagrid-test-report-interval-stat-values ()
+  (let ((report (datagrid-report-interval (dg-test--interval-dg) 0)))
+    (should (= (cdr (assoc "vcount" report)) 4.0))
+    (should (= (cdr (assoc "vmin" report)) 10.0))
+    (should (= (cdr (assoc "vmax" report)) 40.0))
+    (should (= (cdr (assoc "vmedian" report)) 25.0))
+    (should (= (cdr (assoc "vmean" report)) 25.0))
+    ;; sample sdev of [10 20 30 40]: sqrt(500/3) ≈ 12.9099
+    (should (dg-test--approx= (cdr (assoc "vsdev" report)) 12.909944487 1e-4))))
+
+(ert-deftest datagrid-test-report-interval-no-gmean-or-rms ()
+  "Interval report should NOT include vgmean or rms."
+  (let ((report (datagrid-report-interval (dg-test--interval-dg) 0)))
+    (should-not (assoc "vgmean" report))
+    (should-not (assoc "rms" report))))
+
+
+;;;; datagrid-report-ratio
+
+(ert-deftest datagrid-test-report-ratio-heading-first ()
+  (let ((report (datagrid-report-ratio (dg-test--ratio-dg) 0)))
+    (should (equal (car report) "r"))))
+
+(ert-deftest datagrid-test-report-ratio-stats-keys ()
+  (let ((report (datagrid-report-ratio (dg-test--ratio-dg) 0)))
+    (dolist (k '("vcount" "vmin" "vmax" "vmedian" "vmean" "vgmean"
+		 "vsdev" "rms" "mode" "quartiles"))
+      (should (assoc k report)))))
+
+(ert-deftest datagrid-test-report-ratio-stat-values ()
+  (let ((report (datagrid-report-ratio (dg-test--ratio-dg) 0)))
+    (should (= (cdr (assoc "vcount" report)) 5.0))
+    (should (= (cdr (assoc "vmin" report)) 1.0))
+    (should (= (cdr (assoc "vmax" report)) 5.0))
+    (should (= (cdr (assoc "vmedian" report)) 3.0))
+    (should (= (cdr (assoc "vmean" report)) 3.0))
+    ;; sample sdev of [1..5] = sqrt(2.5) ≈ 1.5811388
+    (should (dg-test--approx= (cdr (assoc "vsdev" report)) 1.5811388 1e-4))
+    ;; gmean of [1..5] = 120^(1/5) ≈ 2.6051710
+    (should (dg-test--approx= (cdr (assoc "vgmean" report)) 2.6051710 1e-4))
+    ;; rms of [1..5] = sqrt(55/5) = sqrt(11) ≈ 3.3166247
+    (should (dg-test--approx= (cdr (assoc "rms" report)) 3.3166247 1e-4))))
+
+(ert-deftest datagrid-test-report-ratio-with-convert ()
+  (let* ((dg (vector (datagrid-column-make :heading "s"
+					   :data ["1" "2" "3" "4" "5"]
+					   :lom "ratio")))
+	 (report (datagrid-report-ratio dg 0 nil t)))
+    (should (= (cdr (assoc "vmean" report)) 3.0))))
+
+
+;;;; datagrid-report-all-lom dispatch
+
+(ert-deftest datagrid-test-report-all-lom-dispatches-by-lom ()
+  (let* ((dg (vector
+	      (datagrid-column-make :heading "n"
+				    :data ["a" "b" "a" "c" "b"]
+				    :lom "nominal")
+	      (datagrid-column-make :heading "o" :data [1 2 3 4 5]
+				    :lom "ordinal")
+	      (datagrid-column-make :heading "i" :data [10 20 30 40 50]
+				    :lom "interval")
+	      (datagrid-column-make :heading "r" :data [1.0 2.0 3.0 4.0 5.0]
+				    :lom "ratio")))
+	 (reports (datagrid-report-all-lom dg)))
+    ;; nominal: has "cardinality"
+    (should (assoc "cardinality" (cdr (nth 0 reports))))
+    ;; ordinal: has "mean absolute deviation", no vmean
+    (should (assoc "mean absolute deviation" (cdr (nth 1 reports))))
+    (should-not (assoc "vmean" (cdr (nth 1 reports))))
+    ;; interval: has vmean+vsdev, no vgmean
+    (should (assoc "vmean" (cdr (nth 2 reports))))
+    (should-not (assoc "vgmean" (cdr (nth 2 reports))))
+    ;; ratio: has vgmean+rms
+    (should (assoc "vgmean" (cdr (nth 3 reports))))
+    (should (assoc "rms" (cdr (nth 3 reports))))))
+
+(ert-deftest datagrid-test-report-all-lom-nil-treated-as-nominal ()
+  (let* ((dg (vector (datagrid-column-make :heading "x"
+					   :data ["a" "b" "a"]
+					   :lom nil)))
+	 (reports (datagrid-report-all-lom dg)))
+    (should (assoc "cardinality" (cdr (nth 0 reports))))))
 
 
 (provide 'datagrid-test)
