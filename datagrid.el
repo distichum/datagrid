@@ -390,6 +390,9 @@ fields. Use it with datagrid.el as follows:
   (require 'csv-mode)
   (with-temp-buffer
     (insert-file-contents file-path)
+    (goto-char (point-min))
+    (while (search-forward "\r" nil t)
+      (replace-match "" nil t))
     (csv-mode)
     (datagrid-from-csv-buffer (current-buffer) headings)))
 
@@ -404,30 +407,48 @@ Nil becomes an empty field."
             (concat "\"" (replace-regexp-in-string "\"" "\"\"" s) "\"")
           s)))))
 
-(defun datagrid-write-csv (datagrid file-path &optional headings)
-  "Write DATAGRID to FILE-PATH as CSV.
-If HEADINGS is non-nil, write a heading row first. This is lossy:
+(defun datagrid--insert-csv (datagrid &optional headings)
+  "Insert DATAGRID at point in the current buffer as CSV.
+If HEADINGS is non-nil, insert a heading row first. This is lossy:
 the LOM and CODE slots are not preserved."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let ((n-rows (cdr (datagrid-dimensions datagrid)))
         (cols (append datagrid nil))
         (row 0))
-    (with-temp-file file-path
-      (when headings
-        (insert (mapconcat #'datagrid--csv-quote-field
-                           (append (datagrid-get-headings datagrid) nil)
-                           ","))
-        (insert "\n"))
-      (while (< row n-rows)
-        (insert (mapconcat
-                 (lambda (col)
-                   (datagrid--csv-quote-field
-                    (aref (datagrid-column-data col) row)))
-                 cols
-                 ","))
-        (insert "\n")
-        (setq row (1+ row))))))
+    (when headings
+      (insert (mapconcat #'datagrid--csv-quote-field
+                         (append (datagrid-get-headings datagrid) nil)
+                         ","))
+      (insert "\n"))
+    (while (< row n-rows)
+      (insert (mapconcat
+               (lambda (col)
+                 (datagrid--csv-quote-field
+                  (aref (datagrid-column-data col) row)))
+               cols
+               ","))
+      (insert "\n")
+      (setq row (1+ row)))))
+
+(defun datagrid-write-csv (datagrid file-path &optional headings)
+  "Write DATAGRID to FILE-PATH as CSV.
+If HEADINGS is non-nil, write a heading row first. This is lossy:
+the LOM and CODE slots are not preserved."
+  (with-temp-file file-path
+    (datagrid--insert-csv datagrid headings)))
+
+(defun datagrid-to-csvbuf (datagrid buffer-name &optional headings)
+  "Insert DATAGRID as CSV into a new buffer named BUFFER-NAME and switch to it.
+A fresh buffer is generated (the name is uniquified if needed). If
+HEADINGS is non-nil, insert a heading row first. Returns the new
+buffer. This is lossy: the LOM and CODE slots are not preserved."
+  (let ((buf (generate-new-buffer buffer-name)))
+    (with-current-buffer buf
+      (datagrid--insert-csv datagrid headings)
+      (goto-char (point-min)))
+    (switch-to-buffer buf)
+    buf))
 
 (defun datagrid-to-vec-of-vec (datagrid)
   "Create a vector of vectors from a DATAGRID.
@@ -748,29 +769,48 @@ the help of Claude.ai."
 
 
 
-(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 dg2-index)
-  "Join DATAGRID1 and DATAGRID2 to create a new datagrid column.
-Create a new datagrid with a new DATAGRID-COLUMN by doing a left
-outer join where DATAGRID1 is left and DATAGRID2 is right. Join
-on column index JOIN-ON-1 and JOIN-ON-2, which are simply index
-numbers indicating a column from each datagrid. DG2-index is the
-column from datagrid two that contains the new vector's data.
+(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 &rest dg2-indices)
+  "Join DATAGRID1 and DATAGRID2 to create new datagrid columns.
+Create a new datagrid by doing a left outer join where DATAGRID1
+is left and DATAGRID2 is right. Join on column index JOIN-ON-1
+and JOIN-ON-2, which are simply index numbers indicating a column
+from each datagrid. DG2-INDICES is one or more column indexes
+from DATAGRID2 whose data will be appended to DATAGRID1.
 
-Unlike SQL, it is only possible to specify one column of data to
-collect."
+Empty join keys (nil or the empty string) are skipped on both
+sides, so missing keys never match each other (analogous to SQL
+NULL semantics).
+
+If DATAGRID2 has multiple rows with the same join key, the first
+such row is used; later duplicates are ignored. This matches the
+first-wins semantics of `assoc', `alist-get', and similar
+key-lookup primitives in Emacs Lisp."
   (let* ((dg1-col (datagrid-column-data (aref datagrid1 join-on-1)))
-	 (dg2-col-a (datagrid-column-data (aref datagrid2 join-on-2)))
-	 (dg2-col-b (datagrid-column-data (aref datagrid2 dg2-index)))
+	 (dg2-key (datagrid-column-data (aref datagrid2 join-on-2)))
+	 (empty-key-p (lambda (v)
+			(or (null v)
+			    (and (stringp v) (string-empty-p v)))))
+	 (sentinel (make-symbol "unset"))
 	 (lookup (let ((ht (make-hash-table :test #'equal)))
-		   (cl-loop for val across dg2-col-a
+		   (cl-loop for val across dg2-key
 			    for i from 0
+			    unless (or (funcall empty-key-p val)
+				       (not (eq (gethash val ht sentinel)
+						sentinel)))
 			    do (puthash val i ht))
-		   ht))
-	 (new-list (cl-loop for elt across dg1-col
-			    collect (let ((idx (gethash elt lookup)))
-				      (when idx (aref dg2-col-b idx))))))
-    (datagrid-add-column
-     datagrid1 (datagrid-column-make :data (vconcat new-list)))))
+		   ht)))
+    (cl-loop with result = datagrid1
+	     for dg2-index in dg2-indices
+	     for dg2-col = (datagrid-column-data (aref datagrid2 dg2-index))
+	     for new-vec = (cl-loop for elt across dg1-col
+				    for idx = (and (not (funcall empty-key-p elt))
+						   (gethash elt lookup))
+				    collect (when idx (aref dg2-col idx)) into xs
+				    finally return (vconcat xs))
+	     do (setq result
+		      (datagrid-add-column
+		       result (datagrid-column-make :data new-vec)))
+	     finally return result)))
 
 ;;;; Filters and masks
 (defun datagrid-create-mask (datagrid pred index)
