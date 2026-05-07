@@ -507,7 +507,8 @@ of the research data and the value is another. For example:
   (if (listp index)
       (cl-loop for elt in index
 	       do (setf (datagrid-column-code (aref datagrid elt)) code))
-    (setf (datagrid-column-code (aref datagrid index)) code)))
+    (setf (datagrid-column-code (aref datagrid index)) code))
+  datagrid)
 
 
 ;;;; Datagrid utilities; results are not datagrids
@@ -545,10 +546,8 @@ numbering."
 
 (defun datagrid-get-col-data (datagrid index)
   "Extract a column vector from DATAGRID at INDEX.
-DATAGRID is a vector of a datagrid column structure. INDEX is the column
-to extract, with zero based counting. Returns a new vector containing
-all elements from the specified column, including the heading."
-  (interactive)
+Deprecated. Use `datagrid-pull' instead."
+  (declare (obsolete datagrid-pull "1.0"))
   (datagrid-column-data (aref datagrid index)))
 
 (defun datagrid-get-row-data (datagrid row-num)
@@ -573,7 +572,9 @@ Return nil if the header is not found."
 		(lambda (col h) (equal (datagrid-column-heading col) h))))
 
 (defun datagrid-col-data-by-header (datagrid header-text)
-  "Extract column data from DATAGRID by HEADER-TEXT."
+  "Extract column data from DATAGRID by HEADER-TEXT.
+Deprecated. Use `datagrid-pull' instead."
+  (declare (obsolete datagrid-pull "1.0"))
   (datagrid-column-data
    (elt datagrid (datagrid-col-index-by-header datagrid header-text))))
 
@@ -629,7 +630,7 @@ of rows (default 5)."
      (cl-loop for x from 0 below col-num
 	      for new = (datagrid-column-copy (elt datagrid x))
 	      do (setf (datagrid-column-data new)
-		       (seq-take (datagrid-get-col-data datagrid x) row-num))
+		       (seq-take (datagrid-pull datagrid x) row-num))
 	      collect new))))
 
 (defun datagrid-add-column (datagrid &rest datagrid-columns)
@@ -769,48 +770,66 @@ the help of Claude.ai."
 
 
 
-(defun datagrid-join (datagrid1 join-on-1 datagrid2 join-on-2 &rest dg2-indices)
-  "Join DATAGRID1 and DATAGRID2 to create new datagrid columns.
-Create a new datagrid by doing a left outer join where DATAGRID1
-is left and DATAGRID2 is right. Join on column index JOIN-ON-1
-and JOIN-ON-2, which are simply index numbers indicating a column
-from each datagrid. DG2-INDICES is one or more column indexes
-from DATAGRID2 whose data will be appended to DATAGRID1.
+(defun datagrid-coalesce-columns (datagrid1 join-on-1 datagrid2 join-on-2
+					    col-pairs)
+  "Return a copy of DATAGRID1 with multiple columns backfilled from DATAGRID2.
+COL-PAIRS is a list of (FILL-COL . SOURCE-COL) cons cells, where
+FILL-COL is a column index in DATAGRID1 to fill and SOURCE-COL is
+the column index in DATAGRID2 to draw replacement values from.
 
-Empty join keys (nil or the empty string) are skipped on both
-sides, so missing keys never match each other (analogous to SQL
-NULL semantics).
+For each pair, every row of DATAGRID1 whose FILL-COL value is nil
+or the empty string is looked up by its key (column JOIN-ON-1) in
+DATAGRID2's JOIN-ON-2 column. When a match is found and
+DATAGRID2's SOURCE-COL value for that row is non-empty, the value
+is copied into the returned datagrid. Non-empty FILL-COL values
+in DATAGRID1 are left as is, so existing data is never
+overwritten. DATAGRID1 itself is not modified.
 
-If DATAGRID2 has multiple rows with the same join key, the first
-such row is used; later duplicates are ignored. This matches the
-first-wins semantics of `assoc', `alist-get', and similar
-key-lookup primitives in Emacs Lisp."
-  (let* ((dg1-col (datagrid-column-data (aref datagrid1 join-on-1)))
-	 (dg2-key (datagrid-column-data (aref datagrid2 join-on-2)))
-	 (empty-key-p (lambda (v)
-			(or (null v)
-			    (and (stringp v) (string-empty-p v)))))
-	 (sentinel (make-symbol "unset"))
-	 (lookup (let ((ht (make-hash-table :test #'equal)))
-		   (cl-loop for val across dg2-key
-			    for i from 0
-			    unless (or (funcall empty-key-p val)
-				       (not (eq (gethash val ht sentinel)
-						sentinel)))
-			    do (puthash val i ht))
-		   ht)))
-    (cl-loop with result = datagrid1
-	     for dg2-index in dg2-indices
-	     for dg2-col = (datagrid-column-data (aref datagrid2 dg2-index))
-	     for new-vec = (cl-loop for elt across dg1-col
-				    for idx = (and (not (funcall empty-key-p elt))
-						   (gethash elt lookup))
-				    collect (when idx (aref dg2-col idx)) into xs
-				    finally return (vconcat xs))
-	     do (setq result
-		      (datagrid-add-column
-		       result (datagrid-column-make :data new-vec)))
-	     finally return result)))
+If DATAGRID2 has multiple rows with the same key, the first such
+row is used; later duplicates are ignored, matching the
+first-wins semantics of `assoc' and `alist-get'.
+
+Keys are compared with `equal', which is type-strict: the string
+\"123\" and the integer 123 are not considered equal, nor are
+the integer 1 and the float 1.0. If the two key columns came
+from different sources (e.g. one CSV import left ids as strings
+while another coerced them to numbers), normalize one side
+before calling this function or no row will match."
+  (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v))))
+	      (build-lookup (keys vals)
+		(let ((ht (make-hash-table :test #'equal)))
+		  (cl-loop for k across keys
+			   for v across vals
+			   unless (or (empty-p k) (empty-p v) (gethash k ht))
+			   do (puthash k v ht))
+		  ht)))
+    (let* ((keys2 (datagrid-column-data (aref datagrid2 join-on-2)))
+	   (keys1 (datagrid-column-data (aref datagrid1 join-on-1)))
+	   (result (copy-sequence datagrid1)))
+      (dolist (pair col-pairs result)
+	(let* ((fill-col (car pair))
+	       (source-col (cdr pair))
+	       (lookup (build-lookup
+			keys2
+			(datagrid-column-data (aref datagrid2 source-col))))
+	       (new-col (datagrid-column-copy (aref datagrid1 fill-col)))
+	       (new-data (copy-sequence (datagrid-column-data new-col))))
+	  (cl-loop for i from 0 below (length new-data)
+		   when (empty-p (aref new-data i))
+		   do (when-let ((found (gethash (aref keys1 i) lookup)))
+			(setf (aref new-data i) found)))
+	  (setf (datagrid-column-data new-col) new-data)
+	  (setf (aref result fill-col) new-col))))))
+
+(defun datagrid-coalesce-column (datagrid1 join-on-1 datagrid2 join-on-2
+					   fill-col source-col)
+  "Return a copy of DATAGRID1 with FILL-COL backfilled from DATAGRID2.
+Thin wrapper around `datagrid-coalesce-columns' for the
+single-column case. See that function's docstring for details on
+JOIN-ON-1, JOIN-ON-2, FILL-COL, SOURCE-COL, and the empty-value
+and key-comparison semantics."
+  (datagrid-coalesce-columns datagrid1 join-on-1 datagrid2 join-on-2
+			     (list (cons fill-col source-col))))
 
 ;;;; Filters and masks
 (defun datagrid-create-mask (datagrid pred index)
@@ -1043,24 +1062,29 @@ Nil data values are discarded before the calculation."
 
 
 ;;;; Statistical functions
-(defun datagrid-column-frequencies (datagrid index &optional code)
-  "Find the frequency of elements occuring in a column.
-DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code
-as is. This works for strings or numbers."
+(defun datagrid--frequencies-alist (datagrid index code)
+  "Return ((value . count) ...) for column INDEX of DATAGRID.
+Sorted by count descending. If CODE is non-nil, decode first."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((vec (if code
 		  (datagrid-column-decode datagrid index)
 		(datagrid-column-data (aref datagrid index))))
-	 (counts (make-hash-table :test 'equal)))
-    ;; this loop changes the variable counts
+	 (counts (make-hash-table :test 'equal))
+	 result)
     (cl-loop for item across vec
 	     do (puthash item (1+ (gethash item counts 0)) counts))
-    ;; Convert to alist for easier viewing
-    (let (result)
-      (maphash (lambda (k v) (push (cons k v) result)) counts)
-      (nreverse (seq-sort-by #'cdr #'datagrid-unknown-type-sort result)))))
+    (maphash (lambda (k v) (push (cons k v) result)) counts)
+    (nreverse (seq-sort-by #'cdr #'datagrid-unknown-type-sort result))))
+
+(defun datagrid-column-frequencies (datagrid index &optional code)
+  "Find the frequency of elements occuring in a column.
+Deprecated. Use `datagrid-count' instead.
+DATAGRID is the vector of structs. INDEX is the zero based column
+number. If CODE is t, then decode data first. If nil, take code
+as is. Returns an alist of (value . count) sorted by count descending."
+  (declare (obsolete datagrid-count "1.0"))
+  (datagrid--frequencies-alist datagrid index code))
 
 (defun datagrid-column-quartiles (datagrid index &optional code)
   "Find the first, second, and third quartile of a column.
@@ -1088,7 +1112,7 @@ DATAGRID is a datagrid struct. INDEX is the zero based column
 number. CODE is nil if the data is not coded and non-nil if it
 is. The output is a list of one or more mode values. This works
 for strings or numbers."
-  (let ((frequencies (datagrid-column-frequencies datagrid index code)))
+  (let ((frequencies (datagrid--frequencies-alist datagrid index code)))
     (when frequencies
       (let ((high-freq (cdar frequencies)))
 	(cl-loop for pair in frequencies
@@ -1096,11 +1120,12 @@ for strings or numbers."
 		 collect (car pair))))))
 
 (defun datagrid-column-unique (datagrid index &optional code)
-  "Return unique items from a column.
+  "Return unique items from a column as a vector.
+Deprecated. Use `datagrid-distinct' for a datagrid-shaped result, or
+`datagrid-pull' + `seq-uniq' for the bare vector.
 DATAGRID is the vector of structs. INDEX is the zero based column
-number. If CODE is t, then decode data first. If nil, take code
-as is."
-  (interactive)
+number. If CODE is t, then decode data first."
+  (declare (obsolete datagrid-distinct "1.0"))
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let ((vec (if code (datagrid-column-decode datagrid index)
@@ -1136,7 +1161,7 @@ DATAGRID is a vector of datagrid structures. INDEX is the column
 to analyze. It uses zero based counting."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((freq (seq-take (datagrid-column-frequencies datagrid index) 5)))
+  (let ((freq (seq-take (datagrid--frequencies-alist datagrid index nil) 5)))
     (append
      (list (datagrid-column-heading (elt datagrid index)))
      (list (cons "cardinality" (length freq)))
@@ -1235,6 +1260,165 @@ measurement are treated as nominal data."
 			     (datagrid-report-nominal datagrid x)))))))
 
 
+;;;; dplyr-aligned verbs
+
+(defun datagrid--resolve-col (datagrid spec)
+  "Resolve SPEC to a zero-based column index in DATAGRID.
+SPEC is an integer (returned as is) or a heading string."
+  (cond ((integerp spec) spec)
+	((stringp spec)
+	 (or (cl-position spec (datagrid-get-headings datagrid) :test #'equal)
+	     (error "No column with heading %S in datagrid" spec)))
+	(t (error "Bad column spec: %S" spec))))
+
+(defun datagrid-pull (datagrid col)
+  "Return the data vector of column COL in DATAGRID.
+COL is a zero-based integer index or a heading string."
+  (datagrid-column-data (aref datagrid (datagrid--resolve-col datagrid col))))
+
+(defun datagrid-select (datagrid &rest cols)
+  "Return a new datagrid containing only COLS, in the order given.
+Each element of COLS is a zero-based integer index or a heading string."
+  (vconcat (mapcar (lambda (c)
+		     (datagrid-column-copy
+		      (aref datagrid (datagrid--resolve-col datagrid c))))
+		   cols)))
+
+(defun datagrid-rename (datagrid col-or-renames &optional new-heading)
+  "Return a new DATAGRID with one or more headings renamed.
+If NEW-HEADING is non-nil, COL-OR-RENAMES is a single column index or
+heading and that column's heading becomes NEW-HEADING. Otherwise
+COL-OR-RENAMES is an alist ((OLD-OR-IDX . NEW) ...)."
+  (let ((new-dg (vconcat (mapcar #'datagrid-column-copy datagrid))))
+    (if new-heading
+	(let ((idx (datagrid--resolve-col datagrid col-or-renames)))
+	  (setf (datagrid-column-heading (aref new-dg idx)) new-heading))
+      (dolist (pair col-or-renames)
+	(let ((idx (datagrid--resolve-col datagrid (car pair))))
+	  (setf (datagrid-column-heading (aref new-dg idx)) (cdr pair)))))
+    new-dg))
+
+(defun datagrid--slice-rows (datagrid rows)
+  "Return a datagrid containing only ROWS of DATAGRID.
+Column metadata (heading, code, lom) is preserved. ROWS is a list of
+zero-based row indices."
+  (let ((n (length rows)))
+    (vconcat
+     (cl-loop for col across datagrid
+	      collect (let* ((data (datagrid-column-data col))
+			     (new (datagrid-column-copy col))
+			     (result (make-vector n nil)))
+			(cl-loop for i from 0
+				 for row in rows
+				 do (aset result i (aref data row)))
+			(setf (datagrid-column-data new) result)
+			new)))))
+
+(defun datagrid-slice (datagrid &rest row-indices)
+  "Return a new datagrid containing only the rows at ROW-INDICES.
+ROW-INDICES are zero-based row numbers."
+  (datagrid--slice-rows datagrid row-indices))
+
+(defun datagrid-mutate (datagrid new-heading fn &rest source-cols)
+  "Add or replace a column produced by applying FN row-wise.
+DATAGRID is a datagrid. NEW-HEADING is the heading for the produced
+column; if a column with that heading already exists it is replaced,
+otherwise a new column is appended. FN receives one value per
+SOURCE-COL, in order. SOURCE-COLS are zero-based integer indices."
+  (let* ((n-rows (length (datagrid-column-data (aref datagrid 0))))
+	 (col-vecs (mapcar (lambda (i) (datagrid-column-data (aref datagrid i)))
+			   source-cols))
+	 (new-data (make-vector n-rows nil)))
+    (dotimes (r n-rows)
+      (aset new-data r
+	    (apply fn (mapcar (lambda (v) (aref v r)) col-vecs))))
+    (let* ((new-col (datagrid-column-make :heading new-heading :data new-data))
+	   (existing (cl-position new-heading
+				  (datagrid-get-headings datagrid)
+				  :test #'equal))
+	   (copied (vconcat (mapcar #'datagrid-column-copy datagrid))))
+      (if existing
+	  (progn (setf (aref copied existing) new-col)
+		 copied)
+	(vconcat copied (vector new-col))))))
+
+(cl-defun datagrid-count (datagrid col &key sort name code)
+  "Count occurrences of values in column COL of DATAGRID.
+COL is a zero-based integer index or heading string. Returns a
+two-column datagrid: the unique values from COL, plus a count column.
+If SORT is non-nil, rows are ordered by descending count. NAME is the
+heading of the count column (default \"n\"). If CODE is non-nil, decode
+the source column's data before counting."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let* ((idx (datagrid--resolve-col datagrid col))
+	 (heading (datagrid-column-heading (aref datagrid idx)))
+	 (count-name (or name "n"))
+	 (pairs (datagrid--frequencies-alist datagrid idx code)))
+    (unless sort
+      ;; --frequencies-alist sorts by count desc; without :sort, fall back
+      ;; to ordering by the value itself.
+      (setq pairs (seq-sort-by #'car #'datagrid-unknown-type-sort pairs)))
+    (vector (datagrid-column-make :heading heading
+				  :data (vconcat (mapcar #'car pairs)))
+	    (datagrid-column-make :heading count-name
+				  :data (vconcat (mapcar #'cdr pairs))))))
+
+(defun datagrid-distinct (datagrid &rest cols)
+  "Return DATAGRID with duplicate rows removed.
+With no COLS, rows are deduped considering all columns. With one or
+more COLS (integer indices or heading strings), rows are deduped
+considering only those columns, and only those columns appear in the
+result.
+
+Note: row-level dedup walks all rows and hashes the cross-column key
+for each one, so it can be slow on large datagrids."
+  (let* ((indices (if cols
+		      (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
+			      cols)
+		    (number-sequence 0 (1- (length datagrid)))))
+	 (n-rows (length (datagrid-column-data (aref datagrid 0))))
+	 (col-vecs (mapcar (lambda (i) (datagrid-column-data (aref datagrid i)))
+			   indices))
+	 (seen (make-hash-table :test 'equal))
+	 (kept nil))
+    (dotimes (r n-rows)
+      (let ((key (mapcar (lambda (v) (aref v r)) col-vecs)))
+	(unless (gethash key seen)
+	  (puthash key t seen)
+	  (push r kept))))
+    (let ((subset (vconcat (mapcar (lambda (i)
+				     (datagrid-column-copy (aref datagrid i)))
+				   indices))))
+      (datagrid--slice-rows subset (nreverse kept)))))
+
+(defun datagrid-summarise (datagrid &rest specs)
+  "Compute reductions over DATAGRID columns and return an alist.
+Each spec in SPECS is a plist with the following keywords:
+  :name    heading for this reduction (used as the alist key)
+  :fn      reducer (binary function for `seq-reduce', or a Calc
+           abbreviation string when :calc is non-nil)
+  :col     column index or heading string
+  :code    non-nil to decode the column data first
+  :convert non-nil to convert strings to numbers first
+  :calc    non-nil to interpret :fn as a Calc function abbreviation
+
+Returns ((NAME . VALUE) ...) in the order of SPECS."
+  (mapcar (lambda (spec)
+	    (let* ((name (plist-get spec :name))
+		   (fn (plist-get spec :fn))
+		   (col (plist-get spec :col))
+		   (code (plist-get spec :code))
+		   (convert (plist-get spec :convert))
+		   (calc (plist-get spec :calc))
+		   (idx (datagrid--resolve-col datagrid col)))
+	      (cons name
+		    (if calc
+			(datagrid-reduce-vec-calc datagrid fn idx code convert)
+		      (datagrid-reduce-vec datagrid fn idx code convert)))))
+	  specs))
+
+
 ;;; Provide
 (provide 'datagrid)
 ;;; datagrid.el ends here
