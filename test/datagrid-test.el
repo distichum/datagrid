@@ -1051,5 +1051,53 @@ added columns are appended in the wrong order."
     (should (equal out '(("sum" . 100) ("max" . 40))))))
 
 
+(ert-deftest datagrid-test-rows-patch-fills-only-empties ()
+  (let* ((a (vector (datagrid-column-make :heading "id" :data [1 2 3 4])
+		    (datagrid-column-make :heading "name"
+					  :data ["alice" nil "" "dave"])))
+	 (b (vector (datagrid-column-make :heading "id" :data [1 2 3 5])
+		    (datagrid-column-make :heading "name"
+					  :data ["A." "bob" "carol" "ed"])))
+	 ;; String :on, alist of heading refs.
+	 (out (datagrid-rows-patch a b :on "id"
+				   :cols '(("name" . "name")))))
+    ;; Existing alice and dave preserved; nil and "" filled from b.
+    (should (equal (datagrid-pull out "name")
+		   ["alice" "bob" "carol" "dave"]))
+    ;; id 4 has no match in b, so it stays "dave" (already non-empty).
+    (should (equal (datagrid-pull out "id") [1 2 3 4]))
+    ;; Original a is not mutated.
+    (should (equal (datagrid-pull a "name") ["alice" nil "" "dave"]))))
+
+(ert-deftest datagrid-test-rows-patch-on-cons-and-int-cols ()
+  (let* ((a (vector (datagrid-column-make :heading "akey" :data [1 2 3])
+		    (datagrid-column-make :heading "v"    :data [nil nil 9])))
+	 (b (vector (datagrid-column-make :heading "bkey" :data [2 1 3])
+		    (datagrid-column-make :heading "w"    :data [20 10 30])))
+	 (out (datagrid-rows-patch a b :on '("akey" . "bkey")
+				   :cols '((1 . 1)))))
+    (should (equal (datagrid-pull out 1) [10 20 9]))))
+
+
+(ert-deftest datagrid-test-coalesce-merges-and-drops ()
+  (let* ((dg (vector
+	      (datagrid-column-make :heading "id"      :data [1 2 3 4])
+	      (datagrid-column-make :heading "email"   :data ["a" nil "c" ""])
+	      (datagrid-column-make :heading "email_2" :data ["A" "b" "" "d"])
+	      (datagrid-column-make :heading "phone"   :data [nil "p2" nil nil])
+	      (datagrid-column-make :heading "phone_2" :data ["q1" nil "q3" nil])))
+	 (out (datagrid-coalesce dg
+				 '("email" "email_2")
+				 '("phone" "phone_2"))))
+    ;; Suffixed columns dropped.
+    (should (equal (datagrid-get-headings out) ["id" "email" "phone"]))
+    ;; Row-wise first-non-empty across each group.
+    (should (equal (datagrid-pull out "email") ["a" "b" "c" "d"]))
+    (should (equal (datagrid-pull out "phone") ["q1" "p2" "q3" nil]))
+    ;; Original is not mutated.
+    (should (equal (datagrid-get-headings dg)
+		   ["id" "email" "email_2" "phone" "phone_2"]))))
+
+
 (provide 'datagrid-test)
 ;;; datagrid-test.el ends here

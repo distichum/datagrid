@@ -151,8 +151,18 @@ ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
   "Return DG1 with matching DG2 columns appended.
 All rows of DG1 are kept. For each row, the projected DG2
 columns hold the value from the matching DG2 row, or nil if no
-match. ON, COLS, and SUFFIX behave as documented at the top of
-this file. SUFFIX defaults to \"_2\"."
+match.
+
+ON identifies the join key. It accepts an integer (same column
+index in both grids), a string (heading present in both grids),
+or a cons (X . Y) for per-grid index or heading. Keys are
+compared with `equal'; empty keys (nil or empty string) never
+match. When DG2 has duplicate keys, the first occurrence wins.
+
+COLS is a list of DG2 column indices or headings to project. It
+defaults to every DG2 column except the join key. SUFFIX
+disambiguates DG2 headings that collide with DG1 headings and
+defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
@@ -165,8 +175,16 @@ this file. SUFFIX defaults to \"_2\"."
 
 (cl-defun datagrid-inner-join (dg1 dg2 &key on cols suffix)
   "Return only the rows of DG1 that have a match in DG2, with DG2 columns appended.
-ON, COLS, and SUFFIX behave as documented at the top of this
-file. SUFFIX defaults to \"_2\"."
+
+ON identifies the join key: an integer (same column index in
+both grids), a string (heading present in both), or a cons
+(X . Y) for per-grid index or heading. Keys are compared with
+`equal'; empty keys (nil or empty string) never match. When DG2
+has duplicate keys, the first occurrence wins.
+
+COLS is a list of DG2 column indices or headings to project,
+defaulting to every DG2 column except the join key. SUFFIX
+disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
@@ -187,8 +205,17 @@ nil for unmatched rows); then rows of DG2 whose key is absent
 from DG1 are appended at the bottom. For these extra rows,
 DG1's join column receives the DG2 key, DG1's other columns
 receive nil, and the projected DG2 columns receive their actual
-DG2 values. ON, COLS, and SUFFIX behave as documented at the
-top of this file. SUFFIX defaults to \"_2\"."
+DG2 values.
+
+ON identifies the join key: an integer (same column index in
+both grids), a string (heading present in both), or a cons
+(X . Y) for per-grid index or heading. Keys are compared with
+`equal'; empty keys (nil or empty string) never match. When DG2
+has duplicate keys, the first occurrence wins.
+
+COLS is a list of DG2 column indices or headings to project,
+defaulting to every DG2 column except the join key. SUFFIX
+disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
@@ -235,14 +262,22 @@ top of this file. SUFFIX defaults to \"_2\"."
 (cl-defun datagrid-anti-join (dg1 dg2 &key on)
   "Return rows of DG1 whose join key is absent from DG2.
 Empty keys in DG1 (nil or empty string) are kept, since they
-cannot match anything. ON behaves as documented at the top of
-this file."
+cannot match anything.
+
+ON identifies the join key: an integer (same column index in
+both grids), a string (heading present in both), or a cons
+(X . Y) for per-grid index or heading. Keys are compared with
+`equal'."
   (datagrid-join--filter-rows dg1 dg2 on nil))
 
 (cl-defun datagrid-semi-join (dg1 dg2 &key on)
   "Return rows of DG1 whose join key is present in DG2.
-No DG2 columns are projected. ON behaves as documented at the
-top of this file."
+No DG2 columns are projected.
+
+ON identifies the join key: an integer (same column index in
+both grids), a string (heading present in both), or a cons
+(X . Y) for per-grid index or heading. Keys are compared with
+`equal'; empty keys (nil or empty string) never match."
   (datagrid-join--filter-rows dg1 dg2 on t))
 
 ;;;; Deprecated
