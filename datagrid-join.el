@@ -166,7 +166,8 @@ defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
-	 (cols (or cols (datagrid-join--default-cols dg2 on2)))
+	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+			collect (datagrid-join--resolve-key dg2 c)))
 	 (lookup (datagrid-join--build-index
 		  (datagrid-column-data (aref dg2 on2))))
 	 (row-map (datagrid-join--row-map
@@ -188,7 +189,8 @@ disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
-	 (cols (or cols (datagrid-join--default-cols dg2 on2)))
+	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+			collect (datagrid-join--resolve-key dg2 c)))
 	 (lookup (datagrid-join--build-index
 		  (datagrid-column-data (aref dg2 on2))))
 	 (row-map (datagrid-join--row-map
@@ -219,7 +221,8 @@ disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
-	 (cols (or cols (datagrid-join--default-cols dg2 on2)))
+	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+			collect (datagrid-join--resolve-key dg2 c)))
 	 (keys2 (datagrid-column-data (aref dg2 on2)))
 	 (keys1 (datagrid-column-data (aref dg1 on1)))
 	 (lookup2 (datagrid-join--build-index keys2))

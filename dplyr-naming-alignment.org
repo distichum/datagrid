@@ -227,8 +227,11 @@ Covered above.
   =bind_cols= / =bind_rows=, but =add-= reads fine in Lisp.
 - =datagrid-head= — already matches dplyr / R.
 - =datagrid-group-by= — already matches.
-- =datagrid-coalesce-column= / =datagrid-coalesce-columns= — already
-  match (dplyr =coalesce=).
+- =datagrid-rows-patch= — keyed cross-table NA-fill, matching dplyr
+  =rows_patch=. Renamed from =datagrid-coalesce-column(s)= 2026-05-07
+  because that name implied row-wise coalesce semantics, which it does
+  not have. For row-wise coalesce of overlapping columns after a join,
+  compose =datagrid-mutate= with `or'.
 
 * Suggested order of operations
 
