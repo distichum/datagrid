@@ -492,6 +492,76 @@ added columns are appended in the wrong order."
 	 (mask (datagrid-create-mask dg (lambda (x) (string-equal x "x")) 2)))
     (should (equal mask [t nil t nil]))))
 
+(ert-deftest datagrid-test-create-mask-by-heading ()
+  (let* ((dg (dg-test--simple))
+	 (by-name  (datagrid-create-mask dg (lambda (x) (> x 15)) "score"))
+	 (by-index (datagrid-create-mask dg (lambda (x) (> x 15)) 1)))
+    (should (equal by-name [nil t t t]))
+    (should (equal by-name by-index))))
+
+
+;;;; index-or-heading acceptance for other functions
+
+(ert-deftest datagrid-test-sort-by-heading ()
+  (let ((by-name  (datagrid-sort (dg-test--simple) "score"))
+	(by-index (datagrid-sort (dg-test--simple) 1)))
+    (should (equal by-name by-index))))
+
+(ert-deftest datagrid-test-column-add-code-by-heading ()
+  (require 'datagrid-stats)
+  (let* ((code '(("Agree" . 4) ("Disagree" . 2) ("Neutral" . 3)))
+	 (by-name  (datagrid-column-add-code (dg-test--coded) "rating" code))
+	 (by-index (datagrid-column-add-code (dg-test--coded) 0 code)))
+    (should (equal by-name by-index))))
+
+(ert-deftest datagrid-test-column-decode-by-heading ()
+  (let ((by-name  (datagrid-column-decode (dg-test--coded) "rating"))
+	(by-index (datagrid-column-decode (dg-test--coded) 0)))
+    (should (equal by-name by-index))
+    (should (equal by-name [4 2 3 4]))))
+
+(ert-deftest datagrid-test-group-by-by-heading ()
+  (require 'datagrid-stats)
+  (let ((by-name  (datagrid-group-by (dg-test--simple) "group"))
+	(by-index (datagrid-group-by (dg-test--simple) 2)))
+    (should (equal by-name by-index))))
+
+(ert-deftest datagrid-test-reduce-vec-by-heading ()
+  (require 'datagrid-stats)
+  (should (= (datagrid-reduce-vec (dg-test--simple) #'+ "score")
+	     (datagrid-reduce-vec (dg-test--simple) #'+ 1)))
+  (should (= (datagrid-reduce-vec (dg-test--simple) #'+ "score") 100)))
+
+(ert-deftest datagrid-test-reduce-vec-calc-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-reduce-vec-calc (dg-test--simple) "vsum" "score")
+		 (datagrid-reduce-vec-calc (dg-test--simple) "vsum" 1))))
+
+(ert-deftest datagrid-test-column-quartiles-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-column-quartiles (dg-test--simple) "score")
+		 (datagrid-column-quartiles (dg-test--simple) 1))))
+
+(ert-deftest datagrid-test-column-mode-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-column-mode (dg-test--simple) "group")
+		 (datagrid-column-mode (dg-test--simple) 2))))
+
+(ert-deftest datagrid-test-column-mad-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-column-mad (dg-test--simple) "score")
+		 (datagrid-column-mad (dg-test--simple) 1))))
+
+(ert-deftest datagrid-test-report-nominal-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-report-nominal (dg-test--simple) "group")
+		 (datagrid-report-nominal (dg-test--simple) 2))))
+
+(ert-deftest datagrid-test-report-ratio-by-heading ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-report-ratio (dg-test--simple) "score")
+		 (datagrid-report-ratio (dg-test--simple) 1))))
+
 
 ;;;; datagrid-filter-by-mask
 

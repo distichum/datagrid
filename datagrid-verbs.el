@@ -197,12 +197,13 @@ This function provides a new datagrid with the INDEX row eliminated."
 (defun datagrid-sort (datagrid index)
   "Sort a datagrid by a specific column.
 DATAGRID is a vector of vectors. INDEX is the zero based index of the
-column to sort by. This function assumes that elements in one column are
-of like data type and will cause errors if they are not. Created with
-the help of Claude.ai."
+column to sort by, or a heading string. This function assumes that
+elements in one column are of like data type and will cause errors if
+they are not. Created with the help of Claude.ai."
   ;; TODO: Recreate this with an indirect sorting method as suggested at
   ;; https://www.reddit.com/r/emacs/comments/1lv24a7/comment/n22kkbp/?context=3
-  (let* ((new-dg (vconcat (cl-loop for col across datagrid
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (new-dg (vconcat (cl-loop for col across datagrid
 				   collect (datagrid-column-copy col))))
 	 (sort-col-data (datagrid-column-data (aref new-dg index)))
 	 (sort-col-length (length sort-col-data))
@@ -317,7 +318,8 @@ sibling columns into one."
 (defun datagrid-create-mask (datagrid pred index)
   "Create a mask for a DATAGRID column at INDEX.
 PRED is a function of one argument. It will operate on the
-datagrid column at INDEX. INDEX is zero based.
+datagrid column at INDEX. INDEX is zero based, or a string naming
+the column heading (resolved via `datagrid-col-index-by-header').
 
 This simply returns a vector.
 
@@ -344,7 +346,8 @@ Other common predicate function examples using lambdas:
  (lambda (x) (> x \"2025\"))
  (lambda (x) (<= x \"2025\"))"
   (interactive)
-  (let* ((struct (elt datagrid index))
+  (let* ((idx (datagrid--resolve-col datagrid index))
+	 (struct (elt datagrid idx))
 	 (vec (datagrid-column-data struct))
 	 (mask (and (vectorp datagrid)
 		    (> (length datagrid) 0)

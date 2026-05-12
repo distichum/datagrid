@@ -500,10 +500,10 @@ If HEADINGS is non-nil, create a vtable with a headings row."
 
 (defun datagrid-column-add-code (datagrid index code)
   "Add coding data to a datagrid-column.
-DATAGRID is the vector of structs. INDEX is a number or a list of
-numbers. The function adds CODE in the CODE slot of DATAGRID. If INDEX
-is a list, then CODE is applied to all datagrid columns at those
-positions.
+DATAGRID is the vector of structs. INDEX is a column index (zero-based
+integer), a heading string, or a list of either. The function adds CODE
+in the CODE slot of DATAGRID. If INDEX is a list, then CODE is applied
+to all datagrid columns at those positions.
 
 CODE is an alist where the keys are one possible interpretation
 of the research data and the value is another. For example:
@@ -515,8 +515,12 @@ of the research data and the value is another. For example:
   (\"Strongly agree\"    . 5))"
   (if (listp index)
       (cl-loop for elt in index
-	       do (setf (datagrid-column-code (aref datagrid elt)) code))
-    (setf (datagrid-column-code (aref datagrid index)) code))
+	       do (setf (datagrid-column-code
+			 (aref datagrid (datagrid--resolve-col datagrid elt)))
+			code))
+    (setf (datagrid-column-code
+	   (aref datagrid (datagrid--resolve-col datagrid index)))
+	  code))
   datagrid)
 
 
@@ -604,7 +608,7 @@ Deprecated. Use `datagrid-pull' instead."
 (defun datagrid-column-decode (datagrid index)
   "Output a decoded datagrid column as a vector.
 DATAGRID is the vector of structs. INDEX is the column number to
-code. It is zero based counting. The datagrid-column must have
+code (zero based) or a heading string. The datagrid-column must have
 DATAGRID-COLUMN-CODE to decode the data. If not, then the output
 is simply DATAGRID-COLUMN-DATA.
 
@@ -630,7 +634,8 @@ this point. I should probably create a function that returns the
 original data values that return nil."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (datagrid-column-data (aref datagrid index)))
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (datagrid-column-data (aref datagrid index)))
 	 (code (datagrid-column-code (aref datagrid index)))
 	 (coded-alist (when (and code	      ;; code must exist
 				 (listp code) ;; it must be a list

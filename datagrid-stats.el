@@ -56,12 +56,14 @@ for each one, so it can be slow on large datagrids."
 
 (defun datagrid-group-by (datagrid index)
   "Group data in DATAGRID according to INDEX.
-INDEX is a column number. The resulting structure is a 3D vector. The
-first dimension is a vector of groups which were formed by grouping rows
-of the datagrid by unique values in COL-VALUES. The 2nd dimension vector
-contains the original datagrid vectors filtered for only that group. The
-3rd dimension vector contains the data from one column for one group."
-  (let* ((col-data (datagrid-column-data (aref datagrid index)))
+INDEX is a zero-based column number or a heading string. The resulting
+structure is a 3D vector. The first dimension is a vector of groups
+which were formed by grouping rows of the datagrid by unique values in
+COL-VALUES. The 2nd dimension vector contains the original datagrid
+vectors filtered for only that group. The 3rd dimension vector contains
+the data from one column for one group."
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (col-data (datagrid-column-data (aref datagrid index)))
 	 (index-map (make-hash-table :test #'equal))
 	 (n (length col-data)))
     (cl-loop for i from 0 below n
@@ -91,7 +93,8 @@ SEQ-REDUCE."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (if code
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (if code
 		  (datagrid-column-decode datagrid index)
 		(datagrid-column-data (aref datagrid index))))
 	 (vec (if convert
@@ -181,7 +184,8 @@ Nil data values are discarded before the calculation."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (if code
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (if code
 		  (datagrid-column-decode datagrid index)
 		(datagrid-column-data (aref datagrid index))))
 	 (vec (if convert
@@ -241,7 +245,8 @@ the source column's data before counting."
 Sorted by count descending. If CODE is non-nil, decode first."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (if code
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (if code
 		  (datagrid-column-decode datagrid index)
 		(datagrid-column-data (aref datagrid index))))
 	 (counts (make-hash-table :test 'equal))
@@ -264,7 +269,8 @@ as is. Returns an alist of (value . count) sorted by count descending."
   "Find the first, second, and third quartile of a column.
 DATAGRID is the vector of structs. INDEX is the zero based column
 number. If CODE is t, then decode data first. If nil, take code as is."
-  (if-let* ((vec (if code
+  (if-let* ((index (datagrid--resolve-col datagrid index))
+	    (vec (if code
 		     (datagrid-column-decode datagrid index)
 		   (datagrid-column-data (aref datagrid index))))
 	    (vec (seq-into (seq-filter #'identity vec) 'vector))
@@ -301,8 +307,9 @@ number. If CODE is t, then decode data first."
   (declare (obsolete datagrid-distinct "1.0"))
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((vec (if code (datagrid-column-decode datagrid index)
-	       (datagrid-column-data (aref datagrid index)))))
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (if code (datagrid-column-decode datagrid index)
+		(datagrid-column-data (aref datagrid index)))))
     (seq-uniq vec)))
 
 (defun datagrid-column-mad (datagrid index &optional code)
@@ -310,7 +317,8 @@ number. If CODE is t, then decode data first."
 DATAGRID is the vector of structs. INDEX is the zero based column
 number. If CODE is t, then decode data first. If nil, take code
 as is."
-  (let* ((lst (delq nil (append (if code
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (lst (delq nil (append (if code
 				    (datagrid-column-decode datagrid index)
 				  (datagrid-column-data (aref datagrid index)))
 				nil)))
@@ -326,11 +334,12 @@ as is."
 
 (defun datagrid-report-nominal (datagrid index)
   "Display column statistics for nominal data.
-DATAGRID is a vector of datagrid structures. INDEX is the column
-to analyze. It uses zero based counting."
+DATAGRID is a vector of datagrid structures. INDEX is the column to
+analyze (zero-based integer or heading string)."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((freq (seq-take (datagrid--frequencies-alist datagrid index nil) 5)))
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (freq (seq-take (datagrid--frequencies-alist datagrid index nil) 5)))
     (append
      (list (datagrid-column-heading (elt datagrid index)))
      (list (cons "cardinality" (length freq)))
@@ -344,7 +353,8 @@ CONVERT have the same meaning as in the public report functions. If
 INCLUDE-MAD is non-nil, append the mean absolute deviation."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (if code
+  (let* ((index (datagrid--resolve-col datagrid index))
+	 (vec (if code
 		  (datagrid-column-decode datagrid index)
 		(datagrid-column-data (aref datagrid index))))
 	 (lst (if convert
