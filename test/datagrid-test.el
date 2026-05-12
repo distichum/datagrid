@@ -563,6 +563,65 @@ added columns are appended in the wrong order."
 		 (datagrid-report-ratio (dg-test--simple) 1))))
 
 
+;;;; datagrid-first-non-empty
+
+(ert-deftest datagrid-test-first-non-empty-skips-nil-and-empty ()
+  (require 'datagrid-stats)
+  (should (equal (datagrid-first-non-empty '(nil "" "a" "b")) "a"))
+  (should (equal (datagrid-first-non-empty '("" nil)) nil))
+  (should (equal (datagrid-first-non-empty '()) nil))
+  (should (equal (datagrid-first-non-empty [nil "" 0 1]) 0)))
+
+
+;;;; datagrid-summarize-across
+
+(defun dg-test--scopus ()
+  "Return a small datagrid mirroring the import-collapse use case."
+  (vector
+   (datagrid-column-make
+    :heading "scopus_work_id"
+    :data ["w1" "w1" "w2" "w2" "w2" "w3"])
+   (datagrid-column-make
+    :heading "orcid"
+    :data ["" "0000-0001" "" "" "0000-0002" ""])
+   (datagrid-column-make
+    :heading "department"
+    :data ["" "ENG" "" "" "EARTH" ""])))
+
+(ert-deftest datagrid-test-summarize-across-collapses-to-one-row-per-key ()
+  (require 'datagrid-stats)
+  (let* ((out (datagrid-summarize-across
+	       (dg-test--scopus) #'datagrid-first-non-empty "scopus_work_id")))
+    (should (equal (datagrid-get-headings out)
+		   ["scopus_work_id" "orcid" "department"]))
+    (should (equal (datagrid-column-data (aref out 0))
+		   ["w1" "w2" "w3"]))
+    (should (equal (datagrid-column-data (aref out 1))
+		   ["0000-0001" "0000-0002" nil]))
+    (should (equal (datagrid-column-data (aref out 2))
+		   ["ENG" "EARTH" nil]))))
+
+(ert-deftest datagrid-test-summarize-across-key-by-integer ()
+  (require 'datagrid-stats)
+  (let ((by-name  (datagrid-summarize-across
+		   (dg-test--scopus) #'datagrid-first-non-empty "scopus_work_id"))
+	(by-index (datagrid-summarize-across
+		   (dg-test--scopus) #'datagrid-first-non-empty 0)))
+    (should (equal by-name by-index))))
+
+(ert-deftest datagrid-test-summarize-across-multi-key ()
+  (require 'datagrid-stats)
+  (let* ((dg (vector
+	      (datagrid-column-make :heading "k1" :data ["a" "a" "a" "b"])
+	      (datagrid-column-make :heading "k2" :data ["x" "x" "y" "y"])
+	      (datagrid-column-make :heading "v"  :data ["" "v1" "v2" "v3"])))
+	 (out (datagrid-summarize-across
+	       dg #'datagrid-first-non-empty "k1" "k2")))
+    (should (equal (datagrid-column-data (aref out 0)) ["a" "a" "b"]))
+    (should (equal (datagrid-column-data (aref out 1)) ["x" "y" "y"]))
+    (should (equal (datagrid-column-data (aref out 2)) ["v1" "v2" "v3"]))))
+
+
 ;;;; datagrid-filter-by-mask
 
 (ert-deftest datagrid-test-filter-by-mask-basic ()
@@ -1112,9 +1171,9 @@ added columns are appended in the wrong order."
     ;; Subset by listed cols matches the full row form here.
     (should (equal (datagrid-pull subset 0) ["a" "b" "c" "b"]))))
 
-(ert-deftest datagrid-test-summarise-returns-alist ()
+(ert-deftest datagrid-test-summarize-returns-alist ()
   (let* ((dg (dg-test--simple))
-	 (out (datagrid-summarise
+	 (out (datagrid-summarize
 	       dg
 	       '(:name "sum" :fn + :col 1)
 	       '(:name "max" :fn max :col "score"))))

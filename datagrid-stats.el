@@ -17,7 +17,7 @@
 
 ;; Reductions, descriptive statistics, and summary reports for
 ;; datagrid. Also hosts the dplyr verbs that are tightly coupled to
-;; reduction machinery: distinct, group-by, and summarise.
+;; reduction machinery: distinct, group-by, and summarize.
 
 ;;; Code:
 (require 'cl-lib)
@@ -194,7 +194,7 @@ Nil data values are discarded before the calculation."
 	 (vec (delq nil (append vec nil))))
     (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
-(defun datagrid-summarise (datagrid &rest specs)
+(defun datagrid-summarize (datagrid &rest specs)
   "Compute reductions over DATAGRID columns and return an alist.
 Each spec in SPECS is a plist with the following keywords:
   :name    heading for this reduction (used as the alist key)
@@ -219,6 +219,65 @@ Returns ((NAME . VALUE) ...) in the order of SPECS."
 			(datagrid-reduce-vec-calc datagrid fn idx code convert)
 		      (datagrid-reduce-vec datagrid fn idx code convert)))))
 	  specs))
+
+(defun datagrid-first-non-empty (seq)
+  "Return the first element of SEQ that is not nil and not the empty string."
+  (seq-some (lambda (x)
+	      (unless (or (null x) (and (stringp x) (string-empty-p x)))
+		x))
+	    seq))
+
+(defun datagrid-summarize-across (datagrid fn &rest cols)
+  "Collapse DATAGRID to one row per unique combination of values in COLS.
+COLS are column refs (zero-based integers or heading strings); they
+identify the grouping key. For every other column, FN is called once per
+group on the list of that column's values within the group, producing
+one cell. Returns a new datagrid with the COLS columns first (one row
+per group, in first-seen order), followed by the reduced columns in
+their original order."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let* ((key-indices (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
+			      cols))
+	 (n-cols (length datagrid))
+	 (n-rows (length (datagrid-column-data (aref datagrid 0))))
+	 (other-indices (cl-loop for i from 0 below n-cols
+				 unless (memq i key-indices)
+				 collect i))
+	 (key-vecs (mapcar (lambda (i) (datagrid-column-data (aref datagrid i)))
+			   key-indices))
+	 (groups (make-hash-table :test 'equal))
+	 (order nil))
+    (dotimes (r n-rows)
+      (let ((key (mapcar (lambda (v) (aref v r)) key-vecs)))
+	(unless (gethash key groups)
+	  (push key order))
+	(push r (gethash key groups))))
+    (let* ((order (nreverse order))
+	   (group-rows (mapcar (lambda (k) (nreverse (gethash k groups))) order))
+	   (key-cols
+	    (cl-loop for ki in key-indices
+		     for src = (datagrid-column-data (aref datagrid ki))
+		     collect (let ((new (datagrid-column-copy (aref datagrid ki))))
+			       (setf (datagrid-column-data new)
+				     (vconcat
+				      (mapcar (lambda (rows) (aref src (car rows)))
+					      group-rows)))
+			       new)))
+	   (reduced-cols
+	    (cl-loop for oi in other-indices
+		     for src = (datagrid-column-data (aref datagrid oi))
+		     collect (let ((new (datagrid-column-copy (aref datagrid oi))))
+			       (setf (datagrid-column-data new)
+				     (vconcat
+				      (mapcar
+				       (lambda (rows)
+					 (funcall fn
+						  (mapcar (lambda (r) (aref src r))
+							  rows)))
+				       group-rows)))
+			       new))))
+      (vconcat (append key-cols reduced-cols)))))
 
 (cl-defun datagrid-count (datagrid col &key sort name code)
   "Count occurrences of values in column COL of DATAGRID.

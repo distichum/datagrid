@@ -21,7 +21,7 @@
 ;; rows-patch, coalesce, plus the mask-based filter helpers
 ;; (create-mask, filter-by-mask).
 
-;; Verbs that are tightly coupled to reductions (summarise, group-by,
+;; Verbs that are tightly coupled to reductions (summarize, group-by,
 ;; distinct) live in datagrid-stats.el instead.
 
 ;;; Code:

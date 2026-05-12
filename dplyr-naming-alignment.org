@@ -56,12 +56,12 @@ Signature (folded form):
 *** Further instruction
 Support row-level form but document its performance problems.
 
-** DONE datagrid-reduce-vec / datagrid-reduce-vec-calc → datagrid-summarise
+** DONE datagrid-reduce-vec / datagrid-reduce-vec-calc → datagrid-summarize
 :PROPERTIES:
 :PRIORITY: A
 :END:
 =reduce= is Lisp/Clojure flavor; data-analysis users reach for
-=summarize= / =summarise=. Possible split:
+=summarize= / =summarize=. Possible split:
 - =datagrid-summarize-column= for the simple per-column reduction
 - =datagrid-summarize-column-calc= for the calc-wrapped variant
 Or fold both into =datagrid-summarize= with a flag.
@@ -80,8 +80,8 @@ where =:calc t= reinterprets REDUCER as a calc expression string.
 
 *** Further instruction
 Do not change datagrid-reduce-vec or datagrid-reduce-vec-calc.
-Instead, create a similar datagrid-summarise-column. Reuse code. Use
-summarise, not summarize. Use the following form. Uniform, parses with
+Instead, create a similar datagrid-summarize-column. Reuse code. Use
+summarize, not summarize. Use the following form. Uniform, parses with
 plist-get, no ambiguity. A bit more verbose but every field is
 labeled.
 
