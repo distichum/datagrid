@@ -114,6 +114,58 @@ sorted and counted by computer programs."
   (lom nil :type string :documentation "Level of measurement.")
   (code nil :type list :documentation "An alist used to code or decode values."))
 
+(cl-defstruct (datagrid (:constructor datagrid-make)
+                        (:copier datagrid-copy)
+                        (:predicate datagridp))
+  "A datagrid is a collection of datagrid-column structs with optional
+row and column permutations.
+
+COLUMNS is a vector of datagrid-column structs.
+
+ROW-ORDER is a vector of integer indices into the column data,
+defining a logical row ordering. A value of nil means rows are in
+their natural physical order (0, 1, ..., N-1).
+
+COL-ORDER is a vector of integer indices into COLUMNS, defining a
+logical column ordering. A value of nil means columns are in their
+natural physical order.
+
+The order slots allow sort, filter, slice, and select operations to
+return new datagrids that share underlying column data with the
+source, by composing permutations instead of copying data."
+  (columns nil :type vector :documentation "Vector of datagrid-column structs.")
+  (row-order nil :type vector :documentation "Row permutation, or nil for identity.")
+  (col-order nil :type vector :documentation "Column permutation, or nil for identity."))
+
+(defsubst datagrid--row-at (dg i)
+  "Physical row index for logical row I in DG.
+Nil row-order means rows are in natural order."
+  (let ((order (datagrid-row-order dg)))
+    (if order (aref order i) i)))
+
+(defsubst datagrid--col-at (dg j)
+  "Physical column index for logical column J in DG.
+Nil col-order means columns are in natural order."
+  (let ((order (datagrid-col-order dg)))
+    (if order (aref order j) j)))
+
+(defsubst datagrid--nrows (dg)
+  "Number of logical rows in DG.
+Uses the length of `row-order' when set, otherwise the length of
+the first column's data. Returns 0 when DG has no columns."
+  (let ((order (datagrid-row-order dg))
+        (cols (datagrid-columns dg)))
+    (cond (order (length order))
+          ((or (null cols) (zerop (length cols))) 0)
+          (t (length (datagrid-column-data (aref cols 0)))))))
+
+(defsubst datagrid--ncols (dg)
+  "Number of logical columns in DG.
+Uses the length of `col-order' when set, otherwise the length of
+the `columns' vector."
+  (let ((order (datagrid-col-order dg)))
+    (if order (length order) (length (datagrid-columns dg)))))
+
 (defvar datagrid-column-example
   (datagrid-column-make :heading "I like Emacs."
 			:data [5 5 5 5 5]
@@ -126,32 +178,34 @@ sorted and counted by computer programs."
   "An example datagrid-column structure.")
 
 (defvar datagrid-example
-  (vector (datagrid-column-make
-	   :heading "date"
-	   :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-	   :lom nil)
-	  (datagrid-column-make
-	   :heading "location"
-	   :data ["somewhere" "out" "there" "far"]
-	   :lom "ordinal"
-	   :code  '(("somewhere" . 1)
-		    ("out"       . 2)
-		    ("there"     . 3)
-		    ("far"       . 4)))
-	  (datagrid-column-make
-	   :heading "precipitation"
-	   :data [0.5 0 .25 1]
-	   :lom "ratio")
-	  (datagrid-column-make
-	   :heading "high-temp"
-	   :data [15 20 32 22]
-	   :lom "interval")
-	  (datagrid-column-make
-	   :heading "rating"
-	   :data ["good" "bad" "ugly" "uglier"]
-	   :lom "nominal"))
-  "A datagrid is a vector of datagrid-column data structures.
-This example can be used for testing.")
+  (datagrid-make
+   :columns
+   (vector (datagrid-column-make
+	    :heading "date"
+	    :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+	    :lom nil)
+	   (datagrid-column-make
+	    :heading "location"
+	    :data ["somewhere" "out" "there" "far"]
+	    :lom "ordinal"
+	    :code  '(("somewhere" . 1)
+		     ("out"       . 2)
+		     ("there"     . 3)
+		     ("far"       . 4)))
+	   (datagrid-column-make
+	    :heading "precipitation"
+	    :data [0.5 0 .25 1]
+	    :lom "ratio")
+	   (datagrid-column-make
+	    :heading "high-temp"
+	    :data [15 20 32 22]
+	    :lom "interval")
+	   (datagrid-column-make
+	    :heading "rating"
+	    :data ["good" "bad" "ugly" "uglier"]
+	    :lom "nominal")))
+  "An example datagrid for testing.
+The columns slot is a vector of datagrid-column structs.")
 
 
 ;;;; Helper functions:
@@ -322,28 +376,23 @@ only the data for a row up to the minimum row length."
                :heading label
                :data (vconcat extended))
               result)))
-    (vconcat result)))
+    (datagrid-make :columns (vconcat result))))
 
-(defun datagrid-make (col-num row-num &optional init heading-list)
+(defun datagrid-make-empty (col-num row-num &optional init heading-list)
   "Create a new datagrid with specified dimensions.
-Return a newly created vector of datagrid-column structs where
-COL-NUM is the number of columns. ROW-NUM is the number of rows
-in each column. HEADING-LIST is a list whose length must equal
-the number of columns. INIT is the value of each element in each
-:data slot vector in each datagrid-column struct."
-  (interactive)
+COL-NUM is the number of columns. ROW-NUM is the number of rows in
+each column. HEADING-LIST is a list whose length must equal the
+number of columns. INIT is the value of each element in each :data
+slot vector in each datagrid-column struct."
   (let ((headings (or heading-list (make-list col-num nil))))
-    (cl-loop for elt from 1 to col-num
-	     ;; Make a list of ROW-NUM items, all of which are INIT.
-	     for init-vec = (make-vector row-num init)
-	     ;; Create a datagrid-column struct with init-vec as the data.
-             for dg-col = (datagrid-column-make :data init-vec)
-	     ;; Set the heading of the datagrid-column
-	     do (setf (datagrid-column-heading dg-col) (elt headings (1- elt)))
-	     collect dg-col
-	     ;; It seems like I would not need the into and finally.
-	     into parent-vector
-	     finally return (vconcat parent-vector))))
+    (datagrid-make
+     :columns
+     (cl-loop for elt from 1 to col-num
+              for init-vec = (make-vector row-num init)
+              for dg-col = (datagrid-column-make :data init-vec)
+              do (setf (datagrid-column-heading dg-col) (elt headings (1- elt)))
+              collect dg-col into parent
+              finally return (vconcat parent)))))
 
 
 (defun datagrid-from-vectors (&rest vectors)
@@ -352,10 +401,12 @@ The first element in each vector is the heading."
   (interactive)
   (unless (and vectors (cl-every #'vectorp vectors))
     (error "All arguments must be vectors"))
-  (vconcat (cl-loop for v in vectors
-		    collect (datagrid-column-make
-			     :heading (elt v 0)
-			     :data (seq-drop v 1)))))
+  (datagrid-make
+   :columns
+   (vconcat (cl-loop for v in vectors
+		     collect (datagrid-column-make
+			      :heading (elt v 0)
+			      :data (seq-drop v 1))))))
 
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
@@ -375,12 +426,14 @@ REQUIRES: CSV-MODE"
 	  (forward-line))
 	;; Transpose the list of lists to make it a column store.
 	(setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
-	(vconcat (cl-loop for item in 2d-by-column
-                          collect (datagrid-column-make
-				   :heading (when headings (elt item 0))
-				   :data (vconcat (if headings
-						      (seq-drop item 1)
-						    item)))))))))
+	(datagrid-make
+	 :columns
+	 (vconcat (cl-loop for item in 2d-by-column
+                           collect (datagrid-column-make
+				    :heading (when headings (elt item 0))
+				    :data (vconcat (if headings
+						       (seq-drop item 1)
+						     item))))))))))
 
 (defun datagrid-from-csv-file (file-path &optional headings)
   "Return a datagrid from a CSV file at FILE-PATH.
@@ -525,19 +578,6 @@ of the research data and the value is another. For example:
 
 
 ;;;; Datagrid utilities; results are not datagrids
-(defun datagridp (datagrid)
-  "Check if DATAGRID is a valid vector of datagrid-columns.
-The datagrid-columns must have DATAGRID-COLUMN-DATA fields with equal
-length."
-  (and (vectorp datagrid)
-       (> (length datagrid) 0)
-       (datagrid-column-p (aref datagrid 0))
-       (let ((first-len (length (datagrid-column-data (aref datagrid 0)))))
-	 (cl-every (lambda (col)
-		     (and (datagrid-column-p col)
-			  (= (length (datagrid-column-data col)) first-len)))
-		   datagrid))))
-
 (defun datagrid-dimensions (datagrid)
   "Return the two dimensions of the DATAGRID's data slot.
 DATAGRID is a vector of datagrid-column structs. Returns a cons
