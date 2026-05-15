@@ -28,16 +28,32 @@
 
 ;;; Commentary:
 
-;; datagrid.el is a list of functions to handle table-like structures
-;; in Emacs Lisp. A structure is made of one vector whose elements are
-;; datagrid-column data structures. Each datagrid-column structure is
-;; like a table column. A datagrid-column is defined by cl-defstruct.
-;; Each datagrid-column has a data slot that contains a vector. All
-;; dagatrid-columns in a datagrid must have an equal number of
-;; elements in their datagrid-column-data slot. Think of it as tabular
-;; data, a spreadsheet, a database table, or a dataframe. The purpose
-;; of datagrid.el is to manipulate data in and do calculations on small to
-;; medium sized data sets.
+;; datagrid.el creates and handles table-like data structures in
+;; Emacs Lisp. Both the datagrid and its columns are defined with
+;; cl-defstruct.
+;;
+;; A datagrid struct has three slots:
+;;
+;;   columns    - a vector of datagrid-column structs
+;;   row-order  - a vector of integer indices giving a logical row
+;;                ordering, or nil for natural order
+;;   col-order  - a vector of integer indices giving a logical column
+;;                ordering, or nil for natural order
+;;
+;; Each datagrid-column is like a table column and carries its own
+;; heading, data vector, level of measurement, and optional code
+;; alist. All datagrid-columns in a single datagrid must have an
+;; equal number of elements in their data slot.
+;;
+;; The row-order and col-order slots let sort, filter, slice, and
+;; select operations return new datagrids that share underlying
+;; column data with the source by composing permutations rather than
+;; copying data. Most user-facing functions index logically, so the
+;; permutations are transparent to callers.
+;;
+;; Think of a datagrid as tabular data: a spreadsheet, a database
+;; table, or a dataframe. The purpose of datagrid.el is to manipulate
+;; data in and do calculations on small to medium sized data sets.
 
 ;; datagrid.el is not meant to display data in a buffer or manipulate
 ;; data that is already in a table. That said, the

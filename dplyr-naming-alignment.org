@@ -112,7 +112,7 @@ COL is an integer index or a heading string. Returns a vector.
 
 *** Further instruction
 
-** TODO datagrid-sort → datagrid-arrange (weak case)
+** WONTDO datagrid-sort → datagrid-arrange (weak case)
 :PROPERTIES:
 :PRIORITY: C
 :END:
