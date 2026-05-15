@@ -471,27 +471,30 @@ Nil becomes an empty field."
 
 (defun datagrid--insert-csv (datagrid &optional headings)
   "Insert DATAGRID at point in the current buffer as CSV.
-If HEADINGS is non-nil, insert a heading row first. This is lossy:
-the LOM and CODE slots are not preserved."
+If HEADINGS is non-nil, insert a heading row first. Iterates DATAGRID
+in logical row and column order. This is lossy: the LOM and CODE slots
+are not preserved."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((n-rows (cdr (datagrid-dimensions datagrid)))
-        (cols (append datagrid nil))
-        (row 0))
+  (let* ((cols (datagrid-columns datagrid))
+         (ncols (datagrid--ncols datagrid))
+         (nrows (datagrid--nrows datagrid)))
     (when headings
       (insert (mapconcat #'datagrid--csv-quote-field
                          (append (datagrid-get-headings datagrid) nil)
                          ","))
       (insert "\n"))
-    (while (< row n-rows)
-      (insert (mapconcat
-               (lambda (col)
-                 (datagrid--csv-quote-field
-                  (aref (datagrid-column-data col) row)))
-               cols
-               ","))
-      (insert "\n")
-      (setq row (1+ row)))))
+    (cl-loop for i from 0 below nrows
+             for phys-row = (datagrid--row-at datagrid i) do
+             (insert (mapconcat
+                      (lambda (j)
+                        (let* ((phys-col (datagrid--col-at datagrid j))
+                               (col (aref cols phys-col)))
+                          (datagrid--csv-quote-field
+                           (aref (datagrid-column-data col) phys-row))))
+                      (number-sequence 0 (1- ncols))
+                      ","))
+             (insert "\n"))))
 
 (defun datagrid-write-csv (datagrid file-path &optional headings)
   "Write DATAGRID to FILE-PATH as CSV.
@@ -513,11 +516,12 @@ buffer. This is lossy: the LOM and CODE slots are not preserved."
     buf))
 
 (defun datagrid-to-vec-of-vec (datagrid)
-  "Create a vector of vectors from a DATAGRID.
+  "Create a vector of vectors from DATAGRID in logical order.
 This is a lossy function because it does not maintain the headings,
 code, or lom slot."
-  (vconcat (cl-loop for elt across datagrid
-		    collect (datagrid-column-data elt))))
+  (let ((ncols (datagrid--ncols datagrid)))
+    (vconcat (cl-loop for j from 0 below ncols
+                      collect (datagrid-pull datagrid j)))))
 
 (defun datagrid-to-alist (datagrid &optional headings)
   "Create an alist from a DATAGRID.
@@ -553,10 +557,10 @@ If HEADINGS is non-nil, create a vtable with a headings row."
 
 (defun datagrid-column-add-code (datagrid index code)
   "Add coding data to a datagrid-column.
-DATAGRID is the vector of structs. INDEX is a column index (zero-based
-integer), a heading string, or a list of either. The function adds CODE
-in the CODE slot of DATAGRID. If INDEX is a list, then CODE is applied
-to all datagrid columns at those positions.
+DATAGRID is a datagrid struct. INDEX is a number or a list of
+numbers. The function adds CODE in the CODE slot of DATAGRID. If INDEX
+is a list, then CODE is applied to all datagrid columns at those
+positions.
 
 CODE is an alist where the keys are one possible interpretation
 of the research data and the value is another. For example:
@@ -566,40 +570,37 @@ of the research data and the value is another. For example:
   (\"Neutral\"           . 3)
   (\"Agree\"             . 4)
   (\"Strongly agree\"    . 5))"
-  (if (listp index)
-      (cl-loop for elt in index
-	       do (setf (datagrid-column-code
-			 (aref datagrid (datagrid--resolve-col datagrid elt)))
-			code))
-    (setf (datagrid-column-code
-	   (aref datagrid (datagrid--resolve-col datagrid index)))
-	  code))
-  datagrid)
+  (let* ((src (datagrid-columns datagrid))
+         (new-cols (copy-sequence src))
+         (targets (if (listp index) index (list index))))
+    (dolist (i targets)
+      (let* ((phys (datagrid--col-at datagrid i))
+             (new-col (datagrid-column-copy (aref new-cols phys))))
+        (setf (datagrid-column-code new-col) code)
+        (setf (aref new-cols phys) new-col)))
+    (datagrid-make :columns new-cols
+                   :row-order (datagrid-row-order datagrid)
+                   :col-order (datagrid-col-order datagrid))))
 
 
 ;;;; Datagrid utilities; results are not datagrids
 (defun datagrid-dimensions (datagrid)
-  "Return the two dimensions of the DATAGRID's data slot.
-DATAGRID is a vector of datagrid-column structs. Returns a cons
-cell (columns . rows), where columns is the number of
-columns and rows is the number of rows."
+  "Return the logical dimensions of DATAGRID as (columns . rows)."
   (interactive)
-  (let ((dg (aref datagrid 0)))
-    (cons (length datagrid) (length (datagrid-column-data dg)))))
+  (cons (datagrid--ncols datagrid) (datagrid--nrows datagrid)))
 
 (defun datagrid-get-elt (datagrid column-num row-num)
   "Get a value at a specific column and row.
-DATAGRID is the vector of datagrid-columns. COLUMN-NUM is the
-column number with zero based counting. ROW-NUM is the row number
-with zero based counting. Headings are not part of the row
-numbering."
+COLUMN-NUM and ROW-NUM are zero-based logical indices."
   (interactive)
-  (let ((dg-col (aref datagrid column-num)))
-    (aref (datagrid-column-data dg-col) row-num)))
+  (let* ((cols (datagrid-columns datagrid))
+         (dg-col (aref cols (datagrid--col-at datagrid column-num))))
+    (aref (datagrid-column-data dg-col)
+          (datagrid--row-at datagrid row-num))))
 
 (defun datagrid--resolve-col (datagrid spec)
-  "Retriev a column of DATAGRID based on SPEC.
-SPEC is an column index integer or a heading string."
+  "Resolve a logical column index in DATAGRID from SPEC.
+SPEC is an integer index or a heading string."
   (cond ((integerp spec) spec)
 	((stringp spec)
 	 (or (cl-position spec (datagrid-get-headings datagrid) :test #'equal)
@@ -607,43 +608,58 @@ SPEC is an column index integer or a heading string."
 	(t (error "Bad column spec: %S" spec))))
 
 (defun datagrid-pull (datagrid col)
-  "Return the data vector of column COL in DATAGRID.
-COL is a zero-based integer index or a heading string."
-  (datagrid-column-data (aref datagrid (datagrid--resolve-col datagrid col))))
+  "Return the data vector of logical column COL in DATAGRID.
+COL is a zero-based logical index or a heading string. If DATAGRID
+has a row-order, returns a freshly built vector in logical order;
+otherwise returns the underlying data vector (shared)."
+  (let* ((cols (datagrid-columns datagrid))
+         (j (datagrid--col-at datagrid (datagrid--resolve-col datagrid col)))
+         (data (datagrid-column-data (aref cols j)))
+         (order (datagrid-row-order datagrid)))
+    (if order
+        (vconcat (cl-loop for i across order collect (aref data i)))
+      data)))
 
 (defun datagrid-get-col-data (datagrid index)
-  "Extract a column vector from DATAGRID at INDEX.
+  "Extract a column vector from DATAGRID at logical INDEX.
 Deprecated. Use `datagrid-pull' instead."
   (declare (obsolete datagrid-pull "1.0"))
-  (datagrid-column-data (aref datagrid index)))
+  (datagrid-pull datagrid index))
 
 (defun datagrid-get-row-data (datagrid row-num)
-  "Extract an entire row from DATAGRID.
-DATAGRID is a vector of vectors. ROW-NUM is the index of the row to
-extract, with zero based counting. Row 0 contains the headings.
-Returns a new vector containing all elements from the specified
-row."
-  (vconcat (seq-map (lambda (vec) (aref (datagrid-column-data vec)
-					row-num))
-		    datagrid)))
+  "Extract logical row ROW-NUM from DATAGRID as a fresh vector."
+  (let* ((cols (datagrid-columns datagrid))
+         (ncols (datagrid--ncols datagrid))
+         (phys-row (datagrid--row-at datagrid row-num)))
+    (vconcat (cl-loop for j from 0 below ncols
+                      for phys-col = (datagrid--col-at datagrid j)
+                      collect (aref (datagrid-column-data (aref cols phys-col))
+                                    phys-row)))))
 
 (defun datagrid-get-headings (datagrid)
-  "Create a vector of all DATAGRID headings."
-  ;; Benchmarking shows similar numbers for cl-loop version.
-  (vconcat (seq-map #'datagrid-column-heading datagrid)))
+  "Create a vector of all DATAGRID headings in logical column order."
+  (let ((cols (datagrid-columns datagrid))
+        (ncols (datagrid--ncols datagrid)))
+    (vconcat (cl-loop for j from 0 below ncols
+                      collect (datagrid-column-heading
+                               (aref cols (datagrid--col-at datagrid j)))))))
 
 (defun datagrid-col-index-by-header (datagrid header-text)
-  "Return the DATAGRID column number with HEADER-TEXT.
+  "Return the logical column index in DATAGRID with HEADER-TEXT.
 Return nil if the header is not found."
-  (seq-position datagrid header-text
-		(lambda (col h) (equal (datagrid-column-heading col) h))))
+  (let ((cols (datagrid-columns datagrid))
+        (ncols (datagrid--ncols datagrid)))
+    (cl-loop for j from 0 below ncols
+             for phys = (datagrid--col-at datagrid j)
+             when (equal (datagrid-column-heading (aref cols phys))
+                         header-text)
+             return j)))
 
 (defun datagrid-col-data-by-header (datagrid header-text)
   "Extract column data from DATAGRID by HEADER-TEXT.
 Deprecated. Use `datagrid-pull' instead."
   (declare (obsolete datagrid-pull "1.0"))
-  (datagrid-column-data
-   (elt datagrid (datagrid-col-index-by-header datagrid header-text))))
+  (datagrid-pull datagrid header-text))
 
 (defun datagrid-column-decode (datagrid index)
   "Output a decoded datagrid column as a vector.
@@ -674,12 +690,14 @@ this point. I should probably create a function that returns the
 original data values that return nil."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (datagrid-column-data (aref datagrid index)))
-	 (code (datagrid-column-code (aref datagrid index)))
-	 (coded-alist (when (and code	      ;; code must exist
-				 (listp code) ;; it must be a list
-				 (cl-every #'consp code)) ; it is an alist
+  (let* ((cols (datagrid-columns datagrid))
+         (phys-col (datagrid--col-at datagrid index))
+         (col (aref cols phys-col))
+         (vec (datagrid-pull datagrid index))
+	 (code (datagrid-column-code col))
+	 (coded-alist (when (and code
+				 (listp code)
+				 (cl-every #'consp code))
 			(seq-map (lambda (x)
 				   (cdr (assoc x code #'string-equal)))
 				 vec))))
@@ -689,27 +707,27 @@ original data values that return nil."
 
 ;;;; Slicing primitives (used by verbs and stats)
 (defun datagrid--slice-rows (datagrid rows)
-  "Return a datagrid containing only ROWS of DATAGRID.
-Column metadata (heading, code, lom) is preserved. ROWS is a list of
-zero-based row indices."
-  (let ((n (length rows)))
-    (vconcat
-     (cl-loop for col across datagrid
-	      collect (let* ((data (datagrid-column-data col))
-			     (new (datagrid-column-copy col))
-			     (result (make-vector n nil)))
-			(cl-loop for i from 0
-				 for row in rows
-				 do (aset result i (aref data row)))
-			(setf (datagrid-column-data new) result)
-			new)))))
+  "Return a datagrid restricted to logical ROWS of DATAGRID.
+ROWS is a list of zero-based logical row indices. Column data is
+shared with DATAGRID; only the row-order is set. Composes with any
+existing row-order."
+  (let* ((n (length rows))
+         (new-order (make-vector n 0)))
+    (cl-loop for i from 0
+             for r in rows do
+             (aset new-order i (datagrid--row-at datagrid r)))
+    (datagrid-make :columns (datagrid-columns datagrid)
+                   :row-order new-order
+                   :col-order (datagrid-col-order datagrid))))
 
 (defun datagrid--select-rows (datagrid rows)
   "Return a vector of vectors from DATAGRID containing only ROWS.
-ROWS is a list of row indices."
-  (let ((n (length rows)))
+ROWS is a list of physical row indices. The result is a vector of
+vectors of column data (not a datagrid)."
+  (let ((n (length rows))
+        (cols (datagrid-columns datagrid)))
     (vconcat
-     (cl-loop for col across datagrid
+     (cl-loop for col across cols
 	      collect (let* ((data (datagrid-column-data col))
 			     (result (make-vector n nil)))
 			(cl-loop for i from 0
