@@ -47,26 +47,19 @@
   "Return non-nil if V should be treated as a missing key or value."
   (or (null v) (and (stringp v) (string-empty-p v))))
 
-(defun datagrid-join--resolve-key (dg spec)
-  "Resolve SPEC to a column index in DG.
-SPEC is an integer (used as is) or a string (matched against
-DG's headings)."
-  (cond ((integerp spec) spec)
-	((stringp spec)
-	 (or (cl-position spec (datagrid-get-headings dg) :test #'equal)
-	     (error "No column with heading %S in datagrid" spec)))
-	(t (error "Bad join column spec: %S" spec))))
-
 (defun datagrid-join--normalize-on (on dg1 dg2)
-  "Resolve the :on argument ON into a cons (IDX1 . IDX2)."
+  "Resolve the :on argument ON into a cons (IDX1 . IDX2).
+Also validates that DG1 and DG2 are well-formed datagrids."
   (unless on (error ":on is required"))
+  (unless (datagridp dg1) (error "DG1 must be a datagrid"))
+  (unless (datagridp dg2) (error "DG2 must be a datagrid"))
   (pcase on
     ((or (pred integerp) (pred stringp))
-     (cons (datagrid-join--resolve-key dg1 on)
-	   (datagrid-join--resolve-key dg2 on)))
+     (cons (datagrid--resolve-col dg1 on)
+	   (datagrid--resolve-col dg2 on)))
     (`(,a . ,b)
-     (cons (datagrid-join--resolve-key dg1 a)
-	   (datagrid-join--resolve-key dg2 b)))
+     (cons (datagrid--resolve-col dg1 a)
+	   (datagrid--resolve-col dg2 b)))
     (_ (error "Bad :on value: %S" on))))
 
 (defun datagrid-join--build-index (vec)
@@ -167,7 +160,7 @@ defaults to \"_2\"."
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
-			collect (datagrid-join--resolve-key dg2 c)))
+			collect (datagrid--resolve-col dg2 c)))
 	 (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
 	 (row-map (datagrid-join--row-map (datagrid-pull dg1 on1) lookup)))
     (datagrid-join--project dg1 dg2 cols row-map suffix)))
@@ -188,7 +181,7 @@ disambiguates colliding headings and defaults to \"_2\"."
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
-			collect (datagrid-join--resolve-key dg2 c)))
+			collect (datagrid--resolve-col dg2 c)))
 	 (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
 	 (row-map (datagrid-join--row-map (datagrid-pull dg1 on1) lookup))
 	 (mask (cl-map 'vector (lambda (i) (if i t nil)) row-map))
@@ -218,7 +211,7 @@ disambiguates colliding headings and defaults to \"_2\"."
 	 (on (datagrid-join--normalize-on on dg1 dg2))
 	 (on1 (car on)) (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
-			collect (datagrid-join--resolve-key dg2 c)))
+			collect (datagrid--resolve-col dg2 c)))
 	 (keys2 (datagrid-pull dg2 on2))
 	 (keys1 (datagrid-pull dg1 on1))
 	 (lookup2 (datagrid-join--build-index keys2))
@@ -235,27 +228,27 @@ disambiguates colliding headings and defaults to \"_2\"."
       (let* ((extras-vec (vconcat extras))
              (left-cols (datagrid-columns left))
 	     (n-dg1 (datagrid--ncols dg1))
-	     (n-cols (length left-cols))
+	     (n-cols (datagrid--ncols left))
 	     (result (make-vector n-cols nil)))
-	(dotimes (col-idx n-cols)
-	  (let* ((col (aref left-cols col-idx))
-		 (orig-data (datagrid-column-data col))
+	(dotimes (j n-cols)
+	  (let* ((proto (aref left-cols (datagrid--col-at left j)))
+		 (orig-data (datagrid-pull left j))
 		 (extension
 		  (cond
-		   ((= col-idx on1)
+		   ((= j on1)
 		    (cl-map 'vector (lambda (i) (aref keys2 i)) extras-vec))
-		   ((< col-idx n-dg1)
+		   ((< j n-dg1)
 		    (make-vector n-extra nil))
 		   (t
-		    (let* ((proj-idx (- col-idx n-dg1))
+		    (let* ((proj-idx (- j n-dg1))
 			   (src-idx (nth proj-idx cols))
 			   (src-data (datagrid-pull dg2 src-idx)))
 		      (cl-map 'vector (lambda (i) (aref src-data i))
 			      extras-vec)))))
-		 (new-col (datagrid-column-copy col)))
+		 (new-col (datagrid-column-copy proto)))
 	    (setf (datagrid-column-data new-col)
 		  (vconcat orig-data extension))
-	    (setf (aref result col-idx) new-col)))
+	    (aset result j new-col)))
 	(datagrid-make :columns result)))))
 
 (cl-defun datagrid-anti-join (dg1 dg2 &key on)
