@@ -114,9 +114,9 @@ sorted and counted by computer programs."
   (lom nil :type string :documentation "Level of measurement.")
   (code nil :type list :documentation "An alist used to code or decode values."))
 
-(cl-defstruct (datagrid (:constructor datagrid-make)
+(cl-defstruct (datagrid (:constructor datagrid--make-raw)
                         (:copier datagrid-copy)
-                        (:predicate datagridp))
+                        (:predicate datagrid--type-p))
   "A datagrid is a collection of datagrid-column structs with optional
 row and column permutations.
 
@@ -165,6 +165,32 @@ Uses the length of `col-order' when set, otherwise the length of
 the `columns' vector."
   (let ((order (datagrid-col-order dg)))
     (if order (length order) (length (datagrid-columns dg)))))
+
+(defun datagrid--columns-equal-length-p (columns)
+  "Non-nil when COLUMNS is empty or every datagrid-column shares one data length."
+  (or (null columns)
+      (zerop (length columns))
+      (let ((first-len (length (datagrid-column-data (aref columns 0)))))
+        (cl-every (lambda (c)
+                    (and (datagrid-column--p c)
+                         (= (length (datagrid-column-data c)) first-len)))
+                  columns))))
+
+(cl-defun datagrid-make (&key columns row-order col-order)
+  "Construct a datagrid.
+COLUMNS is a vector of datagrid-column structs that must all have the
+same data length. ROW-ORDER and COL-ORDER are optional permutation
+vectors, or nil for natural order."
+  (unless (datagrid--columns-equal-length-p columns)
+    (error "datagrid-make: COLUMNS have unequal data lengths"))
+  (datagrid--make-raw :columns columns
+                      :row-order row-order
+                      :col-order col-order))
+
+(defun datagridp (x)
+  "Return non-nil if X is a datagrid with equal-length columns."
+  (and (datagrid--type-p x)
+       (datagrid--columns-equal-length-p (datagrid-columns x))))
 
 (defvar datagrid-column-example
   (datagrid-column-make :heading "I like Emacs."
