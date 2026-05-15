@@ -38,32 +38,31 @@ for each one, so it can be slow on large datagrids."
   (let* ((indices (if cols
 		      (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
 			      cols)
-		    (number-sequence 0 (1- (length datagrid)))))
-	 (n-rows (length (datagrid-column-data (aref datagrid 0))))
-	 (col-vecs (mapcar (lambda (i) (datagrid-column-data (aref datagrid i)))
-			   indices))
+		    (number-sequence 0 (1- (datagrid--ncols datagrid)))))
+         (n-rows (datagrid--nrows datagrid))
+	 (logical-cols (mapcar (lambda (i) (datagrid-pull datagrid i))
+			       indices))
 	 (seen (make-hash-table :test 'equal))
 	 (kept nil))
     (dotimes (r n-rows)
-      (let ((key (mapcar (lambda (v) (aref v r)) col-vecs)))
+      (let ((key (mapcar (lambda (v) (aref v r)) logical-cols)))
 	(unless (gethash key seen)
 	  (puthash key t seen)
 	  (push r kept))))
-    (let ((subset (vconcat (mapcar (lambda (i)
-				     (datagrid-column-copy (aref datagrid i)))
-				   indices))))
+    (let ((subset (if cols
+                      (apply #'datagrid-select datagrid indices)
+                    datagrid)))
       (datagrid--slice-rows subset (nreverse kept)))))
 
 (defun datagrid-group-by (datagrid index)
   "Group data in DATAGRID according to INDEX.
-INDEX is a zero-based column number or a heading string. The resulting
-structure is a 3D vector. The first dimension is a vector of groups
-which were formed by grouping rows of the datagrid by unique values in
-COL-VALUES. The 2nd dimension vector contains the original datagrid
-vectors filtered for only that group. The 3rd dimension vector contains
-the data from one column for one group."
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (col-data (datagrid-column-data (aref datagrid index)))
+INDEX is a column number. The resulting structure is a 3D vector. The
+first dimension is a vector of groups which were formed by grouping rows
+of the datagrid by unique values in COL-VALUES. The 2nd dimension vector
+contains the original datagrid vectors filtered for only that group. The
+3rd dimension vector contains the data from one column for one group."
+  (let* ((cols (datagrid-columns datagrid))
+         (col-data (datagrid-column-data (aref cols index)))
 	 (index-map (make-hash-table :test #'equal))
 	 (n (length col-data)))
     (cl-loop for i from 0 below n
@@ -75,6 +74,8 @@ the data from one column for one group."
 			    (datagrid--select-rows
 			     datagrid (nreverse idxs)))))))
 
+
+;;;; Data analysis
 (defun datagrid-reduce-vec (datagrid function index &optional code convert)
   "Reduce a FUNCTION across DATAGRID data at INDEX.
 Return the result of calling FUNCTION on the data vector at INDEX
@@ -93,10 +94,9 @@ SEQ-REDUCE."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (if code
+  (let* ((vec (if code
 		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
+		(datagrid-pull datagrid index)))
 	 (vec (if convert
 		  (datagrid-unknown-type-to-number vec)
 		vec)))
@@ -184,13 +184,16 @@ Nil data values are discarded before the calculation."
   (interactive)
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (if code
+  (let* ((vec (if code
 		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
+		(datagrid-pull datagrid index)))
 	 (vec (if convert
 		  (datagrid-unknown-type-to-number vec)
 		vec))
+	 ;; Calc cannot handle nil values. Remove them. This also
+	 ;; converts vec to a list. Because mathematicians call them
+	 ;; vectors, that is what Calc calls them even if they arrive
+	 ;; to a Calc function in a list.
 	 (vec (delq nil (append vec nil))))
     (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
@@ -239,12 +242,13 @@ their original order."
     (error "Argument must be a datagrid"))
   (let* ((key-indices (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
 			      cols))
-	 (n-cols (length datagrid))
-	 (n-rows (length (datagrid-column-data (aref datagrid 0))))
+	 (n-cols (datagrid--ncols datagrid))
+	 (n-rows (datagrid--nrows datagrid))
 	 (other-indices (cl-loop for i from 0 below n-cols
 				 unless (memq i key-indices)
 				 collect i))
-	 (key-vecs (mapcar (lambda (i) (datagrid-column-data (aref datagrid i)))
+	 (src-cols (datagrid-columns datagrid))
+	 (key-vecs (mapcar (lambda (i) (datagrid-pull datagrid i))
 			   key-indices))
 	 (groups (make-hash-table :test 'equal))
 	 (order nil))
@@ -257,8 +261,9 @@ their original order."
 	   (group-rows (mapcar (lambda (k) (nreverse (gethash k groups))) order))
 	   (key-cols
 	    (cl-loop for ki in key-indices
-		     for src = (datagrid-column-data (aref datagrid ki))
-		     collect (let ((new (datagrid-column-copy (aref datagrid ki))))
+		     for src = (datagrid-pull datagrid ki)
+		     for proto = (aref src-cols (datagrid--col-at datagrid ki))
+		     collect (let ((new (datagrid-column-copy proto)))
 			       (setf (datagrid-column-data new)
 				     (vconcat
 				      (mapcar (lambda (rows) (aref src (car rows)))
@@ -266,8 +271,9 @@ their original order."
 			       new)))
 	   (reduced-cols
 	    (cl-loop for oi in other-indices
-		     for src = (datagrid-column-data (aref datagrid oi))
-		     collect (let ((new (datagrid-column-copy (aref datagrid oi))))
+		     for src = (datagrid-pull datagrid oi)
+		     for proto = (aref src-cols (datagrid--col-at datagrid oi))
+		     collect (let ((new (datagrid-column-copy proto)))
 			       (setf (datagrid-column-data new)
 				     (vconcat
 				      (mapcar
@@ -277,8 +283,10 @@ their original order."
 							  rows)))
 				       group-rows)))
 			       new))))
-      (vconcat (append key-cols reduced-cols)))))
+      (datagrid-make :columns (vconcat (append key-cols reduced-cols))))))
 
+
+;;;; Statistical functions
 (cl-defun datagrid-count (datagrid col &key sort name code)
   "Count occurrences of values in column COL of DATAGRID.
 COL is a zero-based integer index or heading string. Returns a
@@ -289,25 +297,28 @@ the source column's data before counting."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((idx (datagrid--resolve-col datagrid col))
-	 (heading (datagrid-column-heading (aref datagrid idx)))
+         (cols (datagrid-columns datagrid))
+	 (heading (datagrid-column-heading
+                   (aref cols (datagrid--col-at datagrid idx))))
 	 (count-name (or name "n"))
 	 (pairs (datagrid--frequencies-alist datagrid idx code)))
     (unless sort
       (setq pairs (seq-sort-by #'car #'datagrid-unknown-type-sort pairs)))
-    (vector (datagrid-column-make :heading heading
-				  :data (vconcat (mapcar #'car pairs)))
-	    (datagrid-column-make :heading count-name
-				  :data (vconcat (mapcar #'cdr pairs))))))
+    (datagrid-make
+     :columns
+     (vector (datagrid-column-make :heading heading
+				   :data (vconcat (mapcar #'car pairs)))
+	     (datagrid-column-make :heading count-name
+				   :data (vconcat (mapcar #'cdr pairs)))))))
 
 (defun datagrid--frequencies-alist (datagrid index code)
   "Return ((value . count) ...) for column INDEX of DATAGRID.
 Sorted by count descending. If CODE is non-nil, decode first."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (if code
+  (let* ((vec (if code
 		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
+		(datagrid-pull datagrid index)))
 	 (counts (make-hash-table :test 'equal))
 	 result)
     (cl-loop for item across vec
@@ -318,7 +329,7 @@ Sorted by count descending. If CODE is non-nil, decode first."
 (defun datagrid-column-frequencies (datagrid index &optional code)
   "Find the frequency of elements occuring in a column.
 Deprecated. Use `datagrid-count' instead.
-DATAGRID is the vector of structs. INDEX is the zero based column
+DATAGRID is a datagrid struct. INDEX is the zero based column
 number. If CODE is t, then decode data first. If nil, take code
 as is. Returns an alist of (value . count) sorted by count descending."
   (declare (obsolete datagrid-count "1.0"))
@@ -326,12 +337,12 @@ as is. Returns an alist of (value . count) sorted by count descending."
 
 (defun datagrid-column-quartiles (datagrid index &optional code)
   "Find the first, second, and third quartile of a column.
-DATAGRID is the vector of structs. INDEX is the zero based column
+DATAGRID is a datagrid struct. INDEX is the zero based column
 number. If CODE is t, then decode data first. If nil, take code as is."
-  (if-let* ((index (datagrid--resolve-col datagrid index))
-	    (vec (if code
+  (if-let* ((vec (if code
 		     (datagrid-column-decode datagrid index)
-		   (datagrid-column-data (aref datagrid index))))
+		   (datagrid-pull datagrid index)))
+	    ;; Are there more efficient ways to do this?
 	    (vec (seq-into (seq-filter #'identity vec) 'vector))
 	    (vec (seq-sort #'< vec))
 	    (len (length vec))
@@ -361,25 +372,23 @@ for strings or numbers."
   "Return unique items from a column as a vector.
 Deprecated. Use `datagrid-distinct' for a datagrid-shaped result, or
 `datagrid-pull' + `seq-uniq' for the bare vector.
-DATAGRID is the vector of structs. INDEX is the zero based column
+DATAGRID is a datagrid struct. INDEX is the zero based column
 number. If CODE is t, then decode data first."
   (declare (obsolete datagrid-distinct "1.0"))
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (if code (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index)))))
+  (let ((vec (if code (datagrid-column-decode datagrid index)
+	       (datagrid-pull datagrid index))))
     (seq-uniq vec)))
 
 (defun datagrid-column-mad (datagrid index &optional code)
   "Calculate the median absolute deviation.
-DATAGRID is the vector of structs. INDEX is the zero based column
+DATAGRID is a datagrid struct. INDEX is the zero based column
 number. If CODE is t, then decode data first. If nil, take code
 as is."
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (lst (delq nil (append (if code
+  (let* ((lst (delq nil (append (if code
 				    (datagrid-column-decode datagrid index)
-				  (datagrid-column-data (aref datagrid index)))
+				  (datagrid-pull datagrid index))
 				nil)))
 	 (lst-calc (seq-keep #'datagrid-prep-for-calc lst))
 	 (median1 (datagrid-calc-function-wrapper "vmedian" lst-calc))
@@ -387,20 +396,25 @@ as is."
 					   (string-to-number x)
 					 x))
 			   lst))
+	 ;; It would be nice to do this in Calc formulas so the prep
+	 ;; for Calc function doesn't have to done again.
 	 (lst2 (mapcar (lambda (x) (abs (- x median1))) lst-nums)))
     (datagrid-calc-function-wrapper
      "vmedian" (seq-keep #'datagrid-prep-for-calc lst2))))
 
+
+;;;; Summary reports
 (defun datagrid-report-nominal (datagrid index)
   "Display column statistics for nominal data.
-DATAGRID is a vector of datagrid structures. INDEX is the column to
-analyze (zero-based integer or heading string)."
+DATAGRID is a datagrid struct. INDEX is the column
+to analyze. It uses zero based counting."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (freq (seq-take (datagrid--frequencies-alist datagrid index nil) 5)))
+  (let* ((cols (datagrid-columns datagrid))
+         (freq (seq-take (datagrid--frequencies-alist datagrid index nil) 5)))
     (append
-     (list (datagrid-column-heading (elt datagrid index)))
+     (list (datagrid-column-heading
+            (elt cols (datagrid--col-at datagrid index))))
      (list (cons "cardinality" (length freq)))
      (list (cons "mode" (datagrid-column-mode datagrid index)))
      (list (cons "frequency - five or fewer" freq)))))
@@ -412,19 +426,25 @@ CONVERT have the same meaning as in the public report functions. If
 INCLUDE-MAD is non-nil, append the mean absolute deviation."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((index (datagrid--resolve-col datagrid index))
-	 (vec (if code
+  (let* ((vec (if code
 		  (datagrid-column-decode datagrid index)
-		(datagrid-column-data (aref datagrid index))))
+		(datagrid-pull datagrid index)))
+	 ;; Calc cannot handle nil or decimal numbers directly; prep
+	 ;; converts and seq-keep drops nils. This also yields a list.
 	 (lst (if convert
 		  (seq-keep #'datagrid-prep-for-calc vec)
 		(seq-keep #'identity vec)))
 	 (stats (cl-loop for statn in stats-name
 			 collect (datagrid-calc-function-wrapper statn lst)))
-	 (new-dg (vector (datagrid-column-make
-			  :data (datagrid-unknown-type-to-number vec)))))
+	 ;; Non-Calc helpers expect plain numbers.
+	 (new-dg (datagrid-make
+                  :columns
+                  (vector (datagrid-column-make
+			   :data (datagrid-unknown-type-to-number vec))))))
     (append
-     (list (datagrid-column-heading (elt datagrid index)))
+     (list (datagrid-column-heading
+            (elt (datagrid-columns datagrid)
+                 (datagrid--col-at datagrid index))))
      (cl-mapcar #'cons stats-name stats)
      (list (cons "mode" (datagrid-column-mode new-dg 0)))
      (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
@@ -434,7 +454,7 @@ INCLUDE-MAD is non-nil, append the mean absolute deviation."
 
 (defun datagrid-report-ordinal (datagrid index &optional code convert)
   "Display column statistics for ordinal data.
-DATAGRID is a vector of datagrid structures. INDEX is the column
+DATAGRID is a datagrid struct. INDEX is the column
 to analyze. It uses zero based counting. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as
 is. CONVERT tells the function to convert strings to numbers.
@@ -446,7 +466,7 @@ ordinal data."
 
 (defun datagrid-report-interval (datagrid index &optional code convert)
   "Display column statistics for interval data.
-DATAGRID is a vector of datagrid structures. INDEX is the column
+DATAGRID is a datagrid struct. INDEX is the column
 to analyze. It uses zero based counting. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as
 is. CONVERT tells the function to convert strings to numbers."
@@ -456,7 +476,7 @@ is. CONVERT tells the function to convert strings to numbers."
 
 (defun datagrid-report-ratio (datagrid index &optional code convert)
   "Display column statistics for ratio data.
-DATAGRID is a vector of datagrid structures. INDEX is the column
+DATAGRID is a datagrid struct. INDEX is the column
 to analyze. It uses zero based counting. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as
 is. CONVERT tells the function to convert strings to numbers.
@@ -469,7 +489,7 @@ RMS stands for root-mean-square or coefficient of variation."
 
 (defun datagrid-report-all-lom (datagrid)
   "Report on each column of data based on the level of measurement.
-DATAGRID is a vector of datagrid structures.
+DATAGRID is a datagrid struct.
 
 This function will always decode a value if there is a code slot
 provided for a datagrid-column struct. It will always convert strings to
@@ -478,21 +498,22 @@ sets.
 
 This returns a cons structure. All columns with no specified level of
 measurement are treated as nominal data."
-  (cl-loop for x from 0 below (length datagrid)
-	   collect (let ((code (if (datagrid-column-code (elt datagrid x))
-				   t
-				 nil))
-			 (lom (datagrid-column-lom (elt datagrid x))))
-		     (cons
-		      (datagrid-column-heading (elt datagrid x))
-		      (cond ((equal "ordinal" lom)
-			     (datagrid-report-ordinal datagrid x code t))
-			    ((equal "interval" lom)
-			     (datagrid-report-interval datagrid x code t))
-			    ((equal "ratio" lom)
-			     (datagrid-report-ratio datagrid x code t))
-			    (t
-			     (datagrid-report-nominal datagrid x)))))))
+  (let ((cols (datagrid-columns datagrid))
+        (ncols (datagrid--ncols datagrid)))
+    (cl-loop for x from 0 below ncols
+	     for col = (elt cols (datagrid--col-at datagrid x))
+             collect (let ((code (if (datagrid-column-code col) t nil))
+		           (lom (datagrid-column-lom col)))
+		       (cons
+		        (datagrid-column-heading col)
+		        (cond ((equal "ordinal" lom)
+			       (datagrid-report-ordinal datagrid x code t))
+			      ((equal "interval" lom)
+			       (datagrid-report-interval datagrid x code t))
+			      ((equal "ratio" lom)
+			       (datagrid-report-ratio datagrid x code t))
+			      (t
+			       (datagrid-report-nominal datagrid x))))))))
 
 (provide 'datagrid-stats)
 ;;; datagrid-stats.el ends here

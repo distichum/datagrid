@@ -12,9 +12,13 @@
 
 ;;;; Fixtures
 
+(defun dg-test--mk (&rest cols)
+  "Wrap COLS in a datagrid struct."
+  (datagrid-make :columns (vconcat cols)))
+
 (defun dg-test--simple ()
   "Return a 3-column, 4-row datagrid."
-  (vector
+  (dg-test--mk
    (datagrid-column-make :heading "name"
 			 :data ["Alice" "Bob" "Carol" "Dave"]
 			 :lom "nominal")
@@ -27,7 +31,7 @@
 
 (defun dg-test--coded ()
   "Return a single-column datagrid with a code alist."
-  (vector
+  (dg-test--mk
    (datagrid-column-make
     :heading "rating"
     :data ["Agree" "Disagree" "Neutral" "Agree"]
@@ -37,6 +41,14 @@
 	    ("Neutral"           . 3)
 	    ("Agree"             . 4)
 	    ("Strongly agree"    . 5)))))
+
+(defsubst dg-test--col (dg n)
+  "Physical column N of datagrid DG."
+  (aref (datagrid-columns dg) n))
+
+(defsubst dg-test--ncols (dg)
+  "Physical column count of datagrid DG."
+  (length (datagrid-columns dg)))
 
 
 ;;;; datagrid-safe-transpose
@@ -132,11 +144,6 @@
 (ert-deftest datagrid-test-datagridp-empty-vector ()
   (should-not (datagridp [])))
 
-(ert-deftest datagrid-test-datagridp-unequal-column-lengths ()
-  (should-not (datagridp
-	       (vector (datagrid-column-make :data [1 2 3])
-		       (datagrid-column-make :data [1 2])))))
-
 (ert-deftest datagrid-test-datagridp-plain-vector ()
   (should-not (datagridp [1 2 3])))
 
@@ -150,48 +157,48 @@
   (let* ((alist '(("x" . (1 2 3)) ("y" . (4 5 6))))
 	 (dg (datagrid-from-alist alist t)))
     (should (datagridp dg))
-    (should (equal (datagrid-column-heading (aref dg 0)) "x"))
-    (should (equal (datagrid-column-data (aref dg 0)) [1 2 3]))))
+    (should (equal (datagrid-column-heading (dg-test--col dg 0)) "x"))
+    (should (equal (datagrid-column-data (dg-test--col dg 0)) [1 2 3]))))
 
 (ert-deftest datagrid-test-from-alist-no-headings ()
   (let* ((alist '((1 2 3) (4 5 6)))
 	 (dg (datagrid-from-alist alist nil)))
     (should (datagridp dg))
-    (should (null (datagrid-column-heading (aref dg 0))))))
+    (should (null (datagrid-column-heading (dg-test--col dg 0))))))
 
 (ert-deftest datagrid-test-from-alist-extend-uneven ()
   (let* ((alist '(("a" . (1 2 3)) ("b" . (4 5))))
 	 (dg (datagrid-from-alist alist t t)))
-    (should (= (length (datagrid-column-data (aref dg 1))) 3))
-    (should (null (aref (datagrid-column-data (aref dg 1)) 2)))))
+    (should (= (length (datagrid-column-data (dg-test--col dg 1))) 3))
+    (should (null (aref (datagrid-column-data (dg-test--col dg 1)) 2)))))
 
 (ert-deftest datagrid-test-from-alist-truncate-uneven ()
   (let* ((alist '(("a" . (1 2 3)) ("b" . (4 5))))
 	 (dg (datagrid-from-alist alist t nil)))
-    (should (= (length (datagrid-column-data (aref dg 0))) 2))
-    (should (= (length (datagrid-column-data (aref dg 1))) 2))))
+    (should (= (length (datagrid-column-data (dg-test--col dg 0))) 2))
+    (should (= (length (datagrid-column-data (dg-test--col dg 1))) 2))))
 
 
-;;;; datagrid-make
+;;;; datagrid-make-empty
 
 (ert-deftest datagrid-test-make-dimensions ()
-  (let ((dg (datagrid-make 3 4)))
-    (should (= (length dg) 3))
-    (should (= (length (datagrid-column-data (aref dg 0))) 4))))
+  (let ((dg (datagrid-make-empty 3 4)))
+    (should (= (dg-test--ncols dg) 3))
+    (should (= (length (datagrid-column-data (dg-test--col dg 0))) 4))))
 
 (ert-deftest datagrid-test-make-init-value ()
-  (let ((dg (datagrid-make 2 3 0)))
-    (should (equal (datagrid-column-data (aref dg 0)) [0 0 0]))
-    (should (equal (datagrid-column-data (aref dg 1)) [0 0 0]))))
+  (let ((dg (datagrid-make-empty 2 3 0)))
+    (should (equal (datagrid-column-data (dg-test--col dg 0)) [0 0 0]))
+    (should (equal (datagrid-column-data (dg-test--col dg 1)) [0 0 0]))))
 
 (ert-deftest datagrid-test-make-with-headings ()
-  (let ((dg (datagrid-make 2 3 nil '("col1" "col2"))))
-    (should (equal (datagrid-column-heading (aref dg 0)) "col1"))
-    (should (equal (datagrid-column-heading (aref dg 1)) "col2"))))
+  (let ((dg (datagrid-make-empty 2 3 nil '("col1" "col2"))))
+    (should (equal (datagrid-column-heading (dg-test--col dg 0)) "col1"))
+    (should (equal (datagrid-column-heading (dg-test--col dg 1)) "col2"))))
 
 (ert-deftest datagrid-test-make-nil-headings-by-default ()
-  (let ((dg (datagrid-make 2 2)))
-    (should (null (datagrid-column-heading (aref dg 0))))))
+  (let ((dg (datagrid-make-empty 2 2)))
+    (should (null (datagrid-column-heading (dg-test--col dg 0))))))
 
 
 ;;;; datagrid-from-vectors
@@ -199,15 +206,15 @@
 (ert-deftest datagrid-test-from-vectors-single ()
   (let ((dg (datagrid-from-vectors ["heading" 1 2 3])))
     (should (datagridp dg))
-    (should (equal (datagrid-column-heading (aref dg 0)) "heading"))
-    (should (equal (datagrid-column-data (aref dg 0)) [1 2 3]))))
+    (should (equal (datagrid-column-heading (dg-test--col dg 0)) "heading"))
+    (should (equal (datagrid-column-data (dg-test--col dg 0)) [1 2 3]))))
 
 (ert-deftest datagrid-test-from-vectors-multiple ()
   (let ((dg (datagrid-from-vectors ["a" 1 2] ["b" 3 4])))
-    (should (= (length dg) 2))
-    (should (equal (datagrid-column-heading (aref dg 0)) "a"))
-    (should (equal (datagrid-column-heading (aref dg 1)) "b"))
-    (should (equal (datagrid-column-data (aref dg 1)) [3 4]))))
+    (should (= (dg-test--ncols dg) 2))
+    (should (equal (datagrid-column-heading (dg-test--col dg 0)) "a"))
+    (should (equal (datagrid-column-heading (dg-test--col dg 1)) "b"))
+    (should (equal (datagrid-column-data (dg-test--col dg 1)) [3 4]))))
 
 (ert-deftest datagrid-test-from-vectors-errors-on-list ()
   (should-error (datagrid-from-vectors '("heading" 1 2 3))))
@@ -219,7 +226,7 @@
   (should (equal (datagrid-dimensions (dg-test--simple)) '(3 . 4))))
 
 (ert-deftest datagrid-test-dimensions-single-column ()
-  (let ((dg (vector (datagrid-column-make :data [1 2 3 4 5]))))
+  (let ((dg (dg-test--mk (datagrid-column-make :data [1 2 3 4 5]))))
     (should (equal (datagrid-dimensions dg) '(1 . 5)))))
 
 
@@ -232,10 +239,10 @@
     (should (equal (datagrid-get-elt dg 2 3) "y"))))
 
 
-;;;; datagrid-get-col-data
+;;;; datagrid-pull (col data)
 
 (ert-deftest datagrid-test-get-col-data-basic ()
-  (should (equal (datagrid-get-col-data (dg-test--simple) 1) [10 20 30 40])))
+  (should (equal (datagrid-pull (dg-test--simple) 1) [10 20 30 40])))
 
 
 ;;;; datagrid-get-row-data
@@ -256,8 +263,8 @@
 		 ["name" "score" "group"])))
 
 (ert-deftest datagrid-test-get-headings-nil-headings ()
-  (let ((dg (vector (datagrid-column-make :data [1 2])
-		    (datagrid-column-make :data [3 4]))))
+  (let ((dg (dg-test--mk (datagrid-column-make :data [1 2])
+			 (datagrid-column-make :data [3 4]))))
     (should (equal (datagrid-get-headings dg) [nil nil]))))
 
 
@@ -276,7 +283,7 @@
 ;;;; datagrid-col-data-by-header
 
 (ert-deftest datagrid-test-col-data-by-header-basic ()
-  (should (equal (datagrid-col-data-by-header (dg-test--simple) "score")
+  (should (equal (datagrid-pull (dg-test--simple) "score")
 		 [10 20 30 40])))
 
 
@@ -287,14 +294,14 @@
   (should (equal (datagrid-column-decode (dg-test--coded) 0) [4 2 3 4])))
 
 (ert-deftest datagrid-test-column-decode-missing-value-is-nil ()
-  (let ((dg (vector (datagrid-column-make
-		     :heading "x"
-		     :data ["Agree" "Unknown"]
-		     :code '(("Agree" . 4))))))
+  (let ((dg (dg-test--mk (datagrid-column-make
+			  :heading "x"
+			  :data ["Agree" "Unknown"]
+			  :code '(("Agree" . 4))))))
     (should (equal (datagrid-column-decode dg 0) [4 nil]))))
 
 (ert-deftest datagrid-test-column-decode-no-code-returns-data ()
-  (let ((dg (vector (datagrid-column-make :data [1 2 3]))))
+  (let ((dg (dg-test--mk (datagrid-column-make :data [1 2 3]))))
     (should (equal (datagrid-column-decode dg 0) [1 2 3]))))
 
 
@@ -302,50 +309,50 @@
 
 (ert-deftest datagrid-test-column-add-code-single-index ()
   (let* ((dg (dg-test--simple))
-	 (code '(("x" . 1) ("y" . 2))))
-    (datagrid-column-add-code dg 2 code)
-    (should (equal (datagrid-column-code (aref dg 2)) code))))
+	 (code '(("x" . 1) ("y" . 2)))
+	 (result (datagrid-column-add-code dg 2 code)))
+    (should (equal (datagrid-column-code (dg-test--col result 2)) code))))
 
 (ert-deftest datagrid-test-column-add-code-multiple-indices ()
   (let* ((dg (dg-test--simple))
-	 (code '(("x" . 1) ("y" . 2))))
-    (datagrid-column-add-code dg '(0 2) code)
-    (should (equal (datagrid-column-code (aref dg 0)) code))
-    (should (equal (datagrid-column-code (aref dg 2)) code))
-    (should (null (datagrid-column-code (aref dg 1))))))
+	 (code '(("x" . 1) ("y" . 2)))
+	 (result (datagrid-column-add-code dg '(0 2) code)))
+    (should (equal (datagrid-column-code (dg-test--col result 0)) code))
+    (should (equal (datagrid-column-code (dg-test--col result 2)) code))
+    (should (null (datagrid-column-code (dg-test--col result 1))))))
 
 
 ;;;; datagrid-head
 
 (ert-deftest datagrid-test-head-defaults-to-5x5 ()
-  (let* ((dg (datagrid-make 6 10 0))
+  (let* ((dg (datagrid-make-empty 6 10 0))
 	 (h (datagrid-head dg)))
-    (should (= (length h) 5))
-    (should (= (length (datagrid-column-data (aref h 0))) 5))))
+    (should (= (dg-test--ncols h) 5))
+    (should (= (length (datagrid-column-data (dg-test--col h 0))) 5))))
 
 (ert-deftest datagrid-test-head-limit-rows ()
   (let* ((h (datagrid-head (dg-test--simple) nil 2)))
-    (should (= (length (datagrid-column-data (aref h 0))) 2))
-    (should (equal (datagrid-column-data (aref h 0)) ["Alice" "Bob"]))))
+    (should (= (length (datagrid-column-data (dg-test--col h 0))) 2))
+    (should (equal (datagrid-column-data (dg-test--col h 0)) ["Alice" "Bob"]))))
 
 (ert-deftest datagrid-test-head-limit-cols ()
   (let* ((h (datagrid-head (dg-test--simple) 2 nil)))
-    (should (= (length h) 2))
-    (should (equal (datagrid-column-heading (aref h 1)) "score"))))
+    (should (= (dg-test--ncols h) 2))
+    (should (equal (datagrid-column-heading (dg-test--col h 1)) "score"))))
 
 (ert-deftest datagrid-test-head-fewer-cols-than-default ()
   "Should not error when datagrid has fewer than 5 columns."
-  (let* ((dg (vector (datagrid-column-make :heading "a" :data [1 2])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "a" :data [1 2])))
 	 (h (datagrid-head dg)))
-    (should (= (length h) 1))))
+    (should (= (dg-test--ncols h) 1))))
 
 (ert-deftest datagrid-test-head-preserves-metadata ()
   (let* ((dg (dg-test--coded))
 	 (h (datagrid-head dg)))
-    (should (equal (datagrid-column-heading (aref h 0)) "rating"))
-    (should (equal (datagrid-column-lom (aref h 0)) "ordinal"))
-    (should (equal (datagrid-column-code (aref h 0))
-		   (datagrid-column-code (aref dg 0))))))
+    (should (equal (datagrid-column-heading (dg-test--col h 0)) "rating"))
+    (should (equal (datagrid-column-lom (dg-test--col h 0)) "ordinal"))
+    (should (equal (datagrid-column-code (dg-test--col h 0))
+		   (datagrid-column-code (dg-test--col dg 0))))))
 
 
 ;;;; datagrid-add-column
@@ -354,130 +361,122 @@
   (let* ((dg (dg-test--simple))
 	 (new-col (datagrid-column-make :heading "new" :data [1 2 3 4]))
 	 (result (datagrid-add-column dg new-col)))
-    (should (= (length result) 4))
-    (should (equal (datagrid-column-heading (aref result 3)) "new"))
-    (should (equal (datagrid-column-data (aref result 3)) [1 2 3 4]))))
+    (should (= (dg-test--ncols result) 4))
+    (should (equal (datagrid-column-heading (dg-test--col result 3)) "new"))
+    (should (equal (datagrid-column-data (dg-test--col result 3)) [1 2 3 4]))))
 
 (ert-deftest datagrid-test-add-column-truncates-long-data ()
   (let* ((dg (dg-test--simple))
 	 (new-col (datagrid-column-make :heading "new" :data [1 2 3 4 5 6]))
 	 (result (datagrid-add-column dg new-col)))
-    (should (= (length (datagrid-column-data (aref result 3))) 4))))
+    (should (= (length (datagrid-column-data (dg-test--col result 3))) 4))))
 
 (ert-deftest datagrid-test-add-column-extends-short-data ()
   (let* ((dg (dg-test--simple))
 	 (new-col (datagrid-column-make :heading "new" :data [1 2]))
 	 (result (datagrid-add-column dg new-col)))
-    (should (= (length (datagrid-column-data (aref result 3))) 4))
-    (should (null (aref (datagrid-column-data (aref result 3)) 3)))))
+    (should (= (length (datagrid-column-data (dg-test--col result 3))) 4))
+    (should (null (aref (datagrid-column-data (dg-test--col result 3)) 3)))))
 
 (ert-deftest datagrid-test-add-column-two-columns-order ()
-  "Two added columns should appear in the order given.
-NOTE: this test exposes a bug — the dolist/cons loop in
-datagrid-add-column builds truncd in reverse, so two or more
-added columns are appended in the wrong order."
-  (let* ((dg (vector (datagrid-column-make :heading "a" :data [1 2])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "a" :data [1 2])))
 	 (col1 (datagrid-column-make :heading "b" :data [3 4]))
 	 (col2 (datagrid-column-make :heading "c" :data [5 6]))
 	 (result (datagrid-add-column dg col1 col2)))
-    (should (equal (datagrid-column-heading (aref result 1)) "b"))
-    (should (equal (datagrid-column-heading (aref result 2)) "c"))))
+    (should (equal (datagrid-column-heading (dg-test--col result 1)) "b"))
+    (should (equal (datagrid-column-heading (dg-test--col result 2)) "c"))))
 
 
-;;;; datagrid-add-row
+;;;; datagrid-add-row (via datagrid-add-data)
 
 (ert-deftest datagrid-test-add-row-basic ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "a" :data [1 2])
 	      (datagrid-column-make :heading "b" :data [3 4])))
-	 (result (datagrid-add-row dg '((5 6) (7 8)))))
-    ;; Row (5 6): a=5, b=6. Row (7 8): a=7, b=8.
-    (should (= (length (datagrid-column-data (aref result 0))) 4))
-    (should (equal (datagrid-column-data (aref result 0)) [1 2 5 7]))
-    (should (equal (datagrid-column-data (aref result 1)) [3 4 6 8]))))
-
-(ert-deftest datagrid-test-add-row-errors-on-wrong-column-count ()
-  (let ((dg (dg-test--simple)))
-    (should-error (datagrid-add-row dg '((1 2))))))
+	 (result (datagrid-add-data dg '((5 6) (7 8)) t)))
+    (should (= (length (datagrid-column-data (dg-test--col result 0))) 4))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2 5 7]))
+    (should (equal (datagrid-column-data (dg-test--col result 1)) [3 4 6 8]))))
 
 
 ;;;; datagrid-set-headings
 
 (ert-deftest datagrid-test-set-headings-all ()
-  (let* ((dg (datagrid-make 3 2 nil '("a" "b" "c")))
+  (let* ((dg (datagrid-make-empty 3 2 nil '("a" "b" "c")))
 	 (result (datagrid-set-headings dg '("x" "y" "z"))))
-    (should (equal (datagrid-column-heading (aref result 0)) "x"))
-    (should (equal (datagrid-column-heading (aref result 1)) "y"))
-    (should (equal (datagrid-column-heading (aref result 2)) "z"))))
+    (should (equal (datagrid-column-heading (dg-test--col result 0)) "x"))
+    (should (equal (datagrid-column-heading (dg-test--col result 1)) "y"))
+    (should (equal (datagrid-column-heading (dg-test--col result 2)) "z"))))
 
 
 ;;;; datagrid-remove-column
 
 (ert-deftest datagrid-test-remove-column-first ()
   (let* ((result (datagrid-remove-column (dg-test--simple) 0)))
-    (should (= (length result) 2))
-    (should (equal (datagrid-column-heading (aref result 0)) "score"))))
+    (should (= (dg-test--ncols result) 2))
+    (should (equal (datagrid-column-heading (dg-test--col result 0)) "score"))))
 
 (ert-deftest datagrid-test-remove-column-middle ()
   (let* ((result (datagrid-remove-column (dg-test--simple) 1)))
-    (should (= (length result) 2))
-    (should (equal (datagrid-column-heading (aref result 0)) "name"))
-    (should (equal (datagrid-column-heading (aref result 1)) "group"))))
+    (should (= (dg-test--ncols result) 2))
+    (should (equal (datagrid-column-heading (dg-test--col result 0)) "name"))
+    (should (equal (datagrid-column-heading (dg-test--col result 1)) "group"))))
 
 (ert-deftest datagrid-test-remove-column-last ()
   (let* ((result (datagrid-remove-column (dg-test--simple) 2)))
-    (should (= (length result) 2))
-    (should (equal (datagrid-column-heading (aref result 1)) "score"))))
+    (should (= (dg-test--ncols result) 2))
+    (should (equal (datagrid-column-heading (dg-test--col result 1)) "score"))))
 
 
 ;;;; datagrid-sort
 
 (ert-deftest datagrid-test-sort-numeric-reorders-all-columns ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "n" :data [3 1 4 1 5])
 	      (datagrid-column-make :heading "s" :data ["c" "a" "d" "b" "e"])))
 	 (result (datagrid-sort dg 0)))
-    (should (equal (datagrid-column-data (aref result 0)) [1 1 3 4 5]))
-    (should (equal (datagrid-column-data (aref result 1)) ["a" "b" "c" "d" "e"]))))
+    (should (equal (datagrid-pull result 0) [1 1 3 4 5]))
+    (should (equal (datagrid-pull result 1) ["a" "b" "c" "d" "e"]))))
 
 (ert-deftest datagrid-test-sort-string-column ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "s" :data ["banana" "apple" "cherry"])
 	      (datagrid-column-make :heading "n" :data [2 1 3])))
 	 (result (datagrid-sort dg 0)))
-    (should (equal (datagrid-column-data (aref result 0))
+    (should (equal (datagrid-pull result 0)
 		   ["apple" "banana" "cherry"]))
-    (should (equal (datagrid-column-data (aref result 1)) [1 2 3]))))
+    (should (equal (datagrid-pull result 1) [1 2 3]))))
 
 (ert-deftest datagrid-test-sort-does-not-mutate-original ()
-  (let* ((dg (vector (datagrid-column-make :data [3 1 2])))
-	 (original-data (copy-sequence (datagrid-column-data (aref dg 0))))
-	 (_ (datagrid-sort dg 0)))
-    (should (equal (datagrid-column-data (aref dg 0)) original-data))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [3 1 2])))
+	 (original-data (copy-sequence
+			 (datagrid-column-data (dg-test--col dg 0)))))
+    (datagrid-sort dg 0)
+    (should (equal (datagrid-column-data (dg-test--col dg 0))
+		   original-data))))
 
 
-;;;; datagrid-join
+;;;; datagrid-join (deprecated -> datagrid-left-join)
 
 (ert-deftest datagrid-test-join-basic-left-outer ()
-  (let* ((dg1 (vector
+  (let* ((dg1 (dg-test--mk
 	       (datagrid-column-make :heading "id" :data ["a" "b" "c"])
 	       (datagrid-column-make :heading "val" :data [1 2 3])))
-	 (dg2 (vector
+	 (dg2 (dg-test--mk
 	       (datagrid-column-make :heading "id" :data ["b" "c" "a"])
 	       (datagrid-column-make :heading "label" :data ["bee" "cee" "ay"])))
-	 (result (datagrid-join dg1 0 dg2 0 1)))
-    (should (= (length result) 3))
-    (should (equal (datagrid-column-data (aref result 2))
-		   ["ay" "bee" "cee"]))))
+	 (result (with-no-warnings (datagrid-join dg1 0 dg2 0 1))))
+    (should (= (dg-test--ncols result) 3))
+    (should (equal (datagrid-pull result 2) ["ay" "bee" "cee"]))))
 
 (ert-deftest datagrid-test-join-unmatched-row-is-nil ()
-  (let* ((dg1 (vector
+  (let* ((dg1 (dg-test--mk
 	       (datagrid-column-make :heading "id" :data ["a" "x" "c"])))
-	 (dg2 (vector
+	 (dg2 (dg-test--mk
 	       (datagrid-column-make :heading "id" :data ["a" "c"])
 	       (datagrid-column-make :heading "v" :data [10 30])))
-	 (result (datagrid-join dg1 0 dg2 0 1)))
-    (should (null (aref (datagrid-column-data (aref result 1)) 1)))))
+	 (result (with-no-warnings (datagrid-join dg1 0 dg2 0 1))))
+    (should (null (aref (datagrid-pull result 1) 1)))))
 
 
 ;;;; datagrid-create-mask
@@ -492,135 +491,6 @@ added columns are appended in the wrong order."
 	 (mask (datagrid-create-mask dg (lambda (x) (string-equal x "x")) 2)))
     (should (equal mask [t nil t nil]))))
 
-(ert-deftest datagrid-test-create-mask-by-heading ()
-  (let* ((dg (dg-test--simple))
-	 (by-name  (datagrid-create-mask dg (lambda (x) (> x 15)) "score"))
-	 (by-index (datagrid-create-mask dg (lambda (x) (> x 15)) 1)))
-    (should (equal by-name [nil t t t]))
-    (should (equal by-name by-index))))
-
-
-;;;; index-or-heading acceptance for other functions
-
-(ert-deftest datagrid-test-sort-by-heading ()
-  (let ((by-name  (datagrid-sort (dg-test--simple) "score"))
-	(by-index (datagrid-sort (dg-test--simple) 1)))
-    (should (equal by-name by-index))))
-
-(ert-deftest datagrid-test-column-add-code-by-heading ()
-  (require 'datagrid-stats)
-  (let* ((code '(("Agree" . 4) ("Disagree" . 2) ("Neutral" . 3)))
-	 (by-name  (datagrid-column-add-code (dg-test--coded) "rating" code))
-	 (by-index (datagrid-column-add-code (dg-test--coded) 0 code)))
-    (should (equal by-name by-index))))
-
-(ert-deftest datagrid-test-column-decode-by-heading ()
-  (let ((by-name  (datagrid-column-decode (dg-test--coded) "rating"))
-	(by-index (datagrid-column-decode (dg-test--coded) 0)))
-    (should (equal by-name by-index))
-    (should (equal by-name [4 2 3 4]))))
-
-(ert-deftest datagrid-test-group-by-by-heading ()
-  (require 'datagrid-stats)
-  (let ((by-name  (datagrid-group-by (dg-test--simple) "group"))
-	(by-index (datagrid-group-by (dg-test--simple) 2)))
-    (should (equal by-name by-index))))
-
-(ert-deftest datagrid-test-reduce-vec-by-heading ()
-  (require 'datagrid-stats)
-  (should (= (datagrid-reduce-vec (dg-test--simple) #'+ "score")
-	     (datagrid-reduce-vec (dg-test--simple) #'+ 1)))
-  (should (= (datagrid-reduce-vec (dg-test--simple) #'+ "score") 100)))
-
-(ert-deftest datagrid-test-reduce-vec-calc-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-reduce-vec-calc (dg-test--simple) "vsum" "score")
-		 (datagrid-reduce-vec-calc (dg-test--simple) "vsum" 1))))
-
-(ert-deftest datagrid-test-column-quartiles-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-column-quartiles (dg-test--simple) "score")
-		 (datagrid-column-quartiles (dg-test--simple) 1))))
-
-(ert-deftest datagrid-test-column-mode-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-column-mode (dg-test--simple) "group")
-		 (datagrid-column-mode (dg-test--simple) 2))))
-
-(ert-deftest datagrid-test-column-mad-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-column-mad (dg-test--simple) "score")
-		 (datagrid-column-mad (dg-test--simple) 1))))
-
-(ert-deftest datagrid-test-report-nominal-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-report-nominal (dg-test--simple) "group")
-		 (datagrid-report-nominal (dg-test--simple) 2))))
-
-(ert-deftest datagrid-test-report-ratio-by-heading ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-report-ratio (dg-test--simple) "score")
-		 (datagrid-report-ratio (dg-test--simple) 1))))
-
-
-;;;; datagrid-first-non-empty
-
-(ert-deftest datagrid-test-first-non-empty-skips-nil-and-empty ()
-  (require 'datagrid-stats)
-  (should (equal (datagrid-first-non-empty '(nil "" "a" "b")) "a"))
-  (should (equal (datagrid-first-non-empty '("" nil)) nil))
-  (should (equal (datagrid-first-non-empty '()) nil))
-  (should (equal (datagrid-first-non-empty [nil "" 0 1]) 0)))
-
-
-;;;; datagrid-summarize-across
-
-(defun dg-test--scopus ()
-  "Return a small datagrid mirroring the import-collapse use case."
-  (vector
-   (datagrid-column-make
-    :heading "scopus_work_id"
-    :data ["w1" "w1" "w2" "w2" "w2" "w3"])
-   (datagrid-column-make
-    :heading "orcid"
-    :data ["" "0000-0001" "" "" "0000-0002" ""])
-   (datagrid-column-make
-    :heading "department"
-    :data ["" "ENG" "" "" "EARTH" ""])))
-
-(ert-deftest datagrid-test-summarize-across-collapses-to-one-row-per-key ()
-  (require 'datagrid-stats)
-  (let* ((out (datagrid-summarize-across
-	       (dg-test--scopus) #'datagrid-first-non-empty "scopus_work_id")))
-    (should (equal (datagrid-get-headings out)
-		   ["scopus_work_id" "orcid" "department"]))
-    (should (equal (datagrid-column-data (aref out 0))
-		   ["w1" "w2" "w3"]))
-    (should (equal (datagrid-column-data (aref out 1))
-		   ["0000-0001" "0000-0002" nil]))
-    (should (equal (datagrid-column-data (aref out 2))
-		   ["ENG" "EARTH" nil]))))
-
-(ert-deftest datagrid-test-summarize-across-key-by-integer ()
-  (require 'datagrid-stats)
-  (let ((by-name  (datagrid-summarize-across
-		   (dg-test--scopus) #'datagrid-first-non-empty "scopus_work_id"))
-	(by-index (datagrid-summarize-across
-		   (dg-test--scopus) #'datagrid-first-non-empty 0)))
-    (should (equal by-name by-index))))
-
-(ert-deftest datagrid-test-summarize-across-multi-key ()
-  (require 'datagrid-stats)
-  (let* ((dg (vector
-	      (datagrid-column-make :heading "k1" :data ["a" "a" "a" "b"])
-	      (datagrid-column-make :heading "k2" :data ["x" "x" "y" "y"])
-	      (datagrid-column-make :heading "v"  :data ["" "v1" "v2" "v3"])))
-	 (out (datagrid-summarize-across
-	       dg #'datagrid-first-non-empty "k1" "k2")))
-    (should (equal (datagrid-column-data (aref out 0)) ["a" "a" "b"]))
-    (should (equal (datagrid-column-data (aref out 1)) ["x" "y" "y"]))
-    (should (equal (datagrid-column-data (aref out 2)) ["v1" "v2" "v3"]))))
-
 
 ;;;; datagrid-filter-by-mask
 
@@ -628,30 +498,29 @@ added columns are appended in the wrong order."
   (let* ((dg (dg-test--simple))
 	 (result (datagrid-filter-by-mask dg [t nil t nil])))
     (should (datagridp result))
-    (should (= (length (datagrid-column-data (aref result 0))) 2))
-    (should (equal (datagrid-column-data (aref result 0)) ["Alice" "Carol"]))
-    (should (equal (datagrid-column-data (aref result 1)) [10 30]))))
+    (should (= (length (datagrid-pull result 0)) 2))
+    (should (equal (datagrid-pull result 0) ["Alice" "Carol"]))
+    (should (equal (datagrid-pull result 1) [10 30]))))
 
 (ert-deftest datagrid-test-filter-by-mask-all-false ()
   (let* ((result (datagrid-filter-by-mask (dg-test--simple) [nil nil nil nil])))
-    (should (= (length (datagrid-column-data (aref result 0))) 0))))
+    (should (= (length (datagrid-pull result 0)) 0))))
 
 (ert-deftest datagrid-test-filter-by-mask-all-true ()
   (let* ((dg (dg-test--simple))
 	 (result (datagrid-filter-by-mask dg [t t t t])))
-    (should (equal (datagrid-column-data (aref result 0))
-		   (datagrid-column-data (aref dg 0))))))
+    (should (equal (datagrid-pull result 0)
+		   (datagrid-pull dg 0)))))
 
 (ert-deftest datagrid-test-filter-by-mask-accepts-list-mask ()
-  "Mask passed as a list should be converted to vector automatically."
   (let* ((result (datagrid-filter-by-mask (dg-test--simple) '(t nil t nil))))
-    (should (= (length (datagrid-column-data (aref result 0))) 2))))
+    (should (= (length (datagrid-pull result 0)) 2))))
 
 (ert-deftest datagrid-test-filter-by-mask-preserves-metadata ()
   (let* ((dg (dg-test--coded))
 	 (result (datagrid-filter-by-mask dg [t nil t nil])))
-    (should (equal (datagrid-column-heading (aref result 0)) "rating"))
-    (should (equal (datagrid-column-lom (aref result 0)) "ordinal"))))
+    (should (equal (datagrid-column-heading (dg-test--col result 0)) "rating"))
+    (should (equal (datagrid-column-lom (dg-test--col result 0)) "ordinal"))))
 
 
 ;;;; datagrid-group-by
@@ -668,21 +537,13 @@ added columns are appended in the wrong order."
       (should (equal (aref (cadr group-y) 0) ["Bob" "Dave"])))))
 
 (ert-deftest datagrid-test-group-by-single-group ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "g" :data ["a" "a" "a"])
 	      (datagrid-column-make :heading "v" :data [1 2 3])))
 	 (result (datagrid-group-by dg 0)))
     (should (= (length result) 1))
     (should (equal (car (aref result 0)) "a"))
     (should (equal (aref (cadr (aref result 0)) 1) [1 2 3]))))
-
-(ert-deftest datagrid-test-group-by-preserves-row-order ()
-  (let* ((dg (vector
-	      (datagrid-column-make :heading "g" :data ["a" "b" "a" "b"])
-	      (datagrid-column-make :heading "v" :data [1 2 3 4])))
-	 (result (datagrid-group-by dg 0))
-	 (group-a (cl-find "a" result :key #'car :test #'equal)))
-    (should (equal (aref (cadr group-a) 1) [1 3]))))
 
 
 ;;;; datagrid-reduce-vec
@@ -695,7 +556,7 @@ added columns are appended in the wrong order."
   (should (= (datagrid-reduce-vec (dg-test--coded) #'+ 0 t) 13)))
 
 (ert-deftest datagrid-test-reduce-vec-with-convert ()
-  (let ((dg (vector (datagrid-column-make :data ["10" "20" "30"]))))
+  (let ((dg (dg-test--mk (datagrid-column-make :data ["10" "20" "30"]))))
     (should (= (datagrid-reduce-vec dg #'+ 0 nil t) 60))))
 
 
@@ -731,7 +592,6 @@ added columns are appended in the wrong order."
   (should (= (datagrid-calc-function-wrapper "vmedian" '(1 2 3 4 5)) 3.0)))
 
 (ert-deftest datagrid-test-calc-function-wrapper-median-even ()
-  "Even-length data produces a fractional median — tests the math-float fix."
   (should (= (datagrid-calc-function-wrapper "vmedian" '(1 2 3 4)) 2.5)))
 
 (ert-deftest datagrid-test-calc-function-wrapper-max ()
@@ -747,31 +607,31 @@ added columns are appended in the wrong order."
   (should (= (datagrid-reduce-vec-calc (dg-test--simple) "vmean" 1) 25.0)))
 
 (ert-deftest datagrid-test-reduce-vec-calc-with-code ()
-  ;; Decoded: [4 2 3 4], mean = 13/4 = 3.25
   (should (= (datagrid-reduce-vec-calc (dg-test--coded) "vmean" 0 t) 3.25)))
 
 (ert-deftest datagrid-test-reduce-vec-calc-nil-returns-nil-on-empty ()
-  (let ((dg (vector (datagrid-column-make :data [nil nil nil]))))
+  (let ((dg (dg-test--mk (datagrid-column-make :data [nil nil nil]))))
     (should (null (datagrid-reduce-vec-calc dg "vmean" 0 nil t)))))
 
 
 ;;;; datagrid-column-frequencies
 
 (ert-deftest datagrid-test-column-frequencies-basic ()
-  (let* ((dg (vector (datagrid-column-make :data ["a" "b" "a" "c" "a"])))
-	 (freq (datagrid-column-frequencies dg 0)))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data ["a" "b" "a" "c" "a"])))
+	 (freq (with-no-warnings (datagrid-column-frequencies dg 0))))
     (should (= (cdr (assoc "a" freq)) 3))
     (should (= (cdr (assoc "b" freq)) 1))
     (should (= (cdr (assoc "c" freq)) 1))))
 
 (ert-deftest datagrid-test-column-frequencies-sorted-descending ()
-  (let* ((dg (vector (datagrid-column-make :data ["a" "b" "a" "b" "b"])))
-	 (freq (datagrid-column-frequencies dg 0)))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data ["a" "b" "a" "b" "b"])))
+	 (freq (with-no-warnings (datagrid-column-frequencies dg 0))))
     (should (= (cdar freq) 3))
     (should (>= (cdr (nth 0 freq)) (cdr (nth 1 freq))))))
 
 (ert-deftest datagrid-test-column-frequencies-with-code ()
-  (let* ((freq (datagrid-column-frequencies (dg-test--coded) 0 t)))
+  (let* ((freq (with-no-warnings
+		 (datagrid-column-frequencies (dg-test--coded) 0 t))))
     (should (= (cdr (assoc 4 freq)) 2))
     (should (= (cdr (assoc 2 freq)) 1))
     (should (= (cdr (assoc 3 freq)) 1))))
@@ -780,7 +640,8 @@ added columns are appended in the wrong order."
 ;;;; datagrid-column-quartiles
 
 (ert-deftest datagrid-test-column-quartiles-returns-four-keys ()
-  (let* ((dg (vector (datagrid-column-make :data [1 3 5 7 9 11 13 15])))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data [1 3 5 7 9 11 13 15])))
 	 (q (datagrid-column-quartiles dg 0)))
     (should (assoc "1Q" q))
     (should (assoc "2Q" q))
@@ -788,35 +649,34 @@ added columns are appended in the wrong order."
     (should (assoc "IQR" q))))
 
 (ert-deftest datagrid-test-column-quartiles-iqr-consistent ()
-  "IQR must equal 3Q minus 1Q."
-  (let* ((dg (vector (datagrid-column-make :data [1 3 5 7 9 11 13 15])))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data [1 3 5 7 9 11 13 15])))
 	 (q (datagrid-column-quartiles dg 0)))
     (should (= (cdr (assoc "IQR" q))
 	       (- (cdr (assoc "3Q" q)) (cdr (assoc "1Q" q)))))))
 
 (ert-deftest datagrid-test-column-quartiles-known-values ()
-  ;; [1 3 5 7 9 11 13 15] sorted, len=8
-  ;; Q1: aref[(8+1)/4]=aref[2]=5, Q2: aref[4]=9, Q3: aref[6]=13
-  (let* ((dg (vector (datagrid-column-make :data [15 1 9 3 13 5 11 7])))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data [15 1 9 3 13 5 11 7])))
 	 (q (datagrid-column-quartiles dg 0)))
     (should (= (cdr (assoc "1Q" q)) 5))
     (should (= (cdr (assoc "2Q" q)) 9))
     (should (= (cdr (assoc "3Q" q)) 13))))
 
 (ert-deftest datagrid-test-column-quartiles-all-nil-returns-nil ()
-  (let* ((dg (vector (datagrid-column-make :data [nil nil nil]))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [nil nil nil]))))
     (should (null (datagrid-column-quartiles dg 0)))))
 
 (ert-deftest datagrid-test-column-quartiles-small-column-no-error ()
-  "Q3 index must be clamped so columns with len < 4 do not error."
-  (let* ((dg (vector (datagrid-column-make :data [1 2 3]))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [1 2 3]))))
     (should (datagrid-column-quartiles dg 0)))
-  (let* ((dg (vector (datagrid-column-make :data [42]))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [42]))))
     (should (datagrid-column-quartiles dg 0))))
 
 (ert-deftest datagrid-test-column-quartiles-ignores-nil-values ()
-  ;; Use 8 non-nil values so Q3 index stays in bounds.
-  (let* ((dg (vector (datagrid-column-make :data [1 nil 3 5 nil 7 9 11 nil 13 15])))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make
+	       :data [1 nil 3 5 nil 7 9 11 nil 13 15])))
 	 (q (datagrid-column-quartiles dg 0)))
     (should q)))
 
@@ -824,20 +684,21 @@ added columns are appended in the wrong order."
 ;;;; datagrid-column-mode
 
 (ert-deftest datagrid-test-column-mode-unimodal-string ()
-  (let* ((dg (vector (datagrid-column-make :data ["a" "b" "a" "c" "a"]))))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data ["a" "b" "a" "c" "a"]))))
     (should (equal (datagrid-column-mode dg 0) '("a")))))
 
 (ert-deftest datagrid-test-column-mode-unimodal-numeric ()
-  (let* ((dg (vector (datagrid-column-make :data [1 2 2 3 3 3]))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [1 2 2 3 3 3]))))
     (should (equal (datagrid-column-mode dg 0) '(3)))))
 
 (ert-deftest datagrid-test-column-mode-empty-returns-nil ()
-  (let* ((dg (vector (datagrid-column-make :data []))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data []))))
     (should (null (datagrid-column-mode dg 0)))))
 
 (ert-deftest datagrid-test-column-mode-no-redundant-sort ()
-  "datagrid-column-frequencies already sorts; mode should not re-sort."
-  (let* ((dg (vector (datagrid-column-make :data ["z" "z" "a" "a" "a"])))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data ["z" "z" "a" "a" "a"])))
 	 (mode (datagrid-column-mode dg 0)))
     (should (equal mode '("a")))))
 
@@ -845,7 +706,7 @@ added columns are appended in the wrong order."
 ;;;; datagrid-column-unique
 
 (ert-deftest datagrid-test-column-unique-removes-duplicates ()
-  (let* ((dg (vector (datagrid-column-make :data ["a" "b" "a" "c"])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data ["a" "b" "a" "c"])))
 	 (uniq (datagrid-column-unique dg 0)))
     (should (= (length uniq) 3))
     (should (seq-contains-p uniq "a" #'equal))
@@ -853,26 +714,24 @@ added columns are appended in the wrong order."
     (should (seq-contains-p uniq "c" #'equal))))
 
 (ert-deftest datagrid-test-column-unique-no-duplicates-unchanged ()
-  (let* ((dg (vector (datagrid-column-make :data [1 2 3 4])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [1 2 3 4])))
 	 (uniq (datagrid-column-unique dg 0)))
     (should (= (length uniq) 4))))
 
 (ert-deftest datagrid-test-column-unique-with-code ()
   (let* ((uniq (datagrid-column-unique (dg-test--coded) 0 t)))
-    ;; Decoded: [4 2 3 4] → unique: 4, 2, 3
     (should (= (length uniq) 3))))
 
 
 ;;;; datagrid-column-mad
 
 (ert-deftest datagrid-test-column-mad-basic ()
-  ;; [1 2 3 4 5]: median=3, deviations=[2 1 0 1 2], MAD=1
-  (let* ((dg (vector (datagrid-column-make :data [1 2 3 4 5]))))
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [1 2 3 4 5]))))
     (should (= (datagrid-column-mad dg 0) 1.0))))
 
 (ert-deftest datagrid-test-column-mad-string-data ()
-  "String data should be converted to numbers without error."
-  (let* ((dg (vector (datagrid-column-make :data ["1" "2" "3" "4" "5"]))))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :data ["1" "2" "3" "4" "5"]))))
     (should (= (datagrid-column-mad dg 0) 1.0))))
 
 
@@ -890,42 +749,37 @@ added columns are appended in the wrong order."
 ;;;; datagrid-to-alist
 
 (ert-deftest datagrid-test-to-alist-without-headings ()
-  (let* ((dg (vector (datagrid-column-make :heading "a" :data [1 2])
-		     (datagrid-column-make :heading "b" :data [3 4])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "a" :data [1 2])
+			  (datagrid-column-make :heading "b" :data [3 4])))
 	 (result (datagrid-to-alist dg)))
     (should (equal result '((1 2) (3 4))))))
 
 (ert-deftest datagrid-test-to-alist-with-headings ()
-  (let* ((dg (vector (datagrid-column-make :heading "a" :data [1 2])
-		     (datagrid-column-make :heading "b" :data [3 4])))
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "a" :data [1 2])
+			  (datagrid-column-make :heading "b" :data [3 4])))
 	 (result (datagrid-to-alist dg t)))
     (should (equal result '(("a" 1 2) ("b" 3 4))))))
 
 
 ;;;; Report functions
-;; These pin the current Calc-backed behavior so refactors can be verified.
 
 (defun dg-test--approx= (a b &optional tol)
-  "Return non-nil if A and B differ by less than TOL (default 1e-6)."
   (< (abs (- a b)) (or tol 1e-6)))
 
 (defun dg-test--ratio-dg ()
-  "Single ratio column with known values [1 2 3 4 5]."
-  (vector (datagrid-column-make :heading "r"
-				:data [1 2 3 4 5]
-				:lom "ratio")))
+  (dg-test--mk (datagrid-column-make :heading "r"
+				     :data [1 2 3 4 5]
+				     :lom "ratio")))
 
 (defun dg-test--interval-dg ()
-  "Single interval column with known values [10 20 30 40]."
-  (vector (datagrid-column-make :heading "i"
-				:data [10 20 30 40]
-				:lom "interval")))
+  (dg-test--mk (datagrid-column-make :heading "i"
+				     :data [10 20 30 40]
+				     :lom "interval")))
 
 (defun dg-test--ordinal-dg ()
-  "Single ordinal column with known values [1 2 2 3 4 5]."
-  (vector (datagrid-column-make :heading "o"
-				:data [1 2 2 3 4 5]
-				:lom "ordinal")))
+  (dg-test--mk (datagrid-column-make :heading "o"
+				     :data [1 2 2 3 4 5]
+				     :lom "ordinal")))
 
 
 ;;;; datagrid-report-nominal
@@ -936,13 +790,13 @@ added columns are appended in the wrong order."
 
 (ert-deftest datagrid-test-report-nominal-cardinality ()
   (let ((report (datagrid-report-nominal (dg-test--simple) 2)))
-    ;; "x" "y" "x" "y" → 2 unique
     (should (= (cdr (assoc "cardinality" report)) 2))))
 
 (ert-deftest datagrid-test-report-nominal-mode ()
-  (let* ((dg (vector (datagrid-column-make :heading "h"
-					   :data ["a" "b" "a" "c" "a"]
-					   :lom "nominal")))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "h"
+				    :data ["a" "b" "a" "c" "a"]
+				    :lom "nominal")))
 	 (report (datagrid-report-nominal dg 0)))
     (should (equal (cdr (assoc "mode" report)) '("a")))))
 
@@ -975,22 +829,21 @@ added columns are appended in the wrong order."
     (should (equal (cdr (assoc "mode" report)) '(2)))))
 
 (ert-deftest datagrid-test-report-ordinal-no-mean-or-sdev ()
-  "Ordinal report should NOT include vmean or vsdev."
   (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
     (should-not (assoc "vmean" report))
     (should-not (assoc "vsdev" report))))
 
 (ert-deftest datagrid-test-report-ordinal-with-code ()
-  ;; Decoded: [4 2 3 4]
   (let ((report (datagrid-report-ordinal (dg-test--coded) 0 t)))
     (should (= (cdr (assoc "vcount" report)) 4.0))
     (should (= (cdr (assoc "vmin" report)) 2.0))
     (should (= (cdr (assoc "vmax" report)) 4.0))))
 
 (ert-deftest datagrid-test-report-ordinal-with-convert ()
-  (let* ((dg (vector (datagrid-column-make :heading "s"
-					   :data ["1" "2" "3" "4" "5"]
-					   :lom "ordinal")))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "s"
+				    :data ["1" "2" "3" "4" "5"]
+				    :lom "ordinal")))
 	 (report (datagrid-report-ordinal dg 0 nil t)))
     (should (= (cdr (assoc "vcount" report)) 5.0))
     (should (= (cdr (assoc "vmedian" report)) 3.0))))
@@ -1015,11 +868,9 @@ added columns are appended in the wrong order."
     (should (= (cdr (assoc "vmax" report)) 40.0))
     (should (= (cdr (assoc "vmedian" report)) 25.0))
     (should (= (cdr (assoc "vmean" report)) 25.0))
-    ;; sample sdev of [10 20 30 40]: sqrt(500/3) ≈ 12.9099
     (should (dg-test--approx= (cdr (assoc "vsdev" report)) 12.909944487 1e-4))))
 
 (ert-deftest datagrid-test-report-interval-no-gmean-or-rms ()
-  "Interval report should NOT include vgmean or rms."
   (let ((report (datagrid-report-interval (dg-test--interval-dg) 0)))
     (should-not (assoc "vgmean" report))
     (should-not (assoc "rms" report))))
@@ -1044,17 +895,15 @@ added columns are appended in the wrong order."
     (should (= (cdr (assoc "vmax" report)) 5.0))
     (should (= (cdr (assoc "vmedian" report)) 3.0))
     (should (= (cdr (assoc "vmean" report)) 3.0))
-    ;; sample sdev of [1..5] = sqrt(2.5) ≈ 1.5811388
     (should (dg-test--approx= (cdr (assoc "vsdev" report)) 1.5811388 1e-4))
-    ;; gmean of [1..5] = 120^(1/5) ≈ 2.6051710
     (should (dg-test--approx= (cdr (assoc "vgmean" report)) 2.6051710 1e-4))
-    ;; rms of [1..5] = sqrt(55/5) = sqrt(11) ≈ 3.3166247
     (should (dg-test--approx= (cdr (assoc "rms" report)) 3.3166247 1e-4))))
 
 (ert-deftest datagrid-test-report-ratio-with-convert ()
-  (let* ((dg (vector (datagrid-column-make :heading "s"
-					   :data ["1" "2" "3" "4" "5"]
-					   :lom "ratio")))
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "s"
+				    :data ["1" "2" "3" "4" "5"]
+				    :lom "ratio")))
 	 (report (datagrid-report-ratio dg 0 nil t)))
     (should (= (cdr (assoc "vmean" report)) 3.0))))
 
@@ -1062,7 +911,7 @@ added columns are appended in the wrong order."
 ;;;; datagrid-report-all-lom dispatch
 
 (ert-deftest datagrid-test-report-all-lom-dispatches-by-lom ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "n"
 				    :data ["a" "b" "a" "c" "b"]
 				    :lom "nominal")
@@ -1073,22 +922,18 @@ added columns are appended in the wrong order."
 	      (datagrid-column-make :heading "r" :data [1.0 2.0 3.0 4.0 5.0]
 				    :lom "ratio")))
 	 (reports (datagrid-report-all-lom dg)))
-    ;; nominal: has "cardinality"
     (should (assoc "cardinality" (cdr (nth 0 reports))))
-    ;; ordinal: has "mean absolute deviation", no vmean
     (should (assoc "mean absolute deviation" (cdr (nth 1 reports))))
     (should-not (assoc "vmean" (cdr (nth 1 reports))))
-    ;; interval: has vmean+vsdev, no vgmean
     (should (assoc "vmean" (cdr (nth 2 reports))))
     (should-not (assoc "vgmean" (cdr (nth 2 reports))))
-    ;; ratio: has vgmean+rms
     (should (assoc "vgmean" (cdr (nth 3 reports))))
     (should (assoc "rms" (cdr (nth 3 reports))))))
 
 (ert-deftest datagrid-test-report-all-lom-nil-treated-as-nominal ()
-  (let* ((dg (vector (datagrid-column-make :heading "x"
-					   :data ["a" "b" "a"]
-					   :lom nil)))
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "x"
+						:data ["a" "b" "a"]
+						:lom nil)))
 	 (reports (datagrid-report-all-lom dg)))
     (should (assoc "cardinality" (cdr (nth 0 reports))))))
 
@@ -1114,7 +959,6 @@ added columns are appended in the wrong order."
 	 (multi (datagrid-rename dg '(("name" . "who") (1 . "pts")))))
     (should (equal (datagrid-get-headings single) ["who" "score" "group"]))
     (should (equal (datagrid-get-headings multi) ["who" "pts" "group"]))
-    ;; Original is not mutated.
     (should (equal (datagrid-get-headings dg) ["name" "score" "group"]))))
 
 (ert-deftest datagrid-test-slice-keeps-column-metadata ()
@@ -1122,7 +966,7 @@ added columns are appended in the wrong order."
 	 (out (datagrid-slice dg 0 2)))
     (should (equal (datagrid-pull out 0) ["Alice" "Carol"]))
     (should (equal (datagrid-pull out 1) [10 30]))
-    (should (equal (datagrid-column-lom (aref out 1)) "ratio"))))
+    (should (equal (datagrid-column-lom (dg-test--col out 1)) "ratio"))))
 
 (ert-deftest datagrid-test-mutate-appends-and-replaces ()
   (let* ((dg (dg-test--simple))
@@ -1142,33 +986,29 @@ added columns are appended in the wrong order."
 		   ["Alice:10" "Bob:20" "Carol:30" "Dave:40"]))))
 
 (ert-deftest datagrid-test-count-returns-datagrid ()
-  (let* ((dg (vector (datagrid-column-make
-		      :heading "name"
-		      :data ["a" "b" "a" "c" "b" "a"])))
+  (let* ((dg (dg-test--mk (datagrid-column-make
+			   :heading "name"
+			   :data ["a" "b" "a" "c" "b" "a"])))
 	 (out (datagrid-count dg "name"))
 	 (sorted (datagrid-count dg "name" :sort t :name "freq")))
     (should (equal (datagrid-get-headings out) ["name" "n"]))
     (should (equal (datagrid-pull out 0) ["a" "b" "c"]))
     (should (equal (datagrid-pull out 1) [3 2 1]))
     (should (equal (datagrid-get-headings sorted) ["name" "freq"]))
-    ;; :sort t means by descending frequency
     (should (equal (datagrid-pull sorted 1) [3 2 1]))))
 
 (ert-deftest datagrid-test-distinct-row-and-column-forms ()
-  (let* ((dg (vector (datagrid-column-make
-		      :heading "name" :data ["a" "b" "a" "c" "b"])
-		     (datagrid-column-make
-		      :heading "v" :data [1 2 1 3 9])))
+  (let* ((dg (dg-test--mk (datagrid-column-make
+			   :heading "name" :data ["a" "b" "a" "c" "b"])
+			  (datagrid-column-make
+			   :heading "v" :data [1 2 1 3 9])))
 	 (col-only (datagrid-distinct dg "name"))
 	 (rows (datagrid-distinct dg))
 	 (subset (datagrid-distinct dg "name" "v")))
-    ;; Single column: only that column, deduped.
     (should (equal (datagrid-get-headings col-only) ["name"]))
     (should (equal (datagrid-pull col-only 0) ["a" "b" "c"]))
-    ;; Row-level: (a,1), (b,2), (a,1), (c,3), (b,9) -> drops the second (a,1).
     (should (equal (datagrid-pull rows 0) ["a" "b" "c" "b"]))
     (should (equal (datagrid-pull rows 1) [1 2 3 9]))
-    ;; Subset by listed cols matches the full row form here.
     (should (equal (datagrid-pull subset 0) ["a" "b" "c" "b"]))))
 
 (ert-deftest datagrid-test-summarize-returns-alist ()
@@ -1181,35 +1021,31 @@ added columns are appended in the wrong order."
 
 
 (ert-deftest datagrid-test-rows-patch-fills-only-empties ()
-  (let* ((a (vector (datagrid-column-make :heading "id" :data [1 2 3 4])
-		    (datagrid-column-make :heading "name"
-					  :data ["alice" nil "" "dave"])))
-	 (b (vector (datagrid-column-make :heading "id" :data [1 2 3 5])
-		    (datagrid-column-make :heading "name"
-					  :data ["A." "bob" "carol" "ed"])))
-	 ;; String :on, alist of heading refs.
+  (let* ((a (dg-test--mk (datagrid-column-make :heading "id" :data [1 2 3 4])
+			 (datagrid-column-make :heading "name"
+					       :data ["alice" nil "" "dave"])))
+	 (b (dg-test--mk (datagrid-column-make :heading "id" :data [1 2 3 5])
+			 (datagrid-column-make :heading "name"
+					       :data ["A." "bob" "carol" "ed"])))
 	 (out (datagrid-rows-patch a b :on "id"
 				   :cols '(("name" . "name")))))
-    ;; Existing alice and dave preserved; nil and "" filled from b.
     (should (equal (datagrid-pull out "name")
 		   ["alice" "bob" "carol" "dave"]))
-    ;; id 4 has no match in b, so it stays "dave" (already non-empty).
     (should (equal (datagrid-pull out "id") [1 2 3 4]))
-    ;; Original a is not mutated.
     (should (equal (datagrid-pull a "name") ["alice" nil "" "dave"]))))
 
 (ert-deftest datagrid-test-rows-patch-on-cons-and-int-cols ()
-  (let* ((a (vector (datagrid-column-make :heading "akey" :data [1 2 3])
-		    (datagrid-column-make :heading "v"    :data [nil nil 9])))
-	 (b (vector (datagrid-column-make :heading "bkey" :data [2 1 3])
-		    (datagrid-column-make :heading "w"    :data [20 10 30])))
+  (let* ((a (dg-test--mk (datagrid-column-make :heading "akey" :data [1 2 3])
+			 (datagrid-column-make :heading "v"    :data [nil nil 9])))
+	 (b (dg-test--mk (datagrid-column-make :heading "bkey" :data [2 1 3])
+			 (datagrid-column-make :heading "w"    :data [20 10 30])))
 	 (out (datagrid-rows-patch a b :on '("akey" . "bkey")
 				   :cols '((1 . 1)))))
     (should (equal (datagrid-pull out 1) [10 20 9]))))
 
 
 (ert-deftest datagrid-test-coalesce-merges-and-drops ()
-  (let* ((dg (vector
+  (let* ((dg (dg-test--mk
 	      (datagrid-column-make :heading "id"      :data [1 2 3 4])
 	      (datagrid-column-make :heading "email"   :data ["a" nil "c" ""])
 	      (datagrid-column-make :heading "email_2" :data ["A" "b" "" "d"])
@@ -1218,12 +1054,9 @@ added columns are appended in the wrong order."
 	 (out (datagrid-coalesce dg
 				 '("email" "email_2")
 				 '("phone" "phone_2"))))
-    ;; Suffixed columns dropped.
     (should (equal (datagrid-get-headings out) ["id" "email" "phone"]))
-    ;; Row-wise first-non-empty across each group.
     (should (equal (datagrid-pull out "email") ["a" "b" "c" "d"]))
     (should (equal (datagrid-pull out "phone") ["q1" "p2" "q3" nil]))
-    ;; Original is not mutated.
     (should (equal (datagrid-get-headings dg)
 		   ["id" "email" "email_2" "phone" "phone_2"]))))
 
