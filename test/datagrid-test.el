@@ -1061,5 +1061,70 @@
 		   ["id" "email" "email_2" "phone" "phone_2"]))))
 
 
+
+;;;; datagrid-group-modify
+
+(ert-deftest datagrid-test-group-modify-one-row-per-group ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "g"   :data ["a" "b" "a" "b" "a"])
+              (datagrid-column-make :heading "v"   :data [1 10 2 20 3])
+              (datagrid-column-make :heading "tag" :data ["x" "y" "x" "y" "x"])))
+         (out (datagrid-group-modify
+               dg
+               (lambda (sub)
+                 (let ((vs (datagrid-pull sub "v"))
+                       (ks (datagrid-pull sub "g")))
+                   (dg-test--mk
+                    (datagrid-column-make :heading "g"   :data (vector (aref ks 0)))
+                    (datagrid-column-make :heading "sum" :data (vector (seq-reduce #'+ vs 0))))))
+               "g")))
+    (should (equal (datagrid-get-headings out) ["g" "sum"]))
+    (should (equal (datagrid-pull out "g")   ["a" "b"]))
+    (should (equal (datagrid-pull out "sum") [6 30]))))
+
+(ert-deftest datagrid-test-group-modify-multi-row-per-group ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "g" :data ["a" "b" "a" "b"])
+              (datagrid-column-make :heading "v" :data [1 10 2 20])))
+         (out (datagrid-group-modify
+               dg
+               (lambda (sub)
+                 (let* ((vs (datagrid-pull sub "v"))
+                        (ks (datagrid-pull sub "g"))
+                        (n  (length vs)))
+                   (dg-test--mk
+                    (datagrid-column-make :heading "g" :data (make-vector n (aref ks 0)))
+                    (datagrid-column-make :heading "v" :data vs))))
+               "g")))
+    (should (equal (datagrid-get-headings out) ["g" "v"]))
+    (should (equal (datagrid-pull out "g") ["a" "a" "b" "b"]))
+    (should (equal (datagrid-pull out "v") [1 2 10 20]))))
+
+(ert-deftest datagrid-test-group-modify-empty-input ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "g" :data [])
+              (datagrid-column-make :heading "v" :data [])))
+         (out (datagrid-group-modify dg #'identity "g")))
+    (should (datagridp out))
+    (should (zerop (datagrid--ncols out)))))
+
+(ert-deftest datagrid-test-group-modify-schema-mismatch ()
+  (let ((dg (dg-test--mk
+             (datagrid-column-make :heading "g" :data ["a" "b"])
+             (datagrid-column-make :heading "v" :data [1 2]))))
+    (should-error
+     (datagrid-group-modify
+      dg
+      (lambda (sub)
+        (let ((ks (datagrid-pull sub "g"))
+              (vs (datagrid-pull sub "v")))
+          (if (equal (aref ks 0) "a")
+              (dg-test--mk (datagrid-column-make :heading "g" :data (vector (aref ks 0)))
+                           (datagrid-column-make :heading "v" :data vs))
+            (dg-test--mk (datagrid-column-make :heading "g"     :data (vector (aref ks 0)))
+                         (datagrid-column-make :heading "other" :data vs)))))
+      "g"))))
+
+
 (provide 'datagrid-test)
 ;;; datagrid-test.el ends here

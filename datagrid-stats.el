@@ -285,6 +285,62 @@ their original order."
 			       new))))
       (datagrid-make :columns (vconcat (append key-cols reduced-cols))))))
 
+(defun datagrid-group-modify (datagrid fn &rest key-cols)
+  "Group DATAGRID rows by KEY-COLS, apply FN to each group, rbind results.
+KEY-COLS are column refs (zero-based integers or heading strings). Rows
+sharing the same combination of KEY-COLS values form a group; groups
+appear in first-seen order. FN is called once per group with a
+sub-datagrid containing all of DATAGRID's columns and only that group's
+rows. FN must return a datagrid; its column count and headings must
+match across all groups. The per-group results are rbound and returned
+as a single datagrid. Unlike `datagrid-summarize-across', no columns are
+auto-prepended -- FN is responsible for whatever schema it returns.
+Returns an empty datagrid when DATAGRID has no rows."
+  (unless (datagridp datagrid)
+    (error "Argument must be a datagrid"))
+  (let* ((key-indices (cl-loop for c in key-cols
+                               collect (datagrid--resolve-col datagrid c)))
+         (n-rows (datagrid--nrows datagrid))
+         (key-vecs (cl-loop for i in key-indices
+                            collect (datagrid-pull datagrid i)))
+         (groups (make-hash-table :test 'equal))
+         (order nil))
+    (dotimes (r n-rows)
+      (let ((key (cl-loop for v in key-vecs collect (aref v r))))
+        (unless (gethash key groups)
+          (push key order))
+        (push r (gethash key groups))))
+    (if (null order)
+        (datagrid-make :columns (vector))
+      (let* ((order (nreverse order))
+             (group-row-lists
+              (cl-loop for k in order
+                       collect (nreverse (gethash k groups))))
+             (results
+              (cl-loop for rows in group-row-lists
+                       collect (funcall fn
+                                        (apply #'datagrid-slice datagrid rows))))
+             (proto (car results))
+             (proto-headings (datagrid-get-headings proto))
+             (proto-ncols (datagrid--ncols proto)))
+        (cl-loop for r in (cdr results)
+                 unless (and (datagridp r)
+                             (= (datagrid--ncols r) proto-ncols)
+                             (equal (datagrid-get-headings r) proto-headings))
+                 do (error "datagrid-group-modify: FN result schema mismatch"))
+        (let ((out-cols
+               (cl-loop for j from 0 below proto-ncols
+                        for proto-col = (aref (datagrid-columns proto)
+                                              (datagrid--col-at proto j))
+                        collect
+                        (let ((new (datagrid-column-copy proto-col))
+                              (chunks (cl-loop for r in results
+                                               collect (datagrid-pull r j))))
+                          (setf (datagrid-column-data new)
+                                (apply #'vconcat chunks))
+                          new))))
+          (datagrid-make :columns (vconcat out-cols)))))))
+
 
 ;;;; Statistical functions
 (cl-defun datagrid-count (datagrid col &key sort name code)
