@@ -362,7 +362,18 @@ row-wise by the first non-empty value found across the group, where
 each group are dropped from the result. Other columns are unchanged.
 
 Useful after `datagrid-full-join' to merge `email'/`email_2' style
-sibling columns into one."
+sibling columns into one.
+
+Example:
+
+  (datagrid-coalesce joined
+                     \\='(\"email\" \"email_2\")
+                     \\='(\"phone\" \"phone_2\" \"phone_3\"))
+
+Replaces `email' with the first non-empty of `email'/`email_2',
+replaces `phone' with the first non-empty of
+`phone'/`phone_2'/`phone_3', and drops `email_2', `phone_2', and
+`phone_3'."
   (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v)))))
     (let* ((src-cols (datagrid-columns datagrid))
            (ncols (datagrid--ncols datagrid))

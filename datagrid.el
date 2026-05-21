@@ -477,28 +477,43 @@ REQUIRES: CSV-MODE"
 						       (seq-drop item 1)
 						     item))))))))))
 
-(defun datagrid-from-csv-file (file-path &optional headings)
+(defun datagrid-from-csv-file (file-path &optional headings parser extend-uneven)
   "Return a datagrid from a CSV file at FILE-PATH.
 If HEADINGS is nil, then there is not a headings row. If t, then
 there is. The default is nil.
 
-REQUIRES: CSV-MODE
+PARSER selects the CSV backend:
+  nil or `csv-mode' (default) - use csv-mode line-by-line.
+  `pcsv'                      - use pcsv's streaming `pcsv-file-parser',
+                                which handles multiline quoted fields and
+                                very large files without regex-stack
+                                overflow. Requires the pcsv package.
 
-PCSV is a package in MELPA that can correctly parse multiline CSV
-fields. Use it with datagrid.el as follows:
-
-  (datagrid-from-alist
-   (datagrid-safe-transpose (pcsv-parse-file FILE))
-   HEADINGS
-   EXTEND-UNEVEN)"
-  (require 'csv-mode)
-  (with-temp-buffer
-    (insert-file-contents file-path)
-    (goto-char (point-min))
-    (while (search-forward "\r" nil t)
-      (replace-match "" nil t))
-    (csv-mode)
-    (datagrid-from-csv-buffer (current-buffer) headings)))
+EXTEND-UNEVEN is passed through to `datagrid-from-alist' (only used by
+the pcsv backend)."
+  (pcase (or parser 'csv-mode)
+    ('csv-mode
+     (require 'csv-mode)
+     (with-temp-buffer
+       (insert-file-contents file-path)
+       (goto-char (point-min))
+       (while (search-forward "\r" nil t)
+         (replace-match "" nil t))
+       (csv-mode)
+       (datagrid-from-csv-buffer (current-buffer) headings)))
+    ('pcsv
+     (require 'pcsv)
+     (let ((reader (pcsv-file-parser file-path)))
+       (unwind-protect
+           (datagrid-from-alist
+            (datagrid-safe-transpose
+             (cl-loop for row = (funcall reader)
+                      while row
+                      collect row))
+            headings
+            extend-uneven)
+         (funcall reader t))))
+    (_ (error "Unknown CSV parser: %S" parser))))
 
 (defun datagrid--csv-quote-field (field)
   "Return FIELD as a CSV-safe string.
