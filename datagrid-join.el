@@ -128,7 +128,8 @@ preserved; headings uniquified using SUFFIX)."
 ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
 (semi-join), nil keeps unmatched rows (anti-join)."
   (let* ((on (datagrid-join--normalize-on on dg1 dg2))
-	 (on1 (car on)) (on2 (cdr on))
+	 (on1 (car on))
+         (on2 (cdr on))
 	 (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
 	 (mask (cl-map 'vector
 		       (lambda (k)
@@ -158,7 +159,8 @@ disambiguates DG2 headings that collide with DG1 headings and
 defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
-	 (on1 (car on)) (on2 (cdr on))
+	 (on1 (car on))
+         (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
 			collect (datagrid--resolve-col dg2 c)))
 	 (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
@@ -179,7 +181,8 @@ defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
-	 (on1 (car on)) (on2 (cdr on))
+	 (on1 (car on))
+         (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
 			collect (datagrid--resolve-col dg2 c)))
 	 (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
@@ -209,7 +212,8 @@ defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
 	 (on (datagrid-join--normalize-on on dg1 dg2))
-	 (on1 (car on)) (on2 (cdr on))
+	 (on1 (car on))
+         (on2 (cdr on))
 	 (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
 			collect (datagrid--resolve-col dg2 c)))
 	 (keys2 (datagrid-pull dg2 on2))

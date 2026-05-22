@@ -266,11 +266,12 @@ heading string."
                                  (seq-drop logical (1+ index))))
                collect new-col)))))
 
-(defun datagrid-sort (datagrid index)
-  "Return a new datagrid sorted by logical column INDEX.
-Column data is shared with DATAGRID; the result records a row-order
-permutation. Composes with any existing row-order on DATAGRID."
-  (let* ((vals (datagrid-pull datagrid index))
+(defun datagrid-sort (datagrid col)
+  "Return a new datagrid sorted by logical column COL.
+COL is a zero-based column number or a heading string. Column data is
+shared with DATAGRID; the result records a row-order permutation.
+Composes with any existing row-order on DATAGRID."
+  (let* ((vals (datagrid-pull datagrid col))
          (n (length vals))
          (indexed (cl-loop for i from 0 below n
                            collect (cons i (aref vals i))))
@@ -409,11 +410,11 @@ replaces `phone' with the first non-empty of
 			 unless (memq i drops)
 			 collect col))))))
 
-(defun datagrid-create-mask (datagrid pred index)
-  "Create a mask for a DATAGRID column at INDEX.
+(defun datagrid-create-mask (datagrid pred col)
+  "Create a mask for a DATAGRID column at COL.
 PRED is a function of one argument. It will operate on the
-datagrid column at INDEX. INDEX is zero based, or a string naming
-the column heading.
+datagrid column at COL. COL is a zero-based column number or a
+string naming the column heading.
 
 This simply returns a vector.
 
@@ -441,7 +442,7 @@ Other common predicate function examples using lambdas:
  (lambda (x) (<= x \"2025\"))"
   (interactive)
   (let* ((cols (datagrid-columns datagrid))
-         (vec (datagrid-pull datagrid index))
+         (vec (datagrid-pull datagrid col))
 	 (mask (and (vectorp cols)
 		    (> (length cols) 0)
 		    (vectorp vec)

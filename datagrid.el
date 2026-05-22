@@ -718,10 +718,10 @@ Deprecated. Use `datagrid-pull' instead."
   (declare (obsolete datagrid-pull "1.0"))
   (datagrid-pull datagrid header-text))
 
-(defun datagrid-column-decode (datagrid index)
+(defun datagrid-column-decode (datagrid col)
   "Output a decoded datagrid column as a vector.
-DATAGRID is the vector of structs. INDEX is the column number to
-code (zero based) or a heading string. The datagrid-column must have
+DATAGRID is the vector of structs. COL is a zero-based column number
+or a heading string. The datagrid-column must have
 DATAGRID-COLUMN-CODE to decode the data. If not, then the output
 is simply DATAGRID-COLUMN-DATA.
 
@@ -747,10 +747,11 @@ this point. I should probably create a function that returns the
 original data values that return nil."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((cols (datagrid-columns datagrid))
-         (phys-col (datagrid--col-at datagrid index))
+  (let* ((idx (datagrid--resolve-col datagrid col))
+         (cols (datagrid-columns datagrid))
+         (phys-col (datagrid--col-at datagrid idx))
          (col (aref cols phys-col))
-         (vec (datagrid-pull datagrid index))
+         (vec (datagrid-pull datagrid idx))
 	 (code (datagrid-column-code col))
 	 (coded-alist (when (and code
 				 (listp code)
