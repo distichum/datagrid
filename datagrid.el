@@ -612,12 +612,11 @@ If HEADINGS is non-nil, create a vtable with a headings row."
   "Manipulate DATAGRID to create an Org table."
   (datagrid-safe-transpose (datagrid-to-alist datagrid t)))
 
-(defun datagrid-column-add-code (datagrid index code)
-  "Add coding data to a datagrid-column.
-DATAGRID is a datagrid struct. INDEX is a number or a list of
-numbers. The function adds CODE in the CODE slot of DATAGRID. If INDEX
-is a list, then CODE is applied to all datagrid columns at those
-positions.
+(defun datagrid-column-add-code (datagrid cols code)
+  "Add coding data to one or more datagrid-columns.
+DATAGRID is a datagrid struct. COLS is a column ref (zero-based
+integer or heading string) or a list of such refs. CODE is installed
+in the CODE slot of each named column.
 
 CODE is an alist where the keys are one possible interpretation
 of the research data and the value is another. For example:
@@ -627,11 +626,11 @@ of the research data and the value is another. For example:
   (\"Neutral\"           . 3)
   (\"Agree\"             . 4)
   (\"Strongly agree\"    . 5))"
-  (let* ((src (datagrid-columns datagrid))
-         (new-cols (copy-sequence src))
-         (targets (if (listp index) index (list index))))
-    (dolist (i targets)
-      (let* ((phys (datagrid--col-at datagrid i))
+  (let* ((targets (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
+                          (if (listp cols) cols (list cols))))
+         (new-cols (copy-sequence (datagrid-columns datagrid))))
+    (dolist (idx targets)
+      (let* ((phys (datagrid--col-at datagrid idx))
              (new-col (datagrid-column-copy (aref new-cols phys))))
         (setf (datagrid-column-code new-col) code)
         (setf (aref new-cols phys) new-col)))
