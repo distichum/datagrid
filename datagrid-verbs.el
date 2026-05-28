@@ -356,14 +356,15 @@ from different sources."
 
 (defun datagrid-coalesce (datagrid &rest col-groups)
   "Row-wise coalesce one or more groups of columns in DATAGRID.
-Each group in COL-GROUPS is a list of column refs (integer index or
-heading string). For each group, the first column's data is replaced
-row-wise by the first non-empty value found across the group, where
-\"empty\" means nil or the empty string. The non-first columns of
-each group are dropped from the result. Other columns are unchanged.
+Each group in COL-GROUPS is a list of either integer index or
+heading string column references. For each group, the first
+column's data is replaced row-wise by the first non-empty value
+found across the group, where \"empty\" means nil or the empty
+string. The non-first columns of each group are dropped from the
+result. Other columns are unchanged.
 
-Useful after `datagrid-full-join' to merge `email'/`email_2' style
-sibling columns into one.
+Useful after `datagrid-full-join' expressions that merge sibling
+columns into one.
 
 Example:
 
