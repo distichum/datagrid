@@ -399,6 +399,108 @@
     (should (equal (datagrid-column-data (dg-test--col result 1)) [3 4 6 8]))))
 
 
+;;;; datagrid-bind-rows
+
+(ert-deftest datagrid-test-bind-rows-basic ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [1 2])
+               (datagrid-column-make :heading "b" :data [3 4])))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [5 6])
+               (datagrid-column-make :heading "b" :data [7 8])))
+         (result (datagrid-bind-rows dg1 dg2)))
+    (should (= (dg-test--ncols result) 2))
+    (should (equal (datagrid-get-headings result) ["a" "b"]))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2 5 6]))
+    (should (equal (datagrid-column-data (dg-test--col result 1)) [3 4 7 8]))))
+
+(ert-deftest datagrid-test-bind-rows-aligns-by-heading ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [1 2])
+               (datagrid-column-make :heading "b" :data [3 4])))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "b" :data [7 8])
+               (datagrid-column-make :heading "a" :data [5 6])))
+         (result (datagrid-bind-rows dg1 dg2)))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2 5 6]))
+    (should (equal (datagrid-column-data (dg-test--col result 1)) [3 4 7 8]))))
+
+(ert-deftest datagrid-test-bind-rows-fills-missing-columns ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [1 2])
+               (datagrid-column-make :heading "b" :data [3 4])))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [5 6])
+               (datagrid-column-make :heading "c" :data [9 10])))
+         (result (datagrid-bind-rows dg1 dg2)))
+    (should (equal (datagrid-get-headings result) ["a" "b" "c"]))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2 5 6]))
+    (should (equal (datagrid-column-data (dg-test--col result 1)) [3 4 nil nil]))
+    (should (equal (datagrid-column-data (dg-test--col result 2)) [nil nil 9 10]))))
+
+(ert-deftest datagrid-test-bind-rows-preserves-metadata-from-first ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "rating"
+                                     :data ["Agree"]
+                                     :lom "ordinal"
+                                     :code '(("Agree" . 4)))))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "rating"
+                                     :data ["Disagree"]
+                                     :lom "nominal"
+                                     :code nil)))
+         (result (datagrid-bind-rows dg1 dg2)))
+    (should (equal (datagrid-column-lom (dg-test--col result 0)) "ordinal"))
+    (should (equal (datagrid-column-code (dg-test--col result 0))
+                   '(("Agree" . 4))))))
+
+(ert-deftest datagrid-test-bind-rows-single-grid ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "a" :data [1 2 3])))
+         (result (datagrid-bind-rows dg)))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2 3]))))
+
+(ert-deftest datagrid-test-bind-rows-skips-nil-args ()
+  (let* ((dg1 (dg-test--mk (datagrid-column-make :heading "a" :data [1])))
+         (dg2 (dg-test--mk (datagrid-column-make :heading "a" :data [2])))
+         (result (datagrid-bind-rows nil dg1 nil dg2 nil)))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [1 2]))))
+
+(ert-deftest datagrid-test-bind-rows-errors-on-no-args ()
+  (should-error (datagrid-bind-rows))
+  (should-error (datagrid-bind-rows nil nil)))
+
+(ert-deftest datagrid-test-bind-rows-errors-on-non-datagrid ()
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "a" :data [1]))))
+    (should-error (datagrid-bind-rows dg "not a datagrid"))))
+
+(ert-deftest datagrid-test-bind-rows-respects-row-order ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [10 20 30])))
+         (sorted (datagrid-sort dg1 "a"))
+         (reversed (datagrid-make
+                    :columns (datagrid-columns sorted)
+                    :row-order (vector 2 1 0)))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [40 50])))
+         (result (datagrid-bind-rows reversed dg2)))
+    (should (equal (datagrid-column-data (dg-test--col result 0))
+                   [30 20 10 40 50]))))
+
+(ert-deftest datagrid-test-bind-rows-respects-col-order ()
+  (let* ((dg1 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [1 2])
+               (datagrid-column-make :heading "b" :data [3 4])))
+         (reordered (datagrid-select dg1 "b" "a"))
+         (dg2 (dg-test--mk
+               (datagrid-column-make :heading "a" :data [5])
+               (datagrid-column-make :heading "b" :data [6])))
+         (result (datagrid-bind-rows reordered dg2)))
+    (should (equal (datagrid-get-headings result) ["b" "a"]))
+    (should (equal (datagrid-column-data (dg-test--col result 0)) [3 4 6]))
+    (should (equal (datagrid-column-data (dg-test--col result 1)) [1 2 5]))))
+
+
 ;;;; datagrid-set-headings
 
 (ert-deftest datagrid-test-set-headings-all ()

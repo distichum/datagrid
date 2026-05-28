@@ -43,9 +43,7 @@
 
 ;;;; Internal helpers
 
-(defun datagrid-join--empty-p (v)
-  "Return non-nil if V should be treated as a missing key or value."
-  (or (null v) (and (stringp v) (string-empty-p v))))
+(defalias 'datagrid-join--empty-p 'datagrid--empty-p)
 
 (defun datagrid-join--normalize-on (on dg1 dg2)
   "Resolve the :on argument ON into a cons (IDX1 . IDX2).
@@ -62,14 +60,7 @@ Also validates that DG1 and DG2 are well-formed datagrids."
 	   (datagrid--resolve-col dg2 b)))
     (_ (error "Bad :on value: %S" on))))
 
-(defun datagrid-join--build-index (vec)
-  "Return hashtable mapping VEC values to first-occurrence index.
-Empty values and later duplicates are skipped."
-  (let ((ht (make-hash-table :test #'equal)))
-    (cl-loop for v across vec for i from 0
-	     unless (or (datagrid-join--empty-p v) (gethash v ht))
-	     do (puthash v i ht))
-    ht))
+(defalias 'datagrid-join--build-index 'datagrid--build-index)
 
 (defun datagrid-join--row-map (keys1 lookup)
   "Vector of dg2-index-or-nil for each key in KEYS1 via LOOKUP."

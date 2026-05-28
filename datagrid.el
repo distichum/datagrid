@@ -28,9 +28,13 @@
 
 ;;; Commentary:
 
-;; datagrid.el creates and handles table-like data structures in
+;; datagrid.el creates and manipulates 2d data structures in
 ;; Emacs Lisp. Both the datagrid and its columns are defined with
 ;; cl-defstruct.
+;;
+;; Think of a datagrid as tabular data: a spreadsheet, a database
+;; table, or a dataframe. The purpose of datagrid.el is to manipulate
+;; data in and do calculations on small to medium sized data sets.
 ;;
 ;; A datagrid struct has three slots:
 ;;
@@ -40,21 +44,24 @@
 ;;   col-order  - a vector of integer indices giving a logical column
 ;;                ordering, or nil for natural order
 ;;
-;; Each datagrid-column is like a table column and carries its own
-;; heading, data vector, level of measurement, and optional code
-;; alist. All datagrid-columns in a single datagrid must have an
-;; equal number of elements in their data slot.
+;; In a datagrid struct, the row-order and col-order slots let sort,
+;; filter, slice, and select operations return new datagrids that
+;; share underlying column data with the source by composing
+;; permutations rather than copying data. Most user-facing functions
+;; index logically, so the permutations are transparent to callers.
 ;;
-;; The row-order and col-order slots let sort, filter, slice, and
-;; select operations return new datagrids that share underlying
-;; column data with the source by composing permutations rather than
-;; copying data. Most user-facing functions index logically, so the
-;; permutations are transparent to callers.
+;; A datagrid-column struct has four slots:
 ;;
-;; Think of a datagrid as tabular data: a spreadsheet, a database
-;; table, or a dataframe. The purpose of datagrid.el is to manipulate
-;; data in and do calculations on small to medium sized data sets.
-
+;;   heading    - a string naming the column
+;;   data       - a vector holding the column's values
+;;   lom        - the level of measurement (nominal, ordinal,
+;;                interval, ratio, or nil)
+;;   code       - an optional alist mapping between categorical
+;;                labels and their numeric codes, or nil
+;;
+;; All datagrid-columns in a single datagrid must have an equal
+;; number of elements in their data slot.
+;;
 ;; datagrid.el is not meant to display data in a buffer or manipulate
 ;; data that is already in a table. That said, the
 ;; datagrid-to-org-table function, executed in an Org Mode code block,
@@ -91,14 +98,17 @@
 (cl-defstruct (datagrid-column (:constructor datagrid-column-make)
                                (:copier datagrid-column-copy)
                                (:predicate datagrid-column--p))
-  "A datagrid column contains a vector and attributes of that
-vector. The vector may contain anything an Emacs vector may
+  "A datagrid column contains a data vector and attributes of that
+vector. The data vector may contain anything an Emacs vector may
 contain, but some functions in datagrid.el expect a single
-dimensional vector and consistent data types per vector.
-The datagrid attributes are heading, data, lom, and code.
+dimensional vector and consistent data types per datagrid column.
+The datagrid column attributes are additional slots in the data
+structure: heading, data, lom, and code.
 
-The Level Of Measurement (LOM) comes from Stanley Smith Stevens
-and may be one of the following:
+The HEADING is a string giving a name to the data colum. DATA is
+the data vector. The level of measurement (lom) comes from the
+writings of Stanley Smith Stevens and may be one of the
+following:
 
   nominal
   ordinal
@@ -114,8 +124,9 @@ down the data structure with this slot may not be worth it. See if
 anyone uses this or not. It can be helpful when automating summary data
 presentation.)
 
-CODE is an alist where the keys are one possible interpretation
-of the research data and the value is another. For example:
+CODE is an alist where the keys are the actual data values and
+the value is an alternative representation of that data. For
+example:
 
  '(('Strongly disagree' . 1)
    ('Disagree'          . 2)
@@ -123,8 +134,10 @@ of the research data and the value is another. For example:
    ('Agree'             . 4)
    ('Strongly agree'    . 5))
 
-Converting such categories to numerical codes better allows them to be
-sorted and counted by computer programs."
+Converting such categories to numerical codes better allows them
+to be sorted and counted by computer programs. The alist key
+could also hold the numbers/codes and the values could be the
+label."
   (heading nil :type string :documentation "Column heading")
   (data nil :type vector :documentation "The column's data")
   (lom nil :type string :documentation "Level of measurement.")
@@ -280,12 +293,28 @@ numbers. Leave nil values in place."
 			    (t (error "%s cannot be coerced into a number"
 				      item)))))))
 
+(defun datagrid--empty-p (v)
+  "Return non-nil if V should be treated as missing.
+Nil and empty strings are considered empty."
+  (or (null v) (and (stringp v) (string-empty-p v))))
+
+(defun datagrid--build-index (vec)
+  "Return hashtable mapping VEC values to first-occurrence index.
+Empty values (per `datagrid--empty-p') and later duplicates are skipped."
+  (let ((ht (make-hash-table :test #'equal))
+        (i 0)
+        (n (length vec)))
+    (while (< i n)
+      (let ((v (aref vec i)))
+        (unless (or (datagrid--empty-p v) (gethash v ht))
+          (puthash v i ht)))
+      (setq i (1+ i)))
+    ht))
+
 (defun datagrid-unknown-type-sort (a b)
   "Predicate sort function when type is unknown.
 A and B must be the same type but the type may not be known ahead of
-time.
-
-Generated by Claude AI and adapted: 2025-06-13."
+time."
   (cond
    ((numberp a) (< a b))
    ((stringp a) (string< a b))
@@ -297,8 +326,8 @@ Generated by Claude AI and adapted: 2025-06-13."
 ;;;; datagrid-column functions
 (defun datagrid-column-p (dg-c)
   "Return non-nil if DG-C is a datagrid-column, nil otherwise.
-HEADINGS must be strings. DATA must be a vector. LOM must be a string.
-CODE must be an alist."
+Headings must be strings. Data must be a vector. LOM must be a string.
+Code must be an alist."
   (and (datagrid-column--p dg-c)
        (or (null (datagrid-column-heading dg-c))
            (stringp (datagrid-column-heading dg-c)))
@@ -342,12 +371,12 @@ datagrid column lengths in sync."
 
 
 ;;;; Create datagrid-column methods for seq
+;; These methods only return things in the :data slot. streams.el and
+;; ordered-set.el are good examples of extending seq functions.
+
 (cl-defmethod seq-elt ((datagrid-column datagrid-column) n)
   "Return the Nth element of the DATAGRID-COLUMN data."
   (elt (datagrid-column-data datagrid-column) n))
-
-;; These methods ignore datagrid-column slots other than the :data
-;; slot. streams.el and ordered-set.el are good examples.
 
 (cl-defmethod seq-length ((datagrid-column datagrid-column))
   "Return the length of the DATAGRID-COLUMN data."
@@ -664,10 +693,11 @@ SPEC is an integer index or a heading string."
 	(t (error "Bad column spec: %S" spec))))
 
 (defun datagrid-pull (datagrid col)
-  "Return the data vector of logical column COL in DATAGRID.
-COL is a zero-based logical index or a heading string. If DATAGRID
-has a row-order, returns a freshly built vector in logical order;
-otherwise returns the underlying data vector (shared)."
+  "Return the data vector in logical column order.
+COL is a zero-based logical index or a heading string. If
+DATAGRID has a row-order, returns a freshly built vector in
+logical order; otherwise returns the underlying data
+vector."
   (let* ((cols (datagrid-columns datagrid))
          (j (datagrid--col-at datagrid (datagrid--resolve-col datagrid col)))
          (data (datagrid-column-data (aref cols j)))
@@ -717,12 +747,16 @@ Deprecated. Use `datagrid-pull' instead."
   (declare (obsolete datagrid-pull "1.0"))
   (datagrid-pull datagrid header-text))
 
-(defun datagrid-column-decode (datagrid col)
+(defun datagrid-column-decode (datagrid col &optional default missing)
   "Output a decoded datagrid column as a vector.
-DATAGRID is the vector of structs. COL is a zero-based column number
-or a heading string. The datagrid-column must have
-DATAGRID-COLUMN-CODE to decode the data. If not, then the output
-is simply DATAGRID-COLUMN-DATA.
+DATAGRID is the structure holding data vectors. COL is a
+zero-based column number or a heading string. The datagrid-column
+must have DATAGRID-COLUMN-CODE to decode the data. If not, then
+the output is simply DATAGRID-COLUMN-DATA.
+
+DEFAULT is the value substituted for non-nil input values that
+are not found in the coding alist (unmapped values). MISSING is
+the value substituted for nil input values. Both default to nil.
 
  A Lickert scale DATAGRID-COLUMN-CODE may be coded as follows.
 
@@ -738,12 +772,7 @@ The DATAGRID-COLUMN-DATA may look like the following.
 
 This function will output the following.
 
- [1 4 2]
-
-TODO: Provide better feedback regarding data values which are not
-found in the coding alist. I'm not sure what kind of feedback at
-this point. I should probably create a function that returns the
-original data values that return nil."
+ [1 4 2]"
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((idx (datagrid--resolve-col datagrid col))
@@ -756,7 +785,10 @@ original data values that return nil."
 				 (listp code)
 				 (cl-every #'consp code))
 			(seq-map (lambda (x)
-				   (cdr (assoc x code #'string-equal)))
+				   (cond
+				    ((null x) missing)
+				    (t (let ((hit (assoc x code #'string-equal)))
+					 (if hit (cdr hit) default)))))
 				 vec))))
     (if coded-alist (vconcat coded-alist) vec)))
 

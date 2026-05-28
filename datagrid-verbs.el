@@ -131,9 +131,9 @@ length."
 
 (defun datagrid-add-row (datagrid seq)
   "Add elements to the end of each datagrid-column.
-DATAGRID a datagrid structure. SEQ is a list of sequences. Each of the
-sequences in SEQ must be of equal length to the number of logical
-datagrid-columns in datagrid."
+DATAGRID is a datagrid structure. SEQ is a list of sequences.
+Each of the sequences in SEQ must be of equal length to the
+number of logical datagrid-columns in datagrid."
   (interactive)
   (unless (datagridp datagrid)
     (error "DATAGRID is not a datagrid structure"))
@@ -196,6 +196,65 @@ datagrid-columns in DATAGRID."
   (if horizontal
       (datagrid--add-data-by-column datagrid (datagrid-safe-transpose seqs))
     (datagrid--add-data-by-column datagrid seqs)))
+
+(defun datagrid-bind-rows (&rest datagrids)
+  "Stack DATAGRIDS row-wise into a single datagrid.
+Columns are aligned by heading. The unified column set is the union
+of all headings, preserved in first-seen order. Columns absent from a
+given source contribute nil for that source's rows. Per-column metadata
+(lom, code, etc.) is taken from the first source in which each heading
+appears. Nil arguments are skipped. Row and column orders of sources
+are respected (logical view, not physical)."
+  (let ((grids (cl-remove-if #'null datagrids)))
+    (unless grids
+      (error "datagrid-bind-rows: no datagrids given"))
+    (dolist (g grids)
+      (unless (datagridp g)
+        (error "datagrid-bind-rows: argument is not a datagrid")))
+    (let ((total-rows (apply #'+ (mapcar #'datagrid--nrows grids)))
+          (heading-order nil)
+          (templates (make-hash-table :test 'equal))
+          (grid-maps nil))
+      (dolist (g grids)
+        (let* ((headings (datagrid-get-headings g))
+               (m (datagrid--build-index headings))
+               (ncols (length headings))
+               (j 0))
+          (while (< j ncols)
+            (let ((h (aref headings j)))
+              (unless (or (datagrid--empty-p h) (gethash h templates))
+                (let ((cols (datagrid-columns g))
+                      (phys (datagrid--col-at g j)))
+                  (puthash h (aref cols phys) templates)
+                  (push h heading-order))))
+            (setq j (1+ j)))
+          (push m grid-maps)))
+      (setq grid-maps (nreverse grid-maps))
+      (let ((headings (nreverse heading-order))
+            (out-cols nil))
+        (dolist (h headings)
+          (let ((out (make-vector total-rows nil))
+                (offset 0)
+                (gs grids)
+                (ms grid-maps))
+            (while gs
+              (let* ((g (car gs))
+                     (m (car ms))
+                     (nrows (datagrid--nrows g))
+                     (j (gethash h m)))
+                (when j
+                  (let ((src (datagrid-pull g j))
+                        (i 0))
+                    (while (< i nrows)
+                      (aset out (+ offset i) (aref src i))
+                      (setq i (1+ i)))))
+                (setq offset (+ offset nrows))
+                (setq gs (cdr gs))
+                (setq ms (cdr ms))))
+            (let ((new (datagrid-column-copy (gethash h templates))))
+              (setf (datagrid-column-data new) out)
+              (push new out-cols))))
+        (datagrid-make :columns (vconcat (nreverse out-cols)))))))
 
 (defun datagrid-set-headings (datagrid heading-list)
   "Set all DATAGRID headings using HEADING-LIST.
