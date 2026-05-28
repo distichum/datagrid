@@ -191,14 +191,13 @@ Nil data values are discarded before the calculation."
   (let* ((vec (if code
 		  (datagrid-column-decode datagrid col)
 		(datagrid-pull datagrid col)))
+	 ;; Match datagrid--report-numeric: when CONVERT is non-nil run
+	 ;; values through datagrid-prep-for-calc so floats land in Calc's
+	 ;; expected (float M E) form; otherwise just drop nils. seq-keep
+	 ;; both filters nils and yields a list, which is what Calc wants.
 	 (vec (if convert
-		  (datagrid-unknown-type-to-number vec)
-		vec))
-	 ;; Calc cannot handle nil values. Remove them. This also
-	 ;; converts vec to a list. Because mathematicians call them
-	 ;; vectors, that is what Calc calls them even if they arrive
-	 ;; to a Calc function in a list.
-	 (vec (delq nil (append vec nil))))
+		  (seq-keep #'datagrid-prep-for-calc vec)
+		(seq-keep #'identity vec))))
     (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
 (defun datagrid-summarize (datagrid &rest specs)
