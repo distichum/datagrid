@@ -683,6 +683,50 @@ COLUMN-NUM and ROW-NUM are zero-based logical indices."
     (aref (datagrid-column-data dg-col)
           (datagrid--row-at datagrid row-num))))
 
+(defun datagrid-set-elt (datagrid column-num row-num value &optional inplace)
+  "Return a datagrid with VALUE stored at COLUMN-NUM, ROW-NUM.
+COLUMN-NUM is a zero-based logical column index or a heading string;
+ROW-NUM is a zero-based logical row index. This is the setter
+counterpart to `datagrid-get-elt'.
+
+Cost and copying (functional default, INPLACE nil): only the single
+targeted column is copied. The returned datagrid gets a fresh
+`columns' vector -- a shallow O(ncols) pointer copy of the spine --
+in which the target column struct is replaced by a copy whose data
+vector is a fresh O(nrows) copy with the one slot overwritten. Every
+other column, including its data vector, is shared by reference with
+DATAGRID rather than copied, and the `row-order'/`col-order'
+permutations are shared as well. Total work is therefore
+O(nrows + ncols), not a full O(nrows * ncols) grid copy, and DATAGRID
+itself is never modified.
+
+When INPLACE is non-nil the targeted slot is overwritten directly in
+DATAGRID's existing column data vector, and DATAGRID is returned
+unchanged in identity -- no copying occurs (O(1)). This escapes the
+functional model: datagrid shares column data vectors across grids
+derived by `datagrid-sort', `datagrid-filter-by-mask',
+`datagrid-slice', `datagrid-select', and friends (see `datagrid' for
+the sharing contract), so an in-place write is visible in every grid
+that shares the mutated vector. Only pass INPLACE when DATAGRID's
+target column is known not to be shared."
+  (let* ((j (datagrid--col-at datagrid
+                              (datagrid--resolve-col datagrid column-num)))
+         (phys-row (datagrid--row-at datagrid row-num)))
+    (if inplace
+        (progn
+          (aset (datagrid-column-data (aref (datagrid-columns datagrid) j))
+                phys-row value)
+          datagrid)
+      (let* ((new-cols (copy-sequence (datagrid-columns datagrid)))
+             (new-col (datagrid-column-copy (aref new-cols j)))
+             (new-data (copy-sequence (datagrid-column-data new-col))))
+        (aset new-data phys-row value)
+        (setf (datagrid-column-data new-col) new-data)
+        (setf (aref new-cols j) new-col)
+        (datagrid-make :columns new-cols
+                       :row-order (datagrid-row-order datagrid)
+                       :col-order (datagrid-col-order datagrid))))))
+
 (defun datagrid--resolve-col (datagrid spec)
   "Resolve a logical column index in DATAGRID from SPEC.
 SPEC is an integer index or a heading string."

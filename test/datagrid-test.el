@@ -239,6 +239,56 @@
     (should (equal (datagrid-get-elt dg 2 3) "y"))))
 
 
+;;;; datagrid-set-elt
+
+(ert-deftest datagrid-test-set-elt-functional ()
+  (let* ((dg (dg-test--simple))
+	 (result (datagrid-set-elt dg 1 2 99)))
+    (should (equal (datagrid-get-elt result 1 2) 99))
+    ;; source datagrid is not modified
+    (should (equal (datagrid-get-elt dg 1 2) 30))))
+
+(ert-deftest datagrid-test-set-elt-by-heading ()
+  (let* ((dg (dg-test--simple))
+	 (result (datagrid-set-elt dg "group" 0 "z")))
+    (should (equal (datagrid-get-elt result 2 0) "z"))
+    (should (equal (datagrid-get-elt dg 2 0) "x"))))
+
+(ert-deftest datagrid-test-set-elt-copies-only-target-column ()
+  (let* ((dg (dg-test--simple))
+	 (result (datagrid-set-elt dg 1 2 99)))
+    ;; the target column's data vector is a fresh copy
+    (should-not (eq (datagrid-column-data (dg-test--col result 1))
+		    (datagrid-column-data (dg-test--col dg 1))))
+    ;; every other column shares its data vector with the source
+    (should (eq (datagrid-column-data (dg-test--col result 0))
+		(datagrid-column-data (dg-test--col dg 0))))
+    (should (eq (datagrid-column-data (dg-test--col result 2))
+		(datagrid-column-data (dg-test--col dg 2))))))
+
+(ert-deftest datagrid-test-set-elt-respects-row-order ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "n" :data [3 1 2])))
+	 (sorted (datagrid-sort dg 0))          ; logical order [1 2 3]
+	 (result (datagrid-set-elt sorted 0 0 99)))
+    (should (equal (datagrid-pull sorted 0) [1 2 3]))
+    ;; writes the logical-row-0 slot, not physical index 0
+    (should (equal (datagrid-get-elt result 0 0) 99))
+    (should (equal (datagrid-pull result 0) [99 2 3]))
+    ;; the sorted source view is untouched
+    (should (equal (datagrid-pull sorted 0) [1 2 3]))))
+
+(ert-deftest datagrid-test-set-elt-inplace-mutates-and-returns-same ()
+  ;; Use a freshly allocated vector, not a literal: in-place mutation
+  ;; would otherwise corrupt the shared constant across test runs.
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "n" :data (vector 10 20 30 40))))
+	 (ret (datagrid-set-elt dg 0 2 99 t)))
+    ;; in-place returns the same object, mutated
+    (should (eq ret dg))
+    (should (equal (datagrid-get-elt dg 0 2) 99))))
+
+
 ;;;; datagrid-pull (col data)
 
 (ert-deftest datagrid-test-get-col-data-basic ()
