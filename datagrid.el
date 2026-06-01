@@ -74,6 +74,8 @@
 ;;; Code:
 ;;;; Prerequisites
 (require 'cl-lib)
+(require 'cl-print)
+(require 'subr-x)
 (require 'seq)
 (require 'calc)
 (require 'calc-vec)
@@ -773,6 +775,83 @@ Deprecated. Use `datagrid-pull' instead."
     (vconcat (cl-loop for j from 0 below ncols
                       collect (datagrid-column-heading
                                (aref cols (datagrid--col-at datagrid j)))))))
+
+(defvar datagrid-print-head-rows 5
+  "Number of leading logical rows shown when a datagrid is printed.
+Used by `cl-print-object' and `datagrid-describe'. The summary line is
+always printed; up to this many rows of data follow, with a count of
+any remaining rows.")
+
+(defun datagrid--format-summary (datagrid)
+  "Return the one-line summary string for DATAGRID's logical view.
+Reports logical dimensions and headings, not the physical `columns'
+vector."
+  (let ((ncols (datagrid--ncols datagrid))
+        (nrows (datagrid--nrows datagrid)))
+    (format "#<datagrid %d %s x %d %s%s>"
+            ncols (if (= ncols 1) "col" "cols")
+            nrows (if (= nrows 1) "row" "rows")
+            (if (zerop ncols)
+                ""
+              (format " | cols: [%s]"
+                      (mapconcat (lambda (h) (format "%S" h))
+                                 (datagrid-get-headings datagrid)
+                                 " "))))))
+
+(defun datagrid--format-head (datagrid stream)
+  "Print up to `datagrid-print-head-rows' logical rows of DATAGRID to STREAM.
+Rows and columns follow the logical order, so a projection from
+`datagrid-select' shows only its selected columns. Does nothing when
+DATAGRID is empty."
+  (let ((ncols (datagrid--ncols datagrid))
+        (nrows (datagrid--nrows datagrid)))
+    (unless (or (zerop ncols) (zerop nrows))
+      (let* ((shown (min nrows datagrid-print-head-rows))
+             (headings (append (datagrid-get-headings datagrid) nil))
+             (rows (cl-loop for r from 0 below shown
+                            collect (cl-loop for c from 0 below ncols
+                                             collect (format "%s" (datagrid-get-elt datagrid c r)))))
+             (widths (cl-loop for c from 0 below ncols
+                              collect (cl-loop for row in (cons headings rows)
+                                               maximize (length (nth c row))))))
+        (cl-flet ((emit (cells)
+                    (princ "\n  " stream)
+                    (princ (string-join
+                            (cl-loop for c from 0 below ncols
+                                     collect (string-pad (nth c cells) (nth c widths)))
+                            "  ")
+                           stream)))
+          (emit headings)
+          (princ "\n  " stream)
+          (princ (mapconcat (lambda (w) (make-string w ?-)) widths "  ") stream)
+          (mapc #'emit rows))
+        (when (> nrows shown)
+          (princ (format "\n  ... (%d more)" (- nrows shown)) stream))))))
+
+(cl-defmethod cl-print-object ((datagrid datagrid) stream)
+  "Print DATAGRID to STREAM as its logical view rather than the raw struct.
+A datagrid built by `datagrid-select', `datagrid-slice', and friends
+shares the source's full `columns' vector and records only a
+`col-order'/`row-order' permutation, so the default struct printer
+shows every physical column even when the logical grid has fewer. This
+method prints the logical dimensions, headings, and the first
+`datagrid-print-head-rows' rows instead, so evaluation, edebug, and the
+debugger reflect what the datagrid verbs actually operate on. On any
+error it falls back to the default struct printing."
+  (condition-case nil
+      (progn
+        (princ (datagrid--format-summary datagrid) stream)
+        (datagrid--format-head datagrid stream))
+    (error (cl-call-next-method))))
+
+(defun datagrid-describe (datagrid)
+  "Print DATAGRID's logical view (summary plus a head) and return DATAGRID.
+An explicit counterpart to the `cl-print-object' method, for printers
+that bypass `cl-prin1' (such as `eval-print-last-sexp', the scratch
+buffer C-j). With no other output in play it prints to the echo area."
+  (princ (datagrid--format-summary datagrid))
+  (datagrid--format-head datagrid standard-output)
+  datagrid)
 
 (defun datagrid-col-index-by-header (datagrid header-text)
   "Return the logical column index in DATAGRID with HEADER-TEXT.

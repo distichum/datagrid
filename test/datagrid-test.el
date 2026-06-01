@@ -1278,5 +1278,45 @@
       "g"))))
 
 
+;;;; Logical print representation
+
+(ert-deftest datagrid-test-print-summary-reports-logical-dims ()
+  "`cl-print-object' reports logical, not physical, dimensions."
+  (let* ((dg (dg-test--simple))
+         (out (cl-prin1-to-string (datagrid-select dg "score"))))
+    (should (string-prefix-p "#<datagrid 1 col x 4 rows" out))
+    (should (string-match-p "cols: \\[\"score\"\\]" out))))
+
+(ert-deftest datagrid-test-print-hides-unselected-columns ()
+  "A projection prints only its selected column, not the shared spine."
+  (let* ((dg (dg-test--simple))
+         (out (cl-prin1-to-string (datagrid-select dg "score"))))
+    ;; The physical struct still holds name/group; they must not appear.
+    (should-not (string-match-p "Alice" out))
+    (should-not (string-match-p "name" out))
+    (should (string-match-p "score" out))))
+
+(ert-deftest datagrid-test-print-truncates-head ()
+  "Only `datagrid-print-head-rows' rows print, with a remainder count."
+  (let* ((dg (dg-test--simple))
+         (datagrid-print-head-rows 2)
+         (out (cl-prin1-to-string dg)))
+    (should (string-match-p "Alice" out))
+    (should (string-match-p "Bob" out))
+    (should-not (string-match-p "Carol" out))
+    (should (string-match-p "(2 more)" out))))
+
+(ert-deftest datagrid-test-print-empty-datagrid ()
+  "An empty datagrid prints a bare summary with no head."
+  (let ((out (cl-prin1-to-string (datagrid-make :columns (vector)))))
+    (should (string= out "#<datagrid 0 cols x 0 rows>"))))
+
+(ert-deftest datagrid-test-describe-returns-datagrid ()
+  "`datagrid-describe' prints the logical view and returns its argument."
+  (let* ((dg (dg-test--simple))
+         (out (with-output-to-string (should (eq (datagrid-describe dg) dg)))))
+    (should (string-prefix-p "#<datagrid 3 cols x 4 rows" out))))
+
+
 (provide 'datagrid-test)
 ;;; datagrid-test.el ends here
