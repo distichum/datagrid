@@ -1,0 +1,985 @@
+#+TITLE: datagrid.el — Worked Examples for Advanced Functions
+#+AUTHOR: Joshua Lambert
+#+OPTIONS: toc:2 num:nil
+
+This document walks through twenty of the more involved functions in the =datagrid= package. There is one datagrid defined at the top and the other functions use it. that is built once near the top, so you can copy the setup block, then run any later block on its own. The shared datagrid has seven columns and twenty rows. Several columns store numeric codes whose meanings come from a coding alist.
+
+* The shared example datagrid
+
+The block below defines =dg=, a fictional dataset of twenty student
+course records. Three columns are coded: =course-code=, =grade=, and
+=satisfaction=. A coded column stores small integers in the =:data=
+slot and a translation alist in the =:code= slot. Reading the raw
+numbers tells you very little about the data, which is exactly why the
+package gives you a =datagrid-column-decode= function and a =code=
+argument on many of the analysis verbs.
+
+Evaluate this block once and keep the resulting =dg= around for every
+later example.
+
+#+begin_src emacs-lisp :results silent
+  (require 'datagrid)
+
+  (defvar dg nil
+    "Shared example datagrid for the worked examples in this file.")
+
+  (setq dg
+    (datagrid-make
+     :columns
+     (vector
+      (datagrid-column-make
+       :heading "student-id"
+       :lom "nominal"
+       :data ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10"
+              "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"])
+      (datagrid-column-make
+       :heading "course-code"
+       :lom "nominal"
+       :data ["Math" "English" "Math" "Science" "History"
+              "English" "Art" "Math" "Science" "English"
+              "History" "Art" "Math" "English" "Science"
+              "History" "Math" "Art" "English" "Science"]
+       :code '(("Math"    . 1)
+               ("English" . 2)
+               ("Science" . 3)
+               ("History" . 4)
+               ("Art"     . 5)))
+      (datagrid-column-make
+       :heading "grade"
+       :lom "ordinal"
+       :data ["A" "B" "C" "A" "B" "D" "A" "B" "F" "C"
+              "A" "B" "B" "C" "A" "D" "B" "A" "C" "B"]
+       :code '(("F" . 0)
+               ("D" . 1)
+               ("C" . 2)
+               ("B" . 3)
+               ("A" . 4)))
+      (datagrid-column-make
+       :heading "study-hours"
+       :lom "ratio"
+       :data [12 8 5 15 9 3 18 11 0 7
+              14 10 9 6 16 4 11 13 7 10])
+      (datagrid-column-make
+       :heading "attendance"
+       :lom "ratio"
+       :data [0.95 0.80 0.70 0.98 0.85 0.60 0.99 0.88 0.40 0.75
+              0.96 0.82 0.90 0.72 0.97 0.55 0.83 0.94 0.78 0.86])
+      (datagrid-column-make
+       :heading "satisfaction"
+       :lom "ordinal"
+       :data ["Very satisfied" "Satisfied" "Neutral" "Very satisfied"
+              "Satisfied" "Dissatisfied" "Very satisfied" "Satisfied"
+              "Very dissatisfied" "Neutral" "Very satisfied" "Satisfied"
+              "Satisfied" "Neutral" "Very satisfied" "Dissatisfied"
+              "Satisfied" "Very satisfied" "Neutral" "Satisfied"]
+       :code '(("Very dissatisfied" . 1)
+               ("Dissatisfied"      . 2)
+               ("Neutral"           . 3)
+               ("Satisfied"         . 4)
+               ("Very satisfied"    . 5)))
+      (datagrid-column-make
+       :heading "enrolled-date"
+       :lom "nominal"
+       :data ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17"
+              "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19"
+              "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22"
+              "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"]))))
+#+end_src
+
+A quick way to confirm =dg= built correctly is to look at its
+dimensions and the first few rows.
+
+#+begin_src emacs-lisp
+  (list (datagrid-dimensions dg)
+        (datagrid-to-org-table (datagrid-head dg 7 3)))
+#+end_src
+
+#+RESULTS:
+: ((7 . 20) ((student-id course-code grade study-hours attendance satisfaction enrolled-date) (S01 1 4 12 0.95 5 2025-01-15) (S02 2 3 8 0.8 4 2025-01-15) (S03 1 2 5 0.7 3 2025-01-16)))
+
+* Functions from datagrid.el
+
+This file holds the core data structure, the helpers that build
+datagrids from outside sources, and the primitives for reading values
+out again. The examples below show the functions whose behavior is
+non-obvious from their name alone.
+
+** datagrid-from-alist
+
+=datagrid-from-alist= turns an association list into a datagrid. The
+keys of the alist become column headings when you pass =t= as the
+second argument, and the values become column data. The third
+argument, =extend-uneven=, decides what to do when the value lists
+have different lengths: passing =nil= truncates every column to the
+shortest list, while passing =t= pads the shorter columns with =nil=
+out to the longest length.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-from-alist
+    '(("name"  . ("Ada" "Brian" "Cleo"))
+      ("score" . (90 85))
+      ("grade" . ("A" "B" "C")))
+    t   ;; treat keys as headings
+    t)) ;; pad the short column instead of truncating
+#+end_src
+
+#+RESULTS:
+| name  | score | grade |
+| Ada   |    90 | A     |
+| Brian |    85 | B     |
+| Cleo  |   nil | C     |
+
+The =score= column was only two values long, so the third row gets a
+=nil= in that column. If you had passed =nil= for =extend-uneven=, the
+result would have been a two-row datagrid instead.
+
+** datagrid-column-decode
+
+A coded column stores compact values in =:data= and a translation
+alist in =:code=. =datagrid-column-decode= returns a fresh vector with
+each value rewritten through the alist. If the column has no =:code=
+slot, you simply get the raw data back, which means it is safe to call
+this function even when you are not sure whether the column is coded.
+
+In the shared =dg=, the =course-code= column stores course-name
+strings like ="Math"= and ="English"= in =:data=, and the =:code=
+slot maps each label to a small integer. Decoding produces the
+integer codes — the form that statistical functions can compute on.
+
+#+begin_src emacs-lisp
+  (datagrid-column-decode dg "course-code")
+  ;; => [1 2 1 3 4 ...]
+#+end_src
+
+Note the direction: =:data= holds the human-readable values and
+decoding produces the codes. That follows
+=datagrid-column-decode='s contract, which compares keys with
+=string-equal= and so requires the =:data= side to be strings.
+
+You will see this same decode step appear, often as the optional
+=code= argument, in =datagrid-reduce-vec=, =datagrid-count=,
+=datagrid-report-ordinal=, and several other analysis functions. They
+all call =datagrid-column-decode= internally when you ask them to.
+
+** datagrid-column-add-code
+
+If you imported a column from CSV and want to attach a coding alist
+after the fact, =datagrid-column-add-code= returns a new datagrid in
+which the named columns carry the alist you provide. The columns
+argument accepts either one column reference or a list of column
+references, and a column reference is either a zero-based integer or a
+heading string. The same code is installed on every column you name,
+which is convenient when you have a block of survey columns that all
+share a single Likert scale.
+
+#+begin_src emacs-lisp
+  (let ((likert '(("Strongly disagree" . 1)
+                  ("Disagree"          . 2)
+                  ("Neutral"           . 3)
+                  ("Agree"             . 4)
+                  ("Strongly agree"    . 5))))
+    (datagrid-column-add-code dg
+                              '("student-id" "enrolled-date")
+                              likert))
+#+end_src
+
+#+RESULTS:
+: #s(datagrid [#s(datagrid-column "student-id" ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10" "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5))) #s(datagrid-column "course-code" [1 2 1 3 4 2 5 1 3 2 4 5 1 2 3 4 1 5 2 3] "nominal" ((1 . "Math") (2 . "English") (3 . "Science") (4 . "History") (5 . "Art"))) #s(datagrid-column "grade" [4 3 2 4 3 1 4 3 0 2 4 3 3 2 4 1 3 4 2 3] "ordinal" ((0 . "F") (1 . "D") (2 . "C") (3 . "B") (4 . "A"))) #s(datagrid-column "study-hours" [12 8 5 15 9 3 18 11 0 7 14 10 9 6 16 4 11 13 7 10] "ratio" nil) #s(datagrid-column "attendance" [0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86] "ratio" nil) #s(datagrid-column "satisfaction" [5 4 3 5 4 2 5 4 1 3 5 4 4 3 5 2 4 5 3 4] "ordinal" ((1 . "Very dissatisfied") (2 . "Dissatisfied") (3 . "Neutral") (4 . "Satisfied") (5 . "Very satisfied"))) #s(datagrid-column "enrolled-date" ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17" "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19" "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22" "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5)))] nil nil)
+
+The example above is deliberately silly: =student-id= and
+=enrolled-date= have nothing to do with a Likert scale, but the call
+still succeeds and the alist is installed. This shows that
+=datagrid-column-add-code= does not validate that the alist matches
+the data. It is the caller's job to point it at columns whose values
+the alist can actually translate.
+
+* Functions from datagrid-verbs.el
+
+The "verbs" file holds dplyr-style transformations: take a datagrid in
+and return a new datagrid out. Most of these functions return a new
+datagrid that reuses the original column data without copying it. They
+simply record a new row or column order alongside the shared data, so
+they stay fast even on larger datasets. That order vector lives in the
+=row-order= or =col-order= slot of the datagrid struct itself.
+
+** datagrid-mutate
+
+=datagrid-mutate= computes one new column row-by-row from one or more
+existing columns. You pass a name for the new column, a function, and
+the source columns by name or index. The function is called once per
+row with one argument per source column. If the new heading already
+exists in the datagrid, the existing column is replaced instead of
+appended.
+
+This example adds a column that flags students who studied at least
+ten hours and attended at least 90 percent of class.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head
+    (datagrid-mutate dg
+                     "engaged"
+                     (lambda (hours attend)
+                       (if (and (>= hours 10) (>= attend 0.90)) "yes" "no"))
+                     "study-hours" "attendance")
+    8 6))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction | enrolled-date | engaged |
+| S01        |           1 |     4 |          12 |       0.95 |            5 |    2025-01-15 | yes     |
+| S02        |           2 |     3 |           8 |        0.8 |            4 |    2025-01-15 | no      |
+| S03        |           1 |     2 |           5 |        0.7 |            3 |    2025-01-16 | no      |
+| S04        |           3 |     4 |          15 |       0.98 |            5 |    2025-01-16 | yes     |
+| S05        |           4 |     3 |           9 |       0.85 |            4 |    2025-01-17 | no      |
+| S06        |           2 |     1 |           3 |        0.6 |            2 |    2025-01-17 | no      |
+
+The next example shows the replace behavior, and it also shows how to
+do an inline decode by reaching into the column's =:code= slot. We
+rewrite the =grade= column to combine the letter grade with its
+numeric code in parentheses, like ="A (4)"=. Because the heading
+=grade= already exists, the old column is overwritten in place.
+
+#+begin_src emacs-lisp
+  (let ((alist (datagrid-column-code (aref (datagrid-columns dg) 2))))
+    (datagrid-to-org-table
+     (datagrid-head
+      (datagrid-mutate dg
+                       "grade"
+                       (lambda (g) (format "%s (%d)" g (cdr (assoc g alist))))
+                       "grade")
+      7 6)))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S01        | Math        | A (4) |          12 |       0.95 | Very satisfied |    2025-01-15 |
+| S02        | English     | B (3) |           8 |        0.8 | Satisfied      |    2025-01-15 |
+| S03        | Math        | C (2) |           5 |        0.7 | Neutral        |    2025-01-16 |
+| S04        | Science     | A (4) |          15 |       0.98 | Very satisfied |    2025-01-16 |
+| S05        | History     | B (3) |           9 |       0.85 | Satisfied      |    2025-01-17 |
+| S06        | English     | D (1) |           3 |        0.6 | Dissatisfied   |    2025-01-17 |
+
+** datagrid-rename
+
+You can rename a single column by passing the column reference and the
+new heading, or rename many columns at once by passing an alist of
+=(old-or-index . new)= pairs. Either form returns a fresh datagrid;
+the input is not modified.
+
+#+begin_src emacs-lisp
+  ;; Rename one column:
+  (datagrid-get-headings (datagrid-rename dg "attendance" "attend-pct"))
+
+  ;; Rename several at once:
+  (datagrid-get-headings
+   (datagrid-rename dg '(("student-id"    . "id")
+                         ("enrolled-date" . "start"))))
+#+end_src
+
+#+RESULTS:
+: ["id" "course-code" "grade" "study-hours" "attendance" "satisfaction" "start"]
+
+** datagrid-sort
+
+=datagrid-sort= reorders the rows of a datagrid by the values in one
+column. It works on numbers, strings, and symbols. Under the hood it
+does not copy column data; it just records a row permutation, so
+sorting a large datagrid is cheap and composes well with later
+operations like =datagrid-head=.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head (datagrid-sort dg "grade") 7 6))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+
+Sorting on the letter grades alphabetically puts =A= first, which is
+the opposite of the underlying "smaller code means worse grade"
+ordering. If you want to sort by the numeric severity instead, decode
+the column into a new mutated column and sort by that.
+
+#+begin_src emacs-lisp
+  (let* ((alist (datagrid-column-code (aref (datagrid-columns dg) 2)))
+         (with-num
+          (datagrid-mutate dg "grade-num"
+                           (lambda (g) (cdr (assoc g alist)))
+                           "grade")))
+    (datagrid-to-org-table
+     (datagrid-head (datagrid-sort with-num "grade-num") 8 6)))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | grade-num |
+| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |         0 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |         1 |
+| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |         1 |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |         2 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |         2 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |         2 |
+
+** datagrid-create-mask and datagrid-filter-by-mask
+
+These two functions work together. =datagrid-create-mask= produces a
+vector of =t= and =nil= values, one per row, by applying a predicate
+to one column. =datagrid-filter-by-mask= takes that vector and returns
+a new datagrid containing only the rows where the mask is =t=. Pulling
+mask creation and mask application apart is useful because you can
+combine masks by hand before you apply them.
+
+This example keeps only the rows where attendance was above 90
+percent.
+
+#+begin_src emacs-lisp
+  (let ((mask (datagrid-create-mask dg
+                                    (lambda (x) (> x 0.90))
+                                    "attendance")))
+    (datagrid-to-org-table (datagrid-filter-by-mask dg mask)))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+
+If you want "attended a lot AND in a Math class," build two masks and
+combine them yourself. The =course-code= column's =:data= holds the
+label strings, so the second mask compares strings.
+
+#+begin_src emacs-lisp
+  (let* ((m1 (datagrid-create-mask dg (lambda (x) (> x 0.90)) "attendance"))
+         (m2 (datagrid-create-mask dg
+                                   (lambda (x) (string-equal x "Math"))
+                                   "course-code"))
+         (both (cl-map 'vector (lambda (a b) (and a b)) m1 m2)))
+    (datagrid-to-org-table (datagrid-filter-by-mask dg both)))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+
+** datagrid-select and datagrid-slice
+
+=datagrid-select= projects a subset of columns in the order you name
+them; =datagrid-slice= picks specific rows by zero-based index.
+Neither one copies the underlying data: the result simply records a
+new column or row order. You can chain them with =thread-first= for
+readability.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (thread-first dg
+                 (datagrid-select "student-id" "grade" "study-hours")
+                 (datagrid-slice 0 4 9 14 19)))
+#+end_src
+
+#+RESULTS:
+| student-id | grade | study-hours |
+| S01        | A     |          12 |
+| S05        | B     |           9 |
+| S10        | C     |           7 |
+| S15        | A     |          16 |
+| S20        | B     |          10 |
+
+** datagrid-add-row
+
+=datagrid-add-row= appends one or more rows at the bottom of a
+datagrid. The argument is a list of sequences, and each sequence must
+have one element per logical column. The values you pass for coded
+columns should be the same shape as the existing =:data= — in this
+datagrid that means the label strings, not the numeric codes.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head
+    (datagrid-add-row dg
+                      '(["S21" "Math" "A" 12 0.93 "Very satisfied" "2025-01-25"]
+                        ["S22" "Art"  "C" 6  0.70 "Neutral"        "2025-01-25"]))
+    7 22))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+| S21        | Math        | A     |          12 |       0.93 | Very satisfied    |    2025-01-25 |
+| S22        | Art         | C     |           6 |        0.7 | Neutral           |    2025-01-25 |
+
+** datagrid-rows-patch
+
+This function fills in missing cells of one datagrid using matching
+rows from another. It is meant for the case where you have a primary
+table that has gaps, and a secondary table keyed by some shared
+identifier whose values you want to use to plug those gaps. Crucially,
+existing non-empty values are never overwritten — it only fills =nil=
+and empty strings.
+
+Below, we first blank out a few attendance cells in =dg= (so the patch
+has something to do), then patch from a small lookup datagrid that
+provides fresher attendance figures.
+
+#+begin_src emacs-lisp
+  (let* ((dg2 (datagrid-make
+               :columns
+               (vector (datagrid-column-make
+                        :heading "student-id"
+                        :data ["S03" "S09" "S16"])
+                       (datagrid-column-make
+                        :heading "attendance"
+                        :data [0.99 0.99 0.99]))))
+         (with-gaps
+          (datagrid-mutate dg
+                           "attendance"
+                           (lambda (id att)
+                             (if (member id '("S03" "S09" "S16")) nil att))
+                           "student-id" "attendance")))
+    (datagrid-to-org-table
+     (datagrid-rows-patch with-gaps dg2
+                          :on "student-id"
+                          :cols '(("attendance" . "attendance")))))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |           5 |       0.99 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | F     |           0 |       0.99 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | D     |           4 |       0.99 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+
+The =:on= argument names the join key column. The =:cols= argument is
+an alist that maps each column in the primary table to the column in
+the secondary table that should provide replacement values.
+
+** datagrid-coalesce
+
+Sometimes you end up with sibling columns that hold the "same"
+information from different sources, such as =email= and =email_2=
+after a full join. =datagrid-coalesce= takes one or more groups of
+column references, and for each group it replaces the first column's
+data with the first non-empty value found across the group, then
+drops the rest of the group from the result.
+
+Below, we add a backup grade column, blank out the primary =grade= for
+the two rows where the backup has a value, and then coalesce the pair.
+
+#+begin_src emacs-lisp
+  (let* ((backup
+          (datagrid-column-make
+           :heading "grade-backup"
+           :data [nil nil nil nil nil nil nil nil "C" nil
+                  nil nil nil nil nil "C" nil nil nil nil]))
+         (with-backup (datagrid-add-column dg backup))
+         (with-gaps
+          (datagrid-mutate with-backup
+                           "grade"
+                           (lambda (id g)
+                             (if (member id '("S09" "S16")) nil g))
+                           "student-id" "grade")))
+    (datagrid-to-org-table
+     (datagrid-coalesce with-gaps '("grade" "grade-backup"))))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | C     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | C     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+
+After the call, =grade-backup= is gone from the result and the two
+rows that had been blanked out are filled from the backup column.
+
+* Functions from datagrid-stats.el
+
+This file holds reductions, summary statistics, and the dplyr-style
+verbs whose implementation depends on a reducer.
+
+** datagrid-distinct
+
+=datagrid-distinct= drops duplicate rows. With no extra arguments, it
+considers the full row. With one or more column references, it
+considers only those columns when comparing rows, and only those
+columns appear in the result. This makes it a convenient way to ask
+"what unique combinations of course and grade appear in this data?"
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-distinct dg "course-code" "grade"))
+#+end_src
+
+#+RESULTS:
+| course-code | grade |
+| Math        | A     |
+| English     | B     |
+| Math        | C     |
+| Science     | A     |
+| History     | B     |
+| English     | D     |
+| Art         | A     |
+| Math        | B     |
+| Science     | F     |
+| English     | C     |
+| History     | A     |
+| Art         | B     |
+| History     | D     |
+| Science     | B     |
+
+The result rows are in first-seen order, which means duplicate
+detection walks the rows once and remembers each cross-column key in a
+hash table.
+
+** datagrid-group-by
+
+This function returns a vector whose elements are
+=(group-value sub-result)= pairs. It is closer to the raw machinery
+than the nicer =datagrid-summarize-across= verb, and you will mostly
+reach for it when you want full control over what to do with each
+group.
+
+#+begin_src emacs-lisp
+  ;; Look at the shape of the result by counting how many groups there
+  ;; are and reading the first group's value:
+  (let ((groups (datagrid-group-by dg "course-code")))
+    (list :n-groups (length groups)
+          :first-group-value (elt (aref groups 0) 0)))
+#+end_src
+
+#+RESULTS:
+| :n-groups | 5 | :first-group-value | Math |
+
+=datagrid-group-by= groups on the raw values it finds in =:data=, so
+the group keys here are the course-name strings (="Math"=,
+="English"=, ...). If you wanted to group by the numeric codes
+instead, decode the column first with =datagrid-mutate= and group by
+the decoded column.
+
+** datagrid-summarize
+
+=datagrid-summarize= runs one or more reductions and returns an alist
+of =(name . value)=. Each spec is a plist that names the reducer, the
+column, and whether to decode or convert values first. The =:calc= key
+tells the function to interpret =:fn= as a Calc abbreviation rather
+than an Emacs Lisp function.
+
+#+begin_src emacs-lisp
+  (datagrid-summarize
+   dg
+   '(:name "total-hours" :fn + :col "study-hours")
+   '(:name "max-hours"   :fn max :col "study-hours")
+   ;; Calc statistics: pass :calc t and a Calc abbreviation as a string.
+   '(:name "median-hours" :fn "vmedian" :col "study-hours" :calc t)
+   ;; The attendance column holds floats, so we pass :convert t to
+   ;; reformat the values for Calc.
+   '(:name "median-att" :fn "vmedian" :col "attendance" :calc t :convert t)
+   ;; The grade column stores label strings, so we decode to the numeric
+   ;; codes first with :code t before asking Calc for the mean.
+   '(:name "mean-grade-code" :fn "vmean" :col "grade" :calc t :code t))
+#+end_src
+
+#+RESULTS:
+: ((total-hours . 188) (max-hours . 18) (median-hours . 9.5) (median-att . 0.84) (mean-grade-code . 2.75))
+
+Setting =:code t= tells the summarizer to decode through the column's
+coding alist before reducing. That is essential here because Calc
+cannot average the strings ="A"=, ="B"=, ="C"= directly. Decoding
+turns them into integers Calc can handle.
+
+** datagrid-summarize-across
+
+This is the verb most newcomers from R or Python actually want:
+"collapse the datagrid to one row per unique combination of these
+columns, applying a function to every other column." It returns a new
+datagrid in which the grouping columns come first and the reduced
+columns follow.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-summarize-across
+    dg
+    (lambda (vals)
+      ;; vals is the list of values in one group for one column.
+      (if (cl-every #'numberp vals)
+          (/ (apply #'+ vals) (float (length vals)))
+        (length vals)))
+    "course-code"))
+#+end_src
+
+#+RESULTS:
+| course-code | student-id | grade |        study-hours |         attendance | satisfaction | enrolled-date |
+| Math        |          5 |     5 |                9.6 |              0.852 |            5 |             5 |
+| English     |          5 |     5 |                6.2 | 0.7300000000000001 |            5 |             5 |
+| Science     |          4 |     4 |              10.25 | 0.8024999999999999 |            4 |             4 |
+| History     |          3 |     3 |                9.0 | 0.7866666666666667 |            3 |             3 |
+| Art         |          3 |     3 | 13.666666666666666 | 0.9166666666666666 |            3 |             3 |
+
+The reducer is called once per group per non-key column with the list
+of that column's values inside the group. The branch on
+=cl-every #'numberp= is there because some columns hold strings (like
+=student-id=, =enrolled-date=, =grade=, and =satisfaction=) and we
+want a sensible default for them — here, the count of values in the
+group.
+
+** datagrid-group-modify
+
+Where =datagrid-summarize-across= always returns one row per group,
+=datagrid-group-modify= lets each group's function return a whole
+sub-datagrid, and then row-binds them together. The schema (column
+count and headings) of the returned sub-datagrid must match across
+groups. This is the right tool for per-group operations like "keep two
+rows by study-hours within each course."
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-group-modify
+    dg
+    (lambda (sub)
+      (datagrid-head (datagrid-sort sub "study-hours")
+                     (datagrid--ncols sub)
+                     2))
+    "course-code"))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
+| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
+
+Because =datagrid-sort= sorts ascending, the snippet above keeps the
+two students with the fewest hours per course. Reverse the per-group
+behavior to your taste.
+
+** datagrid-count
+
+=datagrid-count= is a friendly wrapper over the frequency machinery.
+It returns a two-column datagrid: the unique values in the named
+column, and a count column. If =:sort= is non-nil, the rows come back
+in descending count order. If =:code= is non-nil, the source column is
+decoded before counting.
+
+#+begin_src emacs-lisp
+  ;; Counts on the raw label strings, sorted by frequency:
+  (datagrid-to-org-table
+   (datagrid-count dg "course-code" :sort t))
+
+  ;; Counts after decoding to numeric codes. Same totals, integer keys:
+  (datagrid-to-org-table
+   (datagrid-count dg "course-code" :sort t :code t))
+#+end_src
+
+#+RESULTS:
+| course-code | n |
+|           1 | 5 |
+|           2 | 5 |
+|           3 | 4 |
+|           4 | 3 |
+|           5 | 3 |
+
+The first call returns rows like =("Math" . 5)= because =:data= holds
+strings. The second call decodes through the column's coding alist
+first, so the keys come back as the integer codes (=1=, =2=, ...).
+That is =datagrid-column-decode= being applied inside =datagrid-count=
+for you.
+
+** datagrid-reduce-vec-calc
+
+This function applies a single-variable Emacs Calc statistic to a
+column. It is the bridge between the datagrid layer and the very rich
+set of statistical functions Calc already provides. The abbreviation
+is a string like ="vmean"=, ="vmedian"=, ="vsdev"=, or ="rms"=. Calc
+cannot handle =nil= directly, so the function strips =nil= values for
+you. If the data is stored as strings, pass =t= for the =convert=
+argument so the values get coerced.
+
+#+begin_src emacs-lisp
+  (list :mean-hrs   (datagrid-reduce-vec-calc dg "vmean"   "study-hours")
+        :median-hrs (datagrid-reduce-vec-calc dg "vmedian" "study-hours")
+        :sdev-hrs   (datagrid-reduce-vec-calc dg "vsdev"   "study-hours")
+        ;; The attendance column holds floating-point numbers. Pass t
+        ;; for the CONVERT argument so the values are reformatted into
+        ;; Calc's expected (float M E) shape before Calc sees them.
+        :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance" nil t)
+        ;; The satisfaction column holds label strings. Pass t for the
+        ;; CODE argument so the column is decoded into its numeric
+        ;; codes (1..5) before Calc averages them.
+        :mean-sat   (datagrid-reduce-vec-calc dg "vmean" "satisfaction" t))
+#+end_src
+
+#+RESULTS:
+| :mean-hrs | 9.4 | :median-hrs | 9.5 | :sdev-hrs | 4.58142703578 | :mean-att | 0.8115 | :mean-sat | 3.75 |
+
+** datagrid-report-all-lom
+
+This loops over every column of a datagrid and runs the right
+descriptive-statistics report for that column's level of measurement.
+Columns whose =:code= slot is set are decoded first; string-shaped
+numbers are converted automatically. The result is a list of
+=(heading . report)= conses, one per column.
+
+#+begin_src emacs-lisp
+  (datagrid-report-all-lom dg)
+#+end_src
+
+#+RESULTS:
+| student-id    | student-id    | (cardinality . 5) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
+| course-code   | course-code   | (cardinality . 5) | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
+| grade         | grade         | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                             |
+| study-hours   | study-hours   | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)       | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 7) (2Q . 10) (3Q . 13) (IQR . 6))                          |
+| attendance    | attendance    | (vcount . 20)     | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.75) (2Q . 0.85) (3Q . 0.95) (IQR . 0.19999999999999996)) |
+| satisfaction  | satisfaction  | (vcount . 20)     | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                             |
+| enrolled-date | enrolled-date | (cardinality . 5) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
+
+The full report is verbose. If you only want one column, call the
+lower-level reports directly. The =t= argument tells each report to
+decode the column first.
+
+#+begin_src emacs-lisp
+  (list (datagrid-report-nominal  dg "course-code")
+        (datagrid-report-ordinal  dg "satisfaction" t)
+        (datagrid-report-interval dg "grade" t)
+        ;; attendance holds raw floats, so pass nil for CODE (the column
+        ;; is not coded) and t for CONVERT so the values get reformatted
+        ;; for Calc.
+        (datagrid-report-ratio    dg "attendance" nil t))
+#+end_src
+
+#+RESULTS:
+| course-code  | (cardinality . 5) | (mode Math English) | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3)) |                  |                  |                                                  |                               |                                                  |                                                                                                       |                                                                             |
+| satisfaction | (vcount . 20)     | (vmin . 1)          | (vmax . 5)                                                                                 | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                                                  |                                                                                                       |                                                                             |
+| grade        | (vcount . 20)     | (vmin . 0)          | (vmax . 4)                                                                                 | (vmedian . 3)    | (vmean . 2.75)   | (vsdev . 1.16415770319)                          | (mode 3)                      | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) |                                                                                                       |                                                                             |
+| attendance   | (vcount . 20)     | (vmin . 0.4)        | (vmax . 0.99)                                                                              | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737)                           | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.75) (2Q . 0.85) (3Q . 0.95) (IQR . 0.19999999999999996)) |
+
+* Functions from datagrid-join.el
+
+The join family follows dplyr's vocabulary. Every public function in
+this file takes two datagrids and a =:on= argument that picks the key
+column. Keys are compared with =equal=, so the integer =1= and the
+string ="1"= do not match — convert types first if your sources
+disagree. When the right-hand grid has duplicate keys, only the first
+occurrence is used.
+
+For the join examples we need a small second datagrid. The
+=course-code= column matches the one in =dg=.
+
+#+begin_src emacs-lisp :results silent
+  (defvar dg-courses nil
+    "Lookup table of course metadata for the join examples.")
+
+  (setq dg-courses
+    (datagrid-make
+     :columns
+     (vector (datagrid-column-make
+              :heading "course-code"
+              :data ["Math" "English" "Science" "History" "Art" "Business"])
+             (datagrid-column-make
+              :heading "department"
+              :data ["STEM" "Humanities" "STEM" "Humanities" "Arts" "Business"])
+             (datagrid-column-make
+              :heading "credit-hours"
+              :data [3 3 4 3 2 3]))))
+#+end_src
+
+** datagrid-left-join
+
+A left join keeps every row of the first datagrid and attaches the
+matching columns from the second. Rows in the first datagrid that have
+no match get =nil= for the attached columns. By default every column
+of the second datagrid except the key is appended, but you can name a
+subset with =:cols=.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head
+    (datagrid-left-join dg dg-courses
+                        :on "course-code"
+                        :cols '("department"))
+    8 6))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date | department |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 | STEM       |
+| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 | Humanities |
+| S03        | Math        | C     |           5 |        0.7 | Neutral        |    2025-01-16 | STEM       |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 | STEM       |
+| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 | Humanities |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 | Humanities |
+
+="Business"= is in =dg-courses= but is never used by any student, so
+it does not appear in the left join's result. That is the defining
+behavior of "left" — only the left grid drives the output.
+
+** datagrid-full-join
+
+A full join is the union of the two grids by key. Every row of the
+first grid is kept, then every row of the second grid whose key is
+absent from the first is appended at the bottom. For those bottom
+rows, the left grid's non-key columns are filled with =nil= and the
+right grid's projected columns get their actual values.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-full-join dg dg-courses
+                       :on "course-code"
+                       :cols '("department" "credit-hours")))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | department | credit-hours |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 | STEM       |            3 |
+| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 | Humanities |            3 |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 | STEM       |            3 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 | STEM       |            4 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 | Humanities |            3 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 | Humanities |            3 |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 | Arts       |            2 |
+| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 | STEM       |            3 |
+| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 | STEM       |            4 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 | Humanities |            3 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 | Humanities |            3 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 | Arts       |            2 |
+| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 | STEM       |            3 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 | Humanities |            3 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 | STEM       |            4 |
+| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 | Humanities |            3 |
+| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 | STEM       |            3 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 | Arts       |            2 |
+| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 | Humanities |            3 |
+| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 | STEM       |            4 |
+| nil        | Business    | nil   |         nil |        nil | nil               |           nil | Business   |            3 |
+
+The extra row at the bottom corresponds to ="Business"=, which
+appears in =dg-courses= but never in =dg=. On that final row,
+=student-id=, =grade=, =study-hours=, =attendance=, =satisfaction=,
+and =enrolled-date= are all =nil=, while =department= and
+=credit-hours= show the values from =dg-courses=.
+
+** datagrid-anti-join and datagrid-semi-join
+
+These two are filters dressed as joins. A semi-join keeps the rows of
+the first datagrid whose key is present in the second; an anti-join
+keeps the rows whose key is absent. Neither one projects any columns
+from the second datagrid, which makes them the right choice when you
+only want to filter.
+
+#+begin_src emacs-lisp
+  ;; Students whose course exists in the lookup table:
+  (datagrid-to-org-table
+   (datagrid-head
+    (datagrid-semi-join dg dg-courses :on "course-code")
+    7 5))
+
+  ;; Students whose course is NOT in the lookup table, after we slice
+  ;; the lookup down to its first four rows (Math, English, Science,
+  ;; History):
+  (datagrid-to-org-table
+   (datagrid-anti-join dg
+                       (datagrid-slice dg-courses 0 1 2 3)
+                       :on "course-code"))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+
+In the anti-join example, we sliced =dg-courses= down to its first
+four rows, leaving out ="Art"= and ="Business"=. The anti-join then
+returns the students who took Art, since that is the only course in
+=dg= whose key is no longer present in the right side.
+
+* What to try next
+
+These examples touch the trickier functions, but the package has
+plenty of smaller utilities that combine well with them. Two patterns
+are worth practicing on the shared =dg=:
+
+- Chain verbs with =thread-first= so the transformation reads top to
+  bottom. =datagrid-select= → =datagrid-sort= → =datagrid-head= is a
+  common opener.
+- When a function takes an optional =code= argument, prefer passing
+  =t= for coded columns. The decoded values are much easier to read
+  in reports and counts, and the function does the decoding for you
+  internally without you having to materialize a new column.
+
+The README documents the full surface of the package and is the right
+next stop when you want to see all the helpers that did not make this
+top-twenty list.
+
+* File local variables
+
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:
