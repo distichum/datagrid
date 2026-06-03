@@ -148,7 +148,7 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 - =datagrid-add-data (datagrid seqs &optional horizontal)=: Add elements to each datagrid-column. DATAGRID a datagrid structure. SEQS is a sequence of sequences. If HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil, then each sequence is one row's data. The default is nil. The sequences are extended to keep DATAGRID-COLUMN-DATA lengths equal. The sequences of data to add must be in the same order as the datagrid-columns in DATAGRID.
 - =datagrid-remove-column (datagrid index)=: Remove the DATAGRID column at INDEX. 
 - =datagrid-remove-row (datagrid index)=: Remove the DATAGRID row at INDEX.
-- =datagrid-sort (datagrid index)=: Sort a datagrid by a specific column. This assumes all data in a column is of the same data type.
+- =datagrid-sort (datagrid &rest keys)=: Sort a datagrid by one or more KEYS. Each key is a column reference or a sort spec plist =(:col REF :key FN :lessp PRED :reverse BOOL)=, borrowing the vocabulary of Emacs's own =sort=. The first key is primary; later keys break ties. The sort is stable. See the worked examples in =examples.org=.
 * Filters and masks
 - =datagrid-create-mask (datagrid pred index)=: Create a mask for a DATAGRID column at INDEX. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
 - =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID.

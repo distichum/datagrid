@@ -325,16 +325,41 @@ heading string."
                                  (seq-drop logical (1+ index))))
                collect new-col)))))
 
-(defun datagrid-sort (datagrid col)
-  "Return a new datagrid sorted by logical column COL.
-COL is a zero-based column number or a heading string. Column data is
-shared with DATAGRID; the result records a row-order permutation.
-Composes with any existing row-order on DATAGRID."
-  (let* ((vals (datagrid-pull datagrid col))
+(defun datagrid--sort-spec (spec)
+  "Normalize a single sort SPEC into a plist.
+A bare column reference (integer index or heading string) becomes
+\(:col SPEC).  A plist is returned unchanged.  Signal an error when no
+`:col' is present."
+  (let ((plist (if (or (integerp spec) (stringp spec))
+                   (list :col spec)
+                 spec)))
+    (unless (plist-get plist :col)
+      (error "Sort spec has no :col: %S" spec))
+    plist))
+
+(defun datagrid--sort-1 (datagrid spec)
+  "Return DATAGRID sorted by a single SPEC, composing its row-order.
+SPEC is a column reference (integer index or heading string) or a
+plist (:col REF :key FN :lessp PRED :reverse BOOL).  KEY transforms
+each value before comparison.  PRED is the less-than predicate
+\(default `datagrid-unknown-type-sort').  A non-nil REVERSE inverts
+the order while preserving the stable handling of ties.
+
+Column data is shared with DATAGRID; the result records a row-order
+permutation that composes with any existing row-order on DATAGRID."
+  (let* ((spec (datagrid--sort-spec spec))
+         (col (plist-get spec :col))
+         (keyfn (plist-get spec :key))
+         (lessp (or (plist-get spec :lessp) #'datagrid-unknown-type-sort))
+         (pred (if (plist-get spec :reverse)
+                   (lambda (a b) (funcall lessp b a))
+                 lessp))
+         (vals (datagrid-pull datagrid col))
          (n (length vals))
          (indexed (cl-loop for i from 0 below n
-                           collect (cons i (aref vals i))))
-         (sorted (seq-sort-by #'cdr #'datagrid-unknown-type-sort indexed))
+                           for v = (aref vals i)
+                           collect (cons i (if keyfn (funcall keyfn v) v))))
+         (sorted (seq-sort-by #'cdr pred indexed))
          (new-order (make-vector n 0)))
     (cl-loop for pair in sorted
              for k from 0 do
@@ -342,6 +367,38 @@ Composes with any existing row-order on DATAGRID."
     (datagrid-make :columns (datagrid-columns datagrid)
                    :row-order new-order
                    :col-order (datagrid-col-order datagrid))))
+
+(defun datagrid-sort (datagrid &rest keys)
+  "Return a new datagrid sorted by one or more KEYS.
+Each key is a sort spec, applied left to right in decreasing
+precedence: the first key is primary, later keys break ties.
+
+A spec is either a bare column reference (a zero-based logical index
+or a heading string) or a plist:
+
+  (:col REF :key FN :lessp PRED :reverse BOOL)
+
+REF names the column.  KEY, when given, is a one-argument function
+applied to each cell before comparison (e.g. `length' or `abs').
+PRED is the less-than predicate, defaulting to
+`datagrid-unknown-type-sort'.  A non-nil REVERSE sorts that key in
+descending order.
+
+The sort is stable, so keys compose by folding stable single-column
+sorts from the last key to the first.  Column data is shared with
+DATAGRID; the result records a row-order permutation that composes
+with any existing row-order on DATAGRID.  With no KEYS, DATAGRID is
+returned unchanged.
+
+Examples:
+
+  (datagrid-sort grid \"age\")
+  (datagrid-sort grid \\='(:col \"age\" :reverse t))
+  (datagrid-sort grid \"department\" \\='(:col \"name\" :key length))"
+  (let ((result datagrid))
+    (cl-loop for spec in (reverse keys)
+             do (setq result (datagrid--sort-1 result spec)))
+    result))
 
 (cl-defun datagrid-rows-patch (dg1 dg2 &key on cols)
   "Return a copy of DG1 with empty cells filled from matching rows of DG2.

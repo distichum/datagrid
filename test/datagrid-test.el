@@ -607,6 +607,67 @@
     (should (equal (datagrid-column-data (dg-test--col dg 0))
 		   original-data))))
 
+(ert-deftest datagrid-test-sort-spec-reverse ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "n" :data [3 1 4 1 5])
+	      (datagrid-column-make :heading "s" :data ["c" "a" "d" "b" "e"])))
+	 (result (datagrid-sort dg '(:col 0 :reverse t))))
+    (should (equal (datagrid-pull result 0) [5 4 3 1 1]))
+    (should (equal (datagrid-pull result 1) ["e" "d" "c" "a" "b"]))))
+
+(ert-deftest datagrid-test-sort-spec-key-transform ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "s"
+				    :data ["ccc" "a" "bb" "dddd"])))
+	 (result (datagrid-sort dg '(:col 0 :key length))))
+    (should (equal (datagrid-pull result 0) ["a" "bb" "ccc" "dddd"]))))
+
+(ert-deftest datagrid-test-sort-spec-custom-lessp ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "n" :data [3 1 2])))
+	 (result (datagrid-sort dg `(:col 0 :lessp ,(lambda (a b) (> a b))))))
+    (should (equal (datagrid-pull result 0) [3 2 1]))))
+
+(ert-deftest datagrid-test-sort-multi-key-precedence ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "dept"
+				    :data ["b" "a" "b" "a"])
+	      (datagrid-column-make :heading "name"
+				    :data ["xx" "yyy" "z" "w"])))
+	 ;; dept ascending, then name length ascending within dept.
+	 (result (datagrid-sort dg "dept" '(:col "name" :key length))))
+    (should (equal (datagrid-pull result 0) ["a" "a" "b" "b"]))
+    (should (equal (datagrid-pull result 1) ["w" "yyy" "z" "xx"]))))
+
+(ert-deftest datagrid-test-sort-multi-key-reverse-secondary ()
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "status"
+				    :data ["ok" "ok" "bad" "ok"])
+	      (datagrid-column-make :heading "profit"
+				    :data [10 -30 5 20])))
+	 ;; status ascending, then absolute profit descending.
+	 (result (datagrid-sort dg "status"
+				'(:col "profit" :key abs :reverse t))))
+    (should (equal (datagrid-pull result 0) ["bad" "ok" "ok" "ok"]))
+    (should (equal (datagrid-pull result 1) [5 -30 20 10]))))
+
+(ert-deftest datagrid-test-sort-multi-key-is-stable ()
+  ;; Equal primary keys must preserve original row order (a stable
+  ;; tie-break), so the trailing column stays in its input sequence.
+  (let* ((dg (dg-test--mk
+	      (datagrid-column-make :heading "k" :data ["a" "a" "a"])
+	      (datagrid-column-make :heading "tag" :data [1 2 3])))
+	 (result (datagrid-sort dg "k")))
+    (should (equal (datagrid-pull result 1) [1 2 3]))))
+
+(ert-deftest datagrid-test-sort-no-keys-returns-input ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [3 1 2]))))
+    (should (equal (datagrid-pull (datagrid-sort dg) 0) [3 1 2]))))
+
+(ert-deftest datagrid-test-sort-bad-spec-signals ()
+  (let ((dg (dg-test--mk (datagrid-column-make :data [1 2]))))
+    (should-error (datagrid-sort dg '(:key length)))))
+
 
 ;;;; datagrid-join (deprecated -> datagrid-left-join)
 

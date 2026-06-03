@@ -327,6 +327,81 @@ the column into a new mutated column and sort by that.
 | S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |         2 |
 | S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |         2 |
 
+*** Sort specs: reverse, key, and multiple columns
+
+The bare column reference above is the simple case. =datagrid-sort=
+also accepts a /sort spec/ plist for each key, borrowing the
+=:key=/=:lessp=/=:reverse= vocabulary of Emacs's own =sort=. A spec is
+=(:col REF :key FN :lessp PRED :reverse BOOL)=, where =REF= is the
+usual column index or heading.
+
+A non-nil =:reverse= sorts that column in descending order. Here are
+the six students with the most study hours.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head (datagrid-sort dg '(:col "study-hours" :reverse t)) 7 6))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
+| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+
+=:key= is a one-argument function applied to each cell before
+comparison, so you can sort by a derived value without first adding a
+column. The mutate-and-sort dance above becomes a single call: decode
+each grade to its numeric severity inside the spec.
+
+#+begin_src emacs-lisp
+  (let ((alist (datagrid-column-code (aref (datagrid-columns dg) 2))))
+    (datagrid-to-org-table
+     (datagrid-head
+      (datagrid-sort dg `(:col "grade"
+                          :key ,(lambda (g) (cdr (assoc g alist)))))
+      7 6)))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
+| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
+| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+
+Pass several keys to sort by more than one column. The first key is
+primary; later keys break ties. Because the sort is stable, this
+example groups rows by =course-code= alphabetically, then orders each
+group by descending study hours. Note the two English students with
+seven hours (=S10=, =S19=): equal on both keys, they keep their
+original relative order.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-head
+    (datagrid-sort dg "course-code" '(:col "study-hours" :reverse t))
+    7 10))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
+| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+| S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
+| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 |
+| S10        | English     | C     |           7 |       0.75 | Neutral        |    2025-01-19 |
+| S19        | English     | C     |           7 |       0.78 | Neutral        |    2025-01-24 |
+| S14        | English     | C     |           6 |       0.72 | Neutral        |    2025-01-21 |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 |
+| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
+| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 |
+
 ** datagrid-create-mask and datagrid-filter-by-mask
 
 These two functions work together. =datagrid-create-mask= produces a
