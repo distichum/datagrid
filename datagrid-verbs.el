@@ -133,7 +133,7 @@ length."
   "Add elements to the end of each datagrid-column.
 DATAGRID is a datagrid structure. SEQ is a list of sequences.
 Each of the sequences in SEQ must be of equal length to the
-number of logical datagrid-columns in datagrid."
+number of logical `datagrid-columns' in datagrid."
   (interactive)
   (unless (datagridp datagrid)
     (error "DATAGRID is not a datagrid structure"))
@@ -160,7 +160,7 @@ number of logical datagrid-columns in datagrid."
   "Add data to DATAGRID columns.
 SEQS is a sequence of sequences. Each sub-sequence is one logical
 column's data. The sequences of data to add must be in the same order
-as the logical datagrid-columns in DATAGRID. The length of SEQS must
+as the logical `datagrid-columns' in DATAGRID. The length of SEQS must
 equal the number of logical columns. If the sequences added are not of
 equal length, then nil will be padded onto other columns to make the
 data equal."
@@ -186,10 +186,10 @@ data equal."
 DATAGRID a datagrid structure. SEQS is a sequence of sequences. If
 HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil,
 then each sequence is one row's data. The default is nil. The sequences
-are extended to keep datagrid-column-data lengths equal.
+are extended to keep `datagrid-column-data' lengths equal.
 
 The sequences of data to add must be in the same order as the
-datagrid-columns in DATAGRID."
+`datagrid-columns' in DATAGRID."
   (interactive)
   (unless (datagridp datagrid)
     (error "DATAGRID is not a datagrid structure"))
@@ -202,15 +202,15 @@ datagrid-columns in DATAGRID."
 Columns are aligned by heading. The unified column set is the union
 of all headings, preserved in first-seen order. Columns absent from a
 given source contribute nil for that source's rows. Per-column metadata
-(lom, code, etc.) is taken from the first source in which each heading
+\(lom, code, etc.\) is taken from the first source in which each heading
 appears. Nil arguments are skipped. Row and column orders of sources
 are respected (logical view, not physical)."
   (let ((grids (cl-remove-if #'null datagrids)))
     (unless grids
-      (error "datagrid-bind-rows: no datagrids given"))
+      (error "datagrid-bind-rows: No datagrids given"))
     (dolist (g grids)
       (unless (datagridp g)
-        (error "datagrid-bind-rows: argument is not a datagrid")))
+        (error "datagrid-bind-rows: Argument is not a datagrid")))
     (let ((total-rows (apply #'+ (mapcar #'datagrid--nrows grids)))
           (heading-order nil)
           (templates (make-hash-table :test 'equal))
@@ -260,7 +260,7 @@ are respected (logical view, not physical)."
   "Set all DATAGRID headings using HEADING-LIST.
 HEADING-LIST is a list of strings where each string is a heading name.
 The headings in the list must be in the same order as the
-datagrid-columns in the datagrid."
+`datagrid-columns' in the datagrid."
   (let* ((src (datagrid-columns datagrid))
          (new-cols (copy-sequence src))
          (ncols (datagrid--ncols datagrid)))
@@ -289,7 +289,7 @@ col-order permutation. Composes with any existing col-order."
                    :col-order new-order)))
 
 (defun datagrid-slice (datagrid &rest row-indices)
-  "Return a new datagrid containing only the rows at ROW-INDICES.
+  "Return a new DATAGRID containing only the rows at ROW-INDICES.
 ROW-INDICES are zero-based row numbers."
   (datagrid--slice-rows datagrid row-indices))
 
