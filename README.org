@@ -139,26 +139,26 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 - =datagrid-get-elt (datagrid column-num row-num)=: Return a value at a specific column and row.
 - =datagrid-get-col-data (datagrid index)=: Return the data slot of a datagrid column.
 - =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row. A row is the Nth element of each datagrid-column's data in the datagrid.
-- =datagrid-col-index-by-header (datagrid header-text)=: Return the index number of the datagrid-column structure that has a heading of =header-text=. This is best used in conjunction with functions that require an "index" parameter.
+- =datagrid-col-index-by-heading (datagrid heading)=: Return the index number of the datagrid-column structure that has a heading of =heading=. This is best used in conjunction with functions that require an "index" parameter.
 - =datagrid-column-decode (datagrid index)=: Return a vector from DATAGRID and INDEX that has been decoded according to its coding alist.
 * Manipulate datagrids
 - =datagrid-head (datagrid &optional column-num row-num)=: Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
 - =datagrid-add-column (datagrid &rest datagrid-columns)=: Add one or more datagrid-column structs to a datagrid.
-- =datagrid-add-row (datagrid seq)=: Add elements to the end of each datagrid-column. Datagrids are not meant for frequent insertions of row data. Such operations are possible but inefficient.
+- =datagrid-add-row (datagrid &rest rows)=: Append one or more rows, each a sequence with one value per logical column. Datagrids are not meant for frequent insertions of row data. Such operations are possible but inefficient.
 - =datagrid-add-data (datagrid seqs &optional horizontal)=: Add elements to each datagrid-column. DATAGRID a datagrid structure. SEQS is a sequence of sequences. If HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil, then each sequence is one row's data. The default is nil. The sequences are extended to keep DATAGRID-COLUMN-DATA lengths equal. The sequences of data to add must be in the same order as the datagrid-columns in DATAGRID.
 - =datagrid-remove-column (datagrid index)=: Remove the DATAGRID column at INDEX. 
-- =datagrid-remove-row (datagrid index)=: Remove the DATAGRID row at INDEX.
+- =datagrid-remove-row (datagrid &rest indices)=: Remove the DATAGRID rows at INDICES.
 - =datagrid-sort (datagrid &rest keys)=: Sort a datagrid by one or more KEYS. Each key is a column reference or a sort spec plist =(:col REF :key FN :lessp PRED :reverse BOOL)=, borrowing the vocabulary of Emacs's own =sort=. The first key is primary; later keys break ties. The sort is stable. See the worked examples in =examples.org=.
 * Filters and masks
 - =datagrid-create-mask (datagrid pred index)=: Create a mask for a DATAGRID column at INDEX. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
 - =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID.
 - =datagrid-group-by (datagrid index)=: Group data in DATAGRID according to INDEX. This function will be slow for medium to large datasets that have many groupings. Filter the datagrid by what is needed first and then group. See the examples later in this document.
 * Data analysis
-- =datagrid-reduce-vec (datagrid function index &optional code convert)=: Reduce a FUNCTION using DATAGRID data at INDEX. As an example, the following code finds the sum of all data values from the column indexed at 2.
+- =datagrid-reduce-vec (datagrid function index &key code convert)=: Reduce a FUNCTION using DATAGRID data at INDEX. As an example, the following code finds the sum of all data values from the column indexed at 2.
   #+begin_src emacs-lisp
     (datagrid-reduce-vec datagrid-example #'+ 2)
   #+end_src
-- =datagrid-reduce-vec-calc (datagrid func-abbrev index &optional code convert)=: Reduce an Emacs Calc function, FUNC-ABBREV, using DATAGRID data. It operates only on single vector Calc functions. See the function document string for more details. The following example duplicates the results above.
+- =datagrid-reduce-vec-calc (datagrid func-abbrev index &key code convert)=: Reduce an Emacs Calc function, FUNC-ABBREV, using DATAGRID data. It operates only on single vector Calc functions. See the function document string for more details. The following example duplicates the results above.
   #+begin_src emacs-lisp
     (datagrid-reduce-vec-calc datagrid-example "vsum" 2)
   #+end_src
@@ -174,9 +174,9 @@ Some statistical measures of survey data are not included in Emacs. Therefore, d
 The following functions return an opinionated list of statistical measures for each level of measurement. The measures are returned in a cons structure.
 
 - =datagrid-report-nominal (datagrid index)= 
-- =datagrid-report-ordinal (datagrid index &optional code convert)=
-- =datagrid-report-interval (datagrid index &optional code convert)=
-- =datagrid-report-ratio (datagrid index &optional code convert)=
+- =datagrid-report-ordinal (datagrid index &key code convert)=
+- =datagrid-report-interval (datagrid index &key code convert)=
+- =datagrid-report-ratio (datagrid index &key code convert)=
 
 - =datagrid-report-all-lom (datagrid)=: Loop through each datagrid column and create a report based on the level of measurement.
 
@@ -195,8 +195,9 @@ datagrid.el includes an example datagrid named =datagrid-example=.
   (datagrid-sort datagrid-example 2)
   (seq-contains-p (elt datagrid-example 0) "2025-04-01")
 
-  (datagrid-add-row datagrid-example '(["2025-04-04" "far" 2 25 "ugliest"]
-    				     ["2025-04-05" "farrer" 3 26 "gooder"]))
+  (datagrid-add-row datagrid-example
+                    ["2025-04-04" "far" 2 25 "ugliest"]
+                    ["2025-04-05" "farrer" 3 26 "gooder"])
 
   (let ((col1 (datagrid-column-make
     	     :heading "low-temp"

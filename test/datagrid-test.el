@@ -318,16 +318,16 @@
     (should (equal (datagrid-get-headings dg) [nil nil]))))
 
 
-;;;; datagrid-col-index-by-header
+;;;; datagrid-col-index-by-heading
 
-(ert-deftest datagrid-test-col-index-by-header-first ()
-  (should (= (datagrid-col-index-by-header (dg-test--simple) "name") 0)))
+(ert-deftest datagrid-test-col-index-by-heading-first ()
+  (should (= (datagrid-col-index-by-heading (dg-test--simple) "name") 0)))
 
-(ert-deftest datagrid-test-col-index-by-header-middle ()
-  (should (= (datagrid-col-index-by-header (dg-test--simple) "score") 1)))
+(ert-deftest datagrid-test-col-index-by-heading-middle ()
+  (should (= (datagrid-col-index-by-heading (dg-test--simple) "score") 1)))
 
-(ert-deftest datagrid-test-col-index-by-header-not-found ()
-  (should (null (datagrid-col-index-by-header (dg-test--simple) "missing"))))
+(ert-deftest datagrid-test-col-index-by-heading-not-found ()
+  (should (null (datagrid-col-index-by-heading (dg-test--simple) "missing"))))
 
 
 ;;;; datagrid-col-data-by-header
@@ -766,11 +766,11 @@
 
 (ert-deftest datagrid-test-reduce-vec-with-code ()
   ;; "Agree"=4 "Disagree"=2 "Neutral"=3 "Agree"=4 → sum=13
-  (should (= (datagrid-reduce-vec (dg-test--coded) #'+ 0 t) 13)))
+  (should (= (datagrid-reduce-vec (dg-test--coded) #'+ 0 :code t) 13)))
 
 (ert-deftest datagrid-test-reduce-vec-with-convert ()
   (let ((dg (dg-test--mk (datagrid-column-make :data ["10" "20" "30"]))))
-    (should (= (datagrid-reduce-vec dg #'+ 0 nil t) 60))))
+    (should (= (datagrid-reduce-vec dg #'+ 0 :convert t) 60))))
 
 
 ;;;; datagrid-prep-for-calc
@@ -820,11 +820,11 @@
   (should (= (datagrid-reduce-vec-calc (dg-test--simple) "vmean" 1) 25.0)))
 
 (ert-deftest datagrid-test-reduce-vec-calc-with-code ()
-  (should (= (datagrid-reduce-vec-calc (dg-test--coded) "vmean" 0 t) 3.25)))
+  (should (= (datagrid-reduce-vec-calc (dg-test--coded) "vmean" 0 :code t) 3.25)))
 
 (ert-deftest datagrid-test-reduce-vec-calc-nil-returns-nil-on-empty ()
   (let ((dg (dg-test--mk (datagrid-column-make :data [nil nil nil]))))
-    (should (null (datagrid-reduce-vec-calc dg "vmean" 0 nil t)))))
+    (should (null (datagrid-reduce-vec-calc dg "vmean" 0 :convert t)))))
 
 
 ;;;; datagrid-column-frequencies
@@ -1047,7 +1047,7 @@
     (should-not (assoc "vsdev" report))))
 
 (ert-deftest datagrid-test-report-ordinal-with-code ()
-  (let ((report (datagrid-report-ordinal (dg-test--coded) 0 t)))
+  (let ((report (datagrid-report-ordinal (dg-test--coded) 0 :code t)))
     (should (= (cdr (assoc "vcount" report)) 4.0))
     (should (= (cdr (assoc "vmin" report)) 2.0))
     (should (= (cdr (assoc "vmax" report)) 4.0))))
@@ -1057,7 +1057,7 @@
 	      (datagrid-column-make :heading "s"
 				    :data ["1" "2" "3" "4" "5"]
 				    :lom "ordinal")))
-	 (report (datagrid-report-ordinal dg 0 nil t)))
+	 (report (datagrid-report-ordinal dg 0 :convert t)))
     (should (= (cdr (assoc "vcount" report)) 5.0))
     (should (= (cdr (assoc "vmedian" report)) 3.0))))
 
@@ -1117,7 +1117,7 @@
 	      (datagrid-column-make :heading "s"
 				    :data ["1" "2" "3" "4" "5"]
 				    :lom "ratio")))
-	 (report (datagrid-report-ratio dg 0 nil t)))
+	 (report (datagrid-report-ratio dg 0 :convert t)))
     (should (= (cdr (assoc "vmean" report)) 3.0))))
 
 

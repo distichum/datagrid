@@ -35,6 +35,7 @@ result.
 
 Note: row-level dedup walks all rows and hashes the cross-column key
 for each one, so it can be slow on large datagrids."
+  (datagrid--check datagrid)
   (let* ((indices (if cols
 		      (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
 			      cols)
@@ -56,48 +57,46 @@ for each one, so it can be slow on large datagrids."
 
 (defun datagrid-group-by (datagrid col)
   "Group data in DATAGRID according to COL.
-COL is a zero-based column number or a heading string. The resulting
-structure is a 3D vector. The first dimension is a vector of groups
-which were formed by grouping rows of the datagrid by unique values in
-COL-VALUES. The 2nd dimension vector contains the original datagrid
-vectors filtered for only that group. The 3rd dimension vector contains
-the data from one column for one group."
+COL is a zero-based column number or a heading string. Rows and
+columns are taken in logical order. Returns a vector of groups in
+first-seen order, one group per unique value in column COL. Each
+group is a list (VALUE COLUMNS) where COLUMNS is a vector of
+column data vectors restricted to that group's rows."
+  (datagrid--check datagrid)
   (let* ((idx (datagrid--resolve-col datagrid col))
-         (cols (datagrid-columns datagrid))
-         (col-data (datagrid-column-data
-                    (aref cols (datagrid--col-at datagrid idx))))
+         (col-data (datagrid-pull datagrid idx))
 	 (index-map (make-hash-table :test #'equal))
-	 (n (length col-data)))
+	 (n (length col-data))
+	 (order nil))
     (cl-loop for i from 0 below n
-	     do (push i (gethash (aref col-data i) index-map)))
+	     for v = (aref col-data i)
+	     do (unless (gethash v index-map) (push v order))
+	     do (push i (gethash v index-map)))
     (vconcat
-     (cl-loop for val being the hash-keys of index-map
-	      using (hash-values idxs)
+     (cl-loop for val in (nreverse order)
 	      collect (list val
-			    (datagrid--select-rows
-			     datagrid (nreverse idxs)))))))
+			    (datagrid-to-vec-of-vec
+			     (datagrid--slice-rows
+			      datagrid (nreverse (gethash val index-map)))))))))
 
 
 ;;;; Data analysis
-(defun datagrid-reduce-vec (datagrid function col &optional code convert)
+(cl-defun datagrid-reduce-vec (datagrid function col &key code convert)
   "Reduce a FUNCTION across DATAGRID data at COL.
 Return the result of calling FUNCTION on the data vector at COL
 from a datagrid column. COL is a zero-based column number or a
 heading string. If CODE is nil, then column data is not decoded.
 If CODE is non-nil then decode data using the alist in the code
-slot of the datagrid column structure. If CONVERT is t, loop over
-the data to convert strings to numbers as needed.
+slot of the datagrid column structure. If CONVERT is non-nil,
+loop over the data to convert strings to numbers as needed.
 
 Examples:
-\ (datagrid-reduce-vec datagrid-example #`+ 2)
-\ (datagrid-reduce-vec datagrid #`max col code convert)
-\ (datagrid-reduce-vec datagrid #`+ col code convert)
+\ (datagrid-reduce-vec datagrid-example #\\='+ 2)
+\ (datagrid-reduce-vec datagrid #\\='max col :code t :convert t)
 
 This function and documentation string are derived from
 SEQ-REDUCE."
-  (interactive)
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((vec (if code
 		  (datagrid-column-decode datagrid col)
 		(datagrid-pull datagrid col)))
@@ -161,14 +160,15 @@ example (calc-vector-mean) [vmean]."
 	 (result (funcall func-name (cons 'vec lst))))
     (string-to-number (math-format-number (math-float result)))))
 
-(defun datagrid-reduce-vec-calc (datagrid func-abbrev col &optional code convert)
+(cl-defun datagrid-reduce-vec-calc (datagrid func-abbrev col &key code convert)
   "Reduce an Emacs Calc function, FUNC-ABBREV, across DATAGRID data.
 Return the result of calling the Calc function FUNC-ABBREV on the
 data in a datagrid column at COL. COL is a zero-based column
 number or a heading string. If CODE is nil, then column data is
 not decoded. If CODE is non-nil then decode data using the alist
 in the code slot of the datagrid column structure. If CONVERT is
-t, loop over the data to convert strings to numbers as needed.
+non-nil, loop over the data to convert strings to numbers as
+needed.
 
 FUNC-ABBREV is a string for the Calc abbreviation for a function.
 You can find these functions by doing \\[describe-function] (C-h f) and typing calcFunc-
@@ -185,9 +185,7 @@ Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean].
 
 Nil data values are discarded before the calculation."
-  (interactive)
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((vec (if code
 		  (datagrid-column-decode datagrid col)
 		(datagrid-pull datagrid col)))
@@ -222,8 +220,10 @@ Returns ((NAME . VALUE) ...) in the order of SPECS."
 		   (idx (datagrid--resolve-col datagrid col)))
 	      (cons name
 		    (if calc
-			(datagrid-reduce-vec-calc datagrid fn idx code convert)
-		      (datagrid-reduce-vec datagrid fn idx code convert)))))
+			(datagrid-reduce-vec-calc datagrid fn idx
+						  :code code :convert convert)
+		      (datagrid-reduce-vec datagrid fn idx
+					   :code code :convert convert)))))
 	  specs))
 
 (defun datagrid-first-non-empty (seq)
@@ -516,7 +516,7 @@ non-nil, append the mean absolute deviation."
        (list (cons "mean absolute deviation"
 		   (datagrid-column-mad new-dg 0)))))))
 
-(defun datagrid-report-ordinal (datagrid col &optional code convert)
+(cl-defun datagrid-report-ordinal (datagrid col &key code convert)
   "Display column statistics for ordinal data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
@@ -528,7 +528,7 @@ ordinal data."
   (datagrid--report-numeric
    datagrid col '("vcount" "vmin" "vmax" "vmedian") code convert t))
 
-(defun datagrid-report-interval (datagrid col &optional code convert)
+(cl-defun datagrid-report-interval (datagrid col &key code convert)
   "Display column statistics for interval data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
@@ -538,7 +538,7 @@ CONVERT tells the function to convert strings to numbers."
    datagrid col '("vcount" "vmin" "vmax" "vmedian" "vmean" "vsdev")
    code convert nil))
 
-(defun datagrid-report-ratio (datagrid col &optional code convert)
+(cl-defun datagrid-report-ratio (datagrid col &key code convert)
   "Display column statistics for ratio data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
@@ -571,11 +571,14 @@ measurement are treated as nominal data."
 		       (cons
 		        (datagrid-column-heading col)
 		        (cond ((equal "ordinal" lom)
-			       (datagrid-report-ordinal datagrid x code t))
+			       (datagrid-report-ordinal datagrid x
+							:code code :convert t))
 			      ((equal "interval" lom)
-			       (datagrid-report-interval datagrid x code t))
+			       (datagrid-report-interval datagrid x
+							 :code code :convert t))
 			      ((equal "ratio" lom)
-			       (datagrid-report-ratio datagrid x code t))
+			       (datagrid-report-ratio datagrid x
+						      :code code :convert t))
 			      (t
 			       (datagrid-report-nominal datagrid x))))))))
 

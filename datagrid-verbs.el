@@ -34,6 +34,7 @@
 Indexing is logical. COLUMN-NUM (default 5) and ROW-NUM (default 5)
 specify how many of each to take. The returned datagrid materializes
 the slice and has nil row-order and col-order."
+  (datagrid--check datagrid)
   (let* ((cols (datagrid-columns datagrid))
          (col-num (min (or column-num 5) (datagrid--ncols datagrid)))
          (row-num (min (or row-num 5) (datagrid--nrows datagrid))))
@@ -54,6 +55,7 @@ column; if a column with that heading already exists it is replaced,
 otherwise a new column is appended. FN receives one value per
 SOURCE-COL, in order. SOURCE-COLS are logical column references
 \(integer index or heading string)."
+  (datagrid--check datagrid)
   (let* ((n-rows (datagrid--nrows datagrid))
          (col-vecs (mapcar
                     (lambda (c)
@@ -87,6 +89,7 @@ SOURCE-COL, in order. SOURCE-COLS are logical column references
 If NEW-HEADING is non-nil, COL-OR-RENAMES is a single column index or
 heading and that column's heading becomes NEW-HEADING. Otherwise
 COL-OR-RENAMES is an alist ((OLD-OR-IDX . NEW) ...)."
+  (datagrid--check datagrid)
   (let ((new-cols (copy-sequence (datagrid-columns datagrid))))
     (cl-flet ((rename-at (logical heading)
                 (let* ((phys (datagrid--col-at datagrid logical))
@@ -109,42 +112,39 @@ DATAGRID is a datagrid. DATAGRID-COLUMNS is a list of datagrid-column
 structs. The new columns are always expanded or truncated to fit the
 length of the existing columns. All datagrid columns must have the same
 length."
-  (interactive)
-  (when-let*
-      ((datagridp (datagridp datagrid))
-       (datagrid-cols-p (not (member nil (mapcar #'datagrid-column-p
-						 datagrid-columns))))
-       (ncols (datagrid--ncols datagrid))
-       (col-len (datagrid--nrows datagrid))
-       (materialized
-        (vconcat
-         (cl-loop for j from 0 below ncols
-                  for src = (aref (datagrid-columns datagrid)
-                                  (datagrid--col-at datagrid j))
-                  for new = (datagrid-column-copy src)
-                  do (setf (datagrid-column-data new)
-                           (datagrid-pull datagrid j))
-                  collect new)))
-       (truncd (mapcar (lambda (dg-c) (datagrid-column-set-length dg-c col-len))
-		       datagrid-columns)))
+  (datagrid--check datagrid)
+  (unless (cl-every #'datagrid-column-p datagrid-columns)
+    (error "All added columns must be datagrid-column structs"))
+  (let* ((ncols (datagrid--ncols datagrid))
+         (col-len (datagrid--nrows datagrid))
+         (materialized
+          (vconcat
+           (cl-loop for j from 0 below ncols
+                    for src = (aref (datagrid-columns datagrid)
+                                    (datagrid--col-at datagrid j))
+                    for new = (datagrid-column-copy src)
+                    do (setf (datagrid-column-data new)
+                             (datagrid-pull datagrid j))
+                    collect new)))
+         (truncd (mapcar (lambda (dg-c) (datagrid-column-set-length dg-c col-len))
+                         datagrid-columns)))
     (datagrid-make :columns (seq-concatenate 'vector materialized truncd))))
 
-(defun datagrid-add-row (datagrid seq)
-  "Add elements to the end of each datagrid-column.
-DATAGRID is a datagrid structure. SEQ is a list of sequences.
-Each of the sequences in SEQ must be of equal length to the
-number of logical `datagrid-columns' in datagrid."
-  (interactive)
-  (unless (datagridp datagrid)
-    (error "DATAGRID is not a datagrid structure"))
-  (unless (apply #'= (mapcar #'length seq))
-    (error "The sequences in SEQ are not of equal length"))
-  (let* ((src-cols (datagrid-columns datagrid))
-         (ncols (datagrid--ncols datagrid)))
-    (unless (= ncols (length (car seq)))
-      (error (concat "The number of datagrid columns is not "
-		     "equal to the length of sequences in SEQ.")))
-    (let ((trans-seq (apply #'cl-mapcar #'list seq)))
+(defun datagrid-add-row (datagrid &rest rows)
+  "Append one or more ROWS to the end of DATAGRID.
+Each row in ROWS is a sequence with one value per logical column,
+in logical column order. Note the orientation: this function
+takes rows, while `datagrid-add-data' takes column-oriented
+sequences by default."
+  (datagrid--check datagrid)
+  (unless rows
+    (error "No rows given"))
+  (let ((ncols (datagrid--ncols datagrid)))
+    (dolist (row rows)
+      (unless (= ncols (length row))
+        (error "Each row must have %d values, one per logical column" ncols)))
+    (let ((src-cols (datagrid-columns datagrid))
+          (trans-seq (apply #'cl-mapcar #'list rows)))
       (datagrid-make
        :columns
        (vconcat
@@ -189,10 +189,11 @@ then each sequence is one row's data. The default is nil. The sequences
 are extended to keep `datagrid-column-data' lengths equal.
 
 The sequences of data to add must be in the same order as the
-`datagrid-columns' in DATAGRID."
-  (interactive)
-  (unless (datagridp datagrid)
-    (error "DATAGRID is not a datagrid structure"))
+`datagrid-columns' in DATAGRID.
+
+Note the orientation: this function takes column-oriented
+sequences by default, while `datagrid-add-row' takes rows."
+  (datagrid--check datagrid)
   (if horizontal
       (datagrid--add-data-by-column datagrid (datagrid-safe-transpose seqs))
     (datagrid--add-data-by-column datagrid seqs)))
@@ -208,9 +209,7 @@ are respected (logical view, not physical)."
   (let ((grids (cl-remove-if #'null datagrids)))
     (unless grids
       (error "datagrid-bind-rows: No datagrids given"))
-    (dolist (g grids)
-      (unless (datagridp g)
-        (error "datagrid-bind-rows: Argument is not a datagrid")))
+    (mapc #'datagrid--check grids)
     (let ((total-rows (apply #'+ (mapcar #'datagrid--nrows grids)))
           (heading-order nil)
           (templates (make-hash-table :test 'equal))
@@ -261,6 +260,7 @@ are respected (logical view, not physical)."
 HEADING-LIST is a list of strings where each string is a heading name.
 The headings in the list must be in the same order as the
 `datagrid-columns' in the datagrid."
+  (datagrid--check datagrid)
   (let* ((src (datagrid-columns datagrid))
          (new-cols (copy-sequence src))
          (ncols (datagrid--ncols datagrid)))
@@ -278,6 +278,7 @@ The headings in the list must be in the same order as the
 Each element of COLS is a zero-based logical column index or a heading
 string. The result shares column data with DATAGRID and records a
 col-order permutation. Composes with any existing col-order."
+  (datagrid--check datagrid)
   (let* ((n (length cols))
          (new-order (make-vector n 0)))
     (cl-loop for i from 0
@@ -291,39 +292,33 @@ col-order permutation. Composes with any existing col-order."
 (defun datagrid-slice (datagrid &rest row-indices)
   "Return a new DATAGRID containing only the rows at ROW-INDICES.
 ROW-INDICES are zero-based row numbers."
+  (datagrid--check datagrid)
   (datagrid--slice-rows datagrid row-indices))
 
 (defun datagrid-remove-column (datagrid &rest cols)
   "Return DATAGRID without the columns in COLS.
 Each element of COLS is a zero-based logical integer index or a
 heading string."
-  (when (datagridp datagrid)
-    (let* ((src-cols (datagrid-columns datagrid))
-           (ncols (datagrid--ncols datagrid))
-           (drop (mapcar (lambda (c) (datagrid--resolve-col datagrid c)) cols))
-           (kept (cl-loop for j from 0 below ncols
-                          unless (memql j drop)
-                          collect (aref src-cols
-                                        (datagrid--col-at datagrid j)))))
-      (datagrid-make :columns (vconcat kept)
-                     :row-order (datagrid-row-order datagrid)))))
-
-(defun datagrid-remove-row (datagrid index)
-  "Return DATAGRID with the row at logical INDEX removed."
-  (interactive)
+  (datagrid--check datagrid)
   (let* ((src-cols (datagrid-columns datagrid))
-         (ncols (datagrid--ncols datagrid)))
-    (datagrid-make
-     :columns
-     (vconcat
-      (cl-loop for j from 0 below ncols
-               for src = (aref src-cols (datagrid--col-at datagrid j))
-               for logical = (datagrid-pull datagrid j)
-               for new-col = (datagrid-column-copy src)
-               do (setf (datagrid-column-data new-col)
-                        (vconcat (seq-take logical index)
-                                 (seq-drop logical (1+ index))))
-               collect new-col)))))
+         (ncols (datagrid--ncols datagrid))
+         (drop (mapcar (lambda (c) (datagrid--resolve-col datagrid c)) cols))
+         (kept (cl-loop for j from 0 below ncols
+                        unless (memql j drop)
+                        collect (aref src-cols
+                                      (datagrid--col-at datagrid j)))))
+    (datagrid-make :columns (vconcat kept)
+                   :row-order (datagrid-row-order datagrid))))
+
+(defun datagrid-remove-row (datagrid &rest indices)
+  "Return DATAGRID without the rows at logical INDICES.
+Each index is a zero-based logical row number. Column data is
+shared with DATAGRID; the result records a row-order permutation,
+as with `datagrid-slice' and `datagrid-filter-by-mask'."
+  (datagrid--check datagrid)
+  (datagrid--slice-rows datagrid
+                        (cl-loop for i from 0 below (datagrid--nrows datagrid)
+                                 unless (memql i indices) collect i)))
 
 (defun datagrid--sort-spec (spec)
   "Normalize a single sort SPEC into a plist.
@@ -395,6 +390,7 @@ Examples:
   (datagrid-sort grid \"age\")
   (datagrid-sort grid \\='(:col \"age\" :reverse t))
   (datagrid-sort grid \"department\" \\='(:col \"name\" :key length))"
+  (datagrid--check datagrid)
   (let ((result datagrid))
     (cl-loop for spec in (reverse keys)
              do (setq result (datagrid--sort-1 result spec)))
@@ -426,6 +422,8 @@ equal. Normalize types before calling if your key columns came
 from different sources."
   (unless on (error ":on is required"))
   (unless cols (error ":cols is required"))
+  (datagrid--check dg1)
+  (datagrid--check dg2)
   (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v))))
 	      (build-lookup (keys vals)
 		(let ((ht (make-hash-table :test #'equal)))
@@ -492,6 +490,7 @@ Replaces `email' with the first non-empty of `email'/`email_2',
 replaces `phone' with the first non-empty of
 `phone'/`phone_2'/`phone_3', and drops `email_2', `phone_2', and
 `phone_3'."
+  (datagrid--check datagrid)
   (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v)))))
     (let* ((src-cols (datagrid-columns datagrid))
            (ncols (datagrid--ncols datagrid))
@@ -557,7 +556,7 @@ Other common predicate function examples using lambdas:
  (lambda (x) (string-prefix-p x \"2025\"))
  (lambda (x) (> x \"2025\"))
  (lambda (x) (<= x \"2025\"))"
-  (interactive)
+  (datagrid--check datagrid)
   (let* ((cols (datagrid-columns datagrid))
          (vec (datagrid-pull datagrid col))
 	 (mask (and (vectorp cols)
@@ -591,10 +590,11 @@ DATAGRID. You can use DATAGRID-CREATE-MASK to create a mask.
 The following code show an example workflow when using masks.
 
  (let* ((mygrid (datagrid-from-csv-buffer \"name-of-file.csv\" t))
-        (index (datagrid-col-index-by-header mygrid \"heading-name\"))
+        (index (datagrid-col-index-by-heading mygrid \"heading-name\"))
         (func (lambda (x) (string-equal x \"filter-string\")))
         (mask (datagrid-create-mask mygrid func index)))
    (datagrid-filter-by-mask mygrid mask))"
+  (datagrid--check datagrid)
   (let* ((mask-vec (vconcat mask))
          (kept (cl-loop for i from 0
                         for m across mask-vec

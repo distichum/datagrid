@@ -157,8 +157,8 @@ decoding produces the codes. That follows
 =datagrid-column-decode='s contract, which compares keys with
 =string-equal= and so requires the =:data= side to be strings.
 
-You will see this same decode step appear, often as the optional
-=code= argument, in =datagrid-reduce-vec=, =datagrid-count=,
+You will see this same decode step appear, usually as a =:code=
+keyword argument, in =datagrid-reduce-vec=, =datagrid-count=,
 =datagrid-report-ordinal=, and several other analysis functions. They
 all call =datagrid-column-decode= internally when you ask them to.
 
@@ -473,8 +473,8 @@ readability.
 ** datagrid-add-row
 
 =datagrid-add-row= appends one or more rows at the bottom of a
-datagrid. The argument is a list of sequences, and each sequence must
-have one element per logical column. The values you pass for coded
+datagrid. Each argument after the datagrid is one row: a sequence
+with one element per logical column. The values you pass for coded
 columns should be the same shape as the existing =:data= — in this
 datagrid that means the label strings, not the numeric codes.
 
@@ -482,8 +482,8 @@ datagrid that means the label strings, not the numeric codes.
   (datagrid-to-org-table
    (datagrid-head
     (datagrid-add-row dg
-                      '(["S21" "Math" "A" 12 0.93 "Very satisfied" "2025-01-25"]
-                        ["S22" "Art"  "C" 6  0.70 "Neutral"        "2025-01-25"]))
+                      ["S21" "Math" "A" 12 0.93 "Very satisfied" "2025-01-25"]
+                      ["S22" "Art"  "C" 6  0.70 "Neutral"        "2025-01-25"])
     7 22))
 #+end_src
 
@@ -834,21 +834,21 @@ column. It is the bridge between the datagrid layer and the very rich
 set of statistical functions Calc already provides. The abbreviation
 is a string like ="vmean"=, ="vmedian"=, ="vsdev"=, or ="rms"=. Calc
 cannot handle =nil= directly, so the function strips =nil= values for
-you. If the data is stored as strings, pass =t= for the =convert=
-argument so the values get coerced.
+you. If the data is stored as strings, pass =:convert t= so the
+values get coerced.
 
 #+begin_src emacs-lisp
   (list :mean-hrs   (datagrid-reduce-vec-calc dg "vmean"   "study-hours")
         :median-hrs (datagrid-reduce-vec-calc dg "vmedian" "study-hours")
         :sdev-hrs   (datagrid-reduce-vec-calc dg "vsdev"   "study-hours")
-        ;; The attendance column holds floating-point numbers. Pass t
-        ;; for the CONVERT argument so the values are reformatted into
-        ;; Calc's expected (float M E) shape before Calc sees them.
-        :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance" nil t)
-        ;; The satisfaction column holds label strings. Pass t for the
-        ;; CODE argument so the column is decoded into its numeric
-        ;; codes (1..5) before Calc averages them.
-        :mean-sat   (datagrid-reduce-vec-calc dg "vmean" "satisfaction" t))
+        ;; The attendance column holds floating-point numbers. Pass
+        ;; :convert t so the values are reformatted into Calc's
+        ;; expected (float M E) shape before Calc sees them.
+        :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance" :convert t)
+        ;; The satisfaction column holds label strings. Pass :code t
+        ;; so the column is decoded into its numeric codes (1..5)
+        ;; before Calc averages them.
+        :mean-sat   (datagrid-reduce-vec-calc dg "vmean" "satisfaction" :code t))
 #+end_src
 
 #+RESULTS:
@@ -876,17 +876,16 @@ numbers are converted automatically. The result is a list of
 | enrolled-date | enrolled-date | (cardinality . 5) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
 
 The full report is verbose. If you only want one column, call the
-lower-level reports directly. The =t= argument tells each report to
-decode the column first.
+lower-level reports directly. =:code t= tells a report to decode
+the column first.
 
 #+begin_src emacs-lisp
   (list (datagrid-report-nominal  dg "course-code")
-        (datagrid-report-ordinal  dg "satisfaction" t)
-        (datagrid-report-interval dg "grade" t)
-        ;; attendance holds raw floats, so pass nil for CODE (the column
-        ;; is not coded) and t for CONVERT so the values get reformatted
-        ;; for Calc.
-        (datagrid-report-ratio    dg "attendance" nil t))
+        (datagrid-report-ordinal  dg "satisfaction" :code t)
+        (datagrid-report-interval dg "grade" :code t)
+        ;; attendance holds raw floats: the column is not coded, so
+        ;; pass only :convert t so the values get reformatted for Calc.
+        (datagrid-report-ratio    dg "attendance" :convert t))
 #+end_src
 
 #+RESULTS:
