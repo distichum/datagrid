@@ -89,13 +89,13 @@
 ;;;; Variables:
 
 (defvar datagrid-test-alist '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
-			      ("location" . ("somewhere" "out" "there" "far"))
-			      ("precipitation" . (0.5 0 .25 1))
-			      ("high-temp" . (15 20 32 22))
-			      ("rating" . ("Strongly disagree"
-					   "Disagree"
-					   "Neutral"
-					   "Neutral")))
+                              ("location" . ("somewhere" "out" "there" "far"))
+                              ("precipitation" . (0.5 0 .25 1))
+                              ("high-temp" . (15 20 32 22))
+                              ("rating" . ("Strongly disagree"
+                                           "Disagree"
+                                           "Neutral"
+                                           "Neutral")))
   "A test association list.")
 
 (cl-defstruct (datagrid-column (:constructor datagrid-column-make)
@@ -231,42 +231,42 @@ vectors, or nil for natural order."
 
 (defvar datagrid-column-example
   (datagrid-column-make :heading "I like Emacs."
-			:data [5 5 5 5 5]
-			:lom "ordinal"
-			:code  '(("Strongly disagree" . 1)
-				 ("Disagree"          . 2)
-				 ("Neutral"           . 3)
-				 ("Agree"             . 4)
-				 ("Strongly agree"    . 5)))
+                        :data [5 5 5 5 5]
+                        :lom "ordinal"
+                        :code  '(("Strongly disagree" . 1)
+                                 ("Disagree"          . 2)
+                                 ("Neutral"           . 3)
+                                 ("Agree"             . 4)
+                                 ("Strongly agree"    . 5)))
   "An example datagrid-column structure.")
 
 (defvar datagrid-example
   (datagrid-make
    :columns
    (vector (datagrid-column-make
-	    :heading "date"
-	    :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
-	    :lom nil)
-	   (datagrid-column-make
-	    :heading "location"
-	    :data ["somewhere" "out" "there" "far"]
-	    :lom "ordinal"
-	    :code  '(("somewhere" . 1)
-		     ("out"       . 2)
-		     ("there"     . 3)
-		     ("far"       . 4)))
-	   (datagrid-column-make
-	    :heading "precipitation"
-	    :data [0.5 0 .25 1]
-	    :lom "ratio")
-	   (datagrid-column-make
-	    :heading "high-temp"
-	    :data [15 20 32 22]
-	    :lom "interval")
-	   (datagrid-column-make
-	    :heading "rating"
-	    :data ["good" "bad" "ugly" "uglier"]
-	    :lom "nominal")))
+            :heading "date"
+            :data ["2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"]
+            :lom nil)
+           (datagrid-column-make
+            :heading "location"
+            :data ["somewhere" "out" "there" "far"]
+            :lom "ordinal"
+            :code  '(("somewhere" . 1)
+                     ("out"       . 2)
+                     ("there"     . 3)
+                     ("far"       . 4)))
+           (datagrid-column-make
+            :heading "precipitation"
+            :data [0.5 0 .25 1]
+            :lom "ratio")
+           (datagrid-column-make
+            :heading "high-temp"
+            :data [15 20 32 22]
+            :lom "interval")
+           (datagrid-column-make
+            :heading "rating"
+            :data ["good" "bad" "ugly" "uglier"]
+            :lom "nominal")))
   "An example datagrid for testing.
 The columns slot is a vector of datagrid-column structs.")
 
@@ -276,14 +276,14 @@ The columns slot is a vector of datagrid-column structs.")
   "Transpose a sequence of sequences and pad short rows if needed.
 SEQ-OF-SEQS is a sequence of sequences. The result is a list of lists."
   (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
-	 (listed (seq-map (lambda (seq) (if (listp seq)
-					    seq
-					  (append seq nil)))
-			  seq-of-seqs))
-	 (padded (cl-loop for row in listed
-			  collect (append row
-					  (make-list (- max-cols (length row))
-						     nil)))))
+         (listed (seq-map (lambda (seq) (if (listp seq)
+                                            seq
+                                          (append seq nil)))
+                          seq-of-seqs))
+         (padded (cl-loop for row in listed
+                          collect (append row
+                                          (make-list (- max-cols (length row))
+                                                     nil)))))
     (apply #'cl-mapcar #'list padded)))
 
 (defun datagrid-unknown-type-to-number (seq)
@@ -293,13 +293,13 @@ numbers. Leave nil values in place."
   (let ((seqnow (seq-into seq 'list)))
     (vconcat
      (cl-loop for item in seqnow
-	      collect (cond ((stringp item) (if (equal item "")
-						nil
-					      (string-to-number item)))
-			    ((numberp item) item)
-			    ((null item) item)
-			    (t (error "%s cannot be coerced into a number"
-				      item)))))))
+              collect (cond ((stringp item) (if (equal item "")
+                                                nil
+                                              (string-to-number item)))
+                            ((numberp item) item)
+                            ((null item) item)
+                            (t (error "%s cannot be coerced into a number"
+                                      item)))))))
 
 (defun datagrid--empty-p (v)
   "Return non-nil if V should be treated as missing.
@@ -353,16 +353,16 @@ datagrid column. N is the length.
 
 This creates a new vector and replaces the old."
   (when-let* ((datagrid-column-p dg-c)
-	      (vec (datagrid-column-data dg-c))
-	      (len (length (datagrid-column-data dg-c))))
+              (vec (datagrid-column-data dg-c))
+              (len (length (datagrid-column-data dg-c))))
     (if (= len N)
-	dg-c
+        dg-c
       (let ((new (datagrid-column-copy dg-c)))
-	(setf (datagrid-column-data new)
-	      (if (< N len)
-		  (seq-take vec N)
-		(seq-concatenate 'vector vec (make-vector (- N len) nil))))
-	new))))
+        (setf (datagrid-column-data new)
+              (if (< N len)
+                  (seq-take vec N)
+                (seq-concatenate 'vector vec (make-vector (- N len) nil))))
+        new))))
 
 (defun datagrid--column-add-data (dg-c seq)
   "Add one or more elements to a datagrid column's data.
@@ -372,8 +372,8 @@ function is a datagrid-column.
 WARNING. Use only in conjunction with DATAGRID-ADD-ROW which keeps the
 datagrid column lengths in sync."
   (when-let* ((datagrid-column-p dg-c)
-	      (data (datagrid-column-data dg-c))
-	      (new (datagrid-column-copy dg-c)))
+              (data (datagrid-column-data dg-c))
+              (new (datagrid-column-copy dg-c)))
     (setf (datagrid-column-data new) (vconcat data seq))
     new))
 
@@ -407,8 +407,8 @@ START is the first element to select and END is the last. END is
 exclusive."
   (let ((new (datagrid-column-copy datagrid-column)))
     (setf (datagrid-column-data new)
-	  (seq-take (seq-drop (datagrid-column-data datagrid-column) start)
-		    (- end start)))
+          (seq-take (seq-drop (datagrid-column-data datagrid-column) start)
+                    (- end start)))
     new))
 
 (cl-defmethod seq-into-sequence ((datagrid-column datagrid-column))
@@ -443,14 +443,14 @@ only the data for a row up to the minimum row length."
          (values (mapcar (if headings #'cdr #'identity) ralist))
          (min-length (apply (if extend-uneven #'max #'min)
                             (mapcar #'length values)))
-	 result)
+         result)
     (dolist (item ralist)
       (let* ((label (if headings (car item) nil))
              (data (if headings (cdr item) item))
              (extended (if extend-uneven
                            (append data (make-list (max 0 (- min-length (length data))) nil))
-			 (seq-take data min-length))))
-	(push (datagrid-column-make
+                         (seq-take data min-length))))
+        (push (datagrid-column-make
                :heading label
                :data (vconcat extended))
               result)))
@@ -481,9 +481,9 @@ The first element in each vector is the heading."
   (datagrid-make
    :columns
    (vconcat (cl-loop for v in vectors
-		     collect (datagrid-column-make
-			      :heading (elt v 0)
-			      :data (seq-drop v 1))))))
+                     collect (datagrid-column-make
+                              :heading (elt v 0)
+                              :data (seq-drop v 1))))))
 
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
@@ -496,21 +496,21 @@ REQUIRES: CSV-MODE"
     (set-buffer buffer-or-name)
     (save-excursion
       (let ((data nil)
-	    (2d-by-column nil))
-	(goto-char (point-min))
-	(while (not (eobp))
-	  (setq data (cons (csv-parse-current-row) data))
-	  (forward-line))
-	;; Transpose the list of lists to make it a column store.
-	(setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
-	(datagrid-make
-	 :columns
-	 (vconcat (cl-loop for item in 2d-by-column
+            (2d-by-column nil))
+        (goto-char (point-min))
+        (while (not (eobp))
+          (setq data (cons (csv-parse-current-row) data))
+          (forward-line))
+        ;; Transpose the list of lists to make it a column store.
+        (setq 2d-by-column (datagrid-safe-transpose (nreverse data)))
+        (datagrid-make
+         :columns
+         (vconcat (cl-loop for item in 2d-by-column
                            collect (datagrid-column-make
-				    :heading (when headings (elt item 0))
-				    :data (vconcat (if headings
-						       (seq-drop item 1)
-						     item))))))))))
+                                    :heading (when headings (elt item 0))
+                                    :data (vconcat (if headings
+                                                       (seq-drop item 1)
+                                                     item))))))))))
 
 (defun datagrid-from-csv-file (file-path &optional headings parser extend-uneven)
   "Return a datagrid from a CSV file at FILE-PATH.
@@ -626,13 +626,13 @@ code, or lom slot."
 If HEADINGS is non-nil, return headings as the first item in each
 list. Otherwise return only data."
   (let ((hdngs (and headings
-		    (append (datagrid-get-headings datagrid) nil)))
-	(data (datagrid-to-vec-of-vec datagrid)))
+                    (append (datagrid-get-headings datagrid) nil)))
+        (data (datagrid-to-vec-of-vec datagrid)))
     (cl-loop for x from 0 below (length data)
-	     collect (if hdngs
-			 (append (list (elt hdngs x))
-				 (append (elt data x) nil))
-		       (append (elt data x) nil)))))
+             collect (if hdngs
+                         (append (list (elt hdngs x))
+                                 (append (elt data x) nil))
+                       (append (elt data x) nil)))))
 
 (defun datagrid-to-vtable (datagrid buffer-name &optional headings)
   "Create a vtable from a DATAGRID.
@@ -640,8 +640,8 @@ If HEADINGS is non-nil, create a vtable with a headings row.
 BUFFER-NAME is the name of buffer where Emacs will create the
 vtable."
   (let ((hdngs (and headings
-		    (append (datagrid-get-headings datagrid) nil)))
-	(data (datagrid-safe-transpose (datagrid-to-alist datagrid))))
+                    (append (datagrid-get-headings datagrid) nil)))
+        (data (datagrid-safe-transpose (datagrid-to-alist datagrid))))
     (get-buffer-create buffer-name)
     (with-current-buffer buffer-name
       (erase-buffer)
@@ -749,10 +749,10 @@ target column is known not to be shared."
   "Resolve a logical column index in DATAGRID from SPEC.
 SPEC is an integer index or a heading string."
   (cond ((integerp spec) spec)
-	((stringp spec)
-	 (or (cl-position spec (datagrid-get-headings datagrid) :test #'equal)
-	     (error "No column with heading %S in datagrid" spec)))
-	(t (error "Bad column spec: %S" spec))))
+        ((stringp spec)
+         (or (cl-position spec (datagrid-get-headings datagrid) :test #'equal)
+             (error "No column with heading %S in datagrid" spec)))
+        (t (error "Bad column spec: %S" spec))))
 
 (defun datagrid-pull (datagrid col)
   "Return the data vector in logical column order.
@@ -922,7 +922,7 @@ the value substituted for nil input values. Both default to nil.
  A Lickert scale DATAGRID-COLUMN-CODE may be coded as follows.
 
 \\='((\"Strongly Disagree\" 1)
-     (\"Disagree\"	2)
+     (\"Disagree\"      2)
      (\"Neither Agree nor Disagree\" 3)
      (\"Agree\" 4)
      (\"Strongly Agree\" 5))
@@ -941,16 +941,16 @@ This function will output the following.
          (phys-col (datagrid--col-at datagrid idx))
          (col (aref cols phys-col))
          (vec (datagrid-pull datagrid idx))
-	 (code (datagrid-column-code col))
-	 (coded-alist (when (and code
-				 (listp code)
-				 (cl-every #'consp code))
-			(seq-map (lambda (x)
-				   (cond
-				    ((null x) missing)
-				    (t (let ((hit (assoc x code #'string-equal)))
-					 (if hit (cdr hit) default)))))
-				 vec))))
+         (code (datagrid-column-code col))
+         (coded-alist (when (and code
+                                 (listp code)
+                                 (cl-every #'consp code))
+                        (seq-map (lambda (x)
+                                   (cond
+                                    ((null x) missing)
+                                    (t (let ((hit (assoc x code #'string-equal)))
+                                         (if hit (cdr hit) default)))))
+                                 vec))))
     (if coded-alist (vconcat coded-alist) vec)))
 
 

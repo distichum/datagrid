@@ -58,14 +58,14 @@ SOURCE-COL, in order. SOURCE-COLS are logical column references
                       (datagrid-pull datagrid
                                      (datagrid--resolve-col datagrid c)))
                     source-cols))
-	 (new-data (make-vector n-rows nil)))
+         (new-data (make-vector n-rows nil)))
     (dotimes (r n-rows)
       (aset new-data r
-	    (apply fn (mapcar (lambda (v) (aref v r)) col-vecs))))
+            (apply fn (mapcar (lambda (v) (aref v r)) col-vecs))))
     (let* ((new-col (datagrid-column-make :heading new-heading :data new-data))
-	   (existing (cl-position new-heading
-				  (datagrid-get-headings datagrid)
-				  :test #'equal)))
+           (existing (cl-position new-heading
+                                  (datagrid-get-headings datagrid)
+                                  :test #'equal)))
       (if existing
           (let ((mat (datagrid--materialize-columns datagrid)))
             (aset mat existing new-col)
@@ -233,7 +233,7 @@ The headings in the list must be in the same order as the
     (cl-loop for x from 0 below ncols
              for phys = (datagrid--col-at datagrid x)
              for new-col = (datagrid-column-copy (aref new-cols phys))
-	     do (setf (datagrid-column-heading new-col) (nth x heading-list))
+             do (setf (datagrid-column-heading new-col) (nth x heading-list))
              do (setf (aref new-cols phys) new-col))
     (datagrid-make :columns new-cols
                    :row-order (datagrid-row-order datagrid)
@@ -391,37 +391,37 @@ from different sources."
   (datagrid--check dg1)
   (datagrid--check dg2)
   (cl-labels ((build-lookup (keys vals)
-		(let ((ht (make-hash-table :test #'equal)))
-		  (cl-loop for k across keys
-			   for v across vals
-			   unless (or (datagrid--empty-p k) (datagrid--empty-p v) (gethash k ht))
-			   do (puthash k v ht))
-		  ht)))
+                (let ((ht (make-hash-table :test #'equal)))
+                  (cl-loop for k across keys
+                           for v across vals
+                           unless (or (datagrid--empty-p k) (datagrid--empty-p v) (gethash k ht))
+                           do (puthash k v ht))
+                  ht)))
     (let* ((on-pair (pcase on
-		      ((or (pred integerp) (pred stringp))
-		       (cons (datagrid--resolve-col dg1 on)
-			     (datagrid--resolve-col dg2 on)))
-		      (`(,a . ,b)
-		       (cons (datagrid--resolve-col dg1 a)
-			     (datagrid--resolve-col dg2 b)))
-		      (_ (error "Bad :on value: %S" on))))
-	   (on1 (car on-pair))
-	   (on2 (cdr on-pair))
+                      ((or (pred integerp) (pred stringp))
+                       (cons (datagrid--resolve-col dg1 on)
+                             (datagrid--resolve-col dg2 on)))
+                      (`(,a . ,b)
+                       (cons (datagrid--resolve-col dg1 a)
+                             (datagrid--resolve-col dg2 b)))
+                      (_ (error "Bad :on value: %S" on))))
+           (on1 (car on-pair))
+           (on2 (cdr on-pair))
            (result-cols (datagrid--materialize-columns dg1))
-	   (keys1 (datagrid-pull dg1 on1))
-	   (keys2 (datagrid-pull dg2 on2)))
+           (keys1 (datagrid-pull dg1 on1))
+           (keys2 (datagrid-pull dg2 on2)))
       (dolist (pair cols)
-	(let* ((fill-idx (datagrid--resolve-col dg1 (car pair)))
-	       (source-idx (datagrid--resolve-col dg2 (cdr pair)))
-	       (lookup (build-lookup keys2 (datagrid-pull dg2 source-idx)))
-	       (new-col (datagrid-column-copy (aref result-cols fill-idx)))
-	       (new-data (copy-sequence (datagrid-column-data new-col))))
-	  (cl-loop for i from 0 below (length new-data)
-		   when (datagrid--empty-p (aref new-data i))
-		   do (when-let ((found (gethash (aref keys1 i) lookup)))
-			(setf (aref new-data i) found)))
-	  (setf (datagrid-column-data new-col) new-data)
-	  (setf (aref result-cols fill-idx) new-col)))
+        (let* ((fill-idx (datagrid--resolve-col dg1 (car pair)))
+               (source-idx (datagrid--resolve-col dg2 (cdr pair)))
+               (lookup (build-lookup keys2 (datagrid-pull dg2 source-idx)))
+               (new-col (datagrid-column-copy (aref result-cols fill-idx)))
+               (new-data (copy-sequence (datagrid-column-data new-col))))
+          (cl-loop for i from 0 below (length new-data)
+                   when (datagrid--empty-p (aref new-data i))
+                   do (when-let ((found (gethash (aref keys1 i) lookup)))
+                        (setf (aref new-data i) found)))
+          (setf (datagrid-column-data new-col) new-data)
+          (setf (aref result-cols fill-idx) new-col)))
       (datagrid-make :columns result-cols))))
 
 (defun datagrid-coalesce (datagrid &rest col-groups)
@@ -450,28 +450,28 @@ replaces `phone' with the first non-empty of
   (let* ((n-rows (datagrid--nrows datagrid))
          (mat (datagrid--materialize-columns datagrid))
          (groups (mapcar (lambda (g)
-			   (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
-				   g))
-			 col-groups))
-	 (drops (apply #'append (mapcar #'cdr groups))))
+                           (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
+                                   g))
+                         col-groups))
+         (drops (apply #'append (mapcar #'cdr groups))))
     (dolist (group groups)
       (let* ((target (car group))
-	     (vecs (mapcar (lambda (i) (datagrid-column-data (aref mat i)))
-			   group))
-	     (out (make-vector n-rows nil))
+             (vecs (mapcar (lambda (i) (datagrid-column-data (aref mat i)))
+                           group))
+             (out (make-vector n-rows nil))
              (new-col (datagrid-column-copy (aref mat target))))
-	(dotimes (r n-rows)
-	  (aset out r (seq-some (lambda (v) (let ((x (aref v r)))
-					      (unless (datagrid--empty-p x) x)))
-				vecs)))
-	(setf (datagrid-column-data new-col) out)
+        (dotimes (r n-rows)
+          (aset out r (seq-some (lambda (v) (let ((x (aref v r)))
+                                              (unless (datagrid--empty-p x) x)))
+                                vecs)))
+        (setf (datagrid-column-data new-col) out)
         (setf (aref mat target) new-col)))
     (datagrid-make
      :columns
      (vconcat (cl-loop for col across mat
-		       for i from 0
-		       unless (memq i drops)
-		       collect col)))))
+                       for i from 0
+                       unless (memq i drops)
+                       collect col)))))
 
 (defun datagrid-create-mask (datagrid pred col)
   "Create a mask for a DATAGRID column at COL.
@@ -506,10 +506,10 @@ Other common predicate function examples using lambdas:
   (datagrid--check datagrid)
   (let* ((cols (datagrid-columns datagrid))
          (vec (datagrid-pull datagrid col))
-	 (mask (and (vectorp cols)
-		    (> (length cols) 0)
-		    (vectorp vec)
-		    (cl-map 'vector pred vec))))
+         (mask (and (vectorp cols)
+                    (> (length cols) 0)
+                    (vectorp vec)
+                    (cl-map 'vector pred vec))))
     mask))
 
 (defun datagrid-filter-vector-by-mask (column-struct mask)
@@ -521,11 +521,11 @@ helper function for DATAGRID-FILTER-BY-MASK. It returns a
 datagrid-column structure that copies the original but with the data
 slot filtered."
   (let ((vec (datagrid-column-data column-struct))
-	(new (datagrid-column-copy column-struct)))
+        (new (datagrid-column-copy column-struct)))
     (setf (datagrid-column-data new)
-	  (vconcat (cl-loop for m across mask
-			    for v across vec
-			    when m collect v)))
+          (vconcat (cl-loop for m across mask
+                            for v across vec
+                            when m collect v)))
     new))
 
 (defun datagrid-filter-by-mask (datagrid mask)
