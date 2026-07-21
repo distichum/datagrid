@@ -229,8 +229,7 @@ Returns ((NAME . VALUE) ...) in the order of SPECS."
 (defun datagrid-first-non-empty (seq)
   "Return the first element of SEQ that is not nil and not the empty string."
   (seq-some (lambda (x)
-	      (unless (or (null x) (and (stringp x) (string-empty-p x)))
-		x))
+	      (unless (datagrid--empty-p x) x))
 	    seq))
 
 (defun datagrid-summarize-across (datagrid fn &rest cols)

@@ -768,6 +768,25 @@ vector."
         (vconcat (cl-loop for i across order collect (aref data i)))
       data)))
 
+(defun datagrid--materialize-columns (datagrid &optional transform ncount)
+  "Return a vector of DATAGRID's columns materialized in logical order.
+Each element is a fresh copy of the corresponding logical column whose
+data slot holds the logically-ordered vector from `datagrid-pull', so
+the result carries no row-order or col-order. NCOUNT limits how many
+leading logical columns to materialize (default all). TRANSFORM, when
+non-nil, is called as (funcall TRANSFORM J DATA) with the logical index
+J and that column's pulled data, and its result replaces the data slot."
+  (let ((n (or ncount (datagrid--ncols datagrid)))
+        (cols (datagrid-columns datagrid)))
+    (vconcat
+     (cl-loop for j from 0 below n
+              for new = (datagrid-column-copy
+                         (aref cols (datagrid--col-at datagrid j)))
+              for data = (datagrid-pull datagrid j)
+              do (setf (datagrid-column-data new)
+                       (if transform (funcall transform j data) data))
+              collect new))))
+
 (defun datagrid-get-col-data (datagrid index)
   "Extract a column vector from DATAGRID at logical INDEX.
 Deprecated. Use `datagrid-pull' instead."

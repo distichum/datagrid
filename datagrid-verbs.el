@@ -35,18 +35,14 @@ Indexing is logical. COLUMN-NUM (default 5) and ROW-NUM (default 5)
 specify how many of each to take. The returned datagrid materializes
 the slice and has nil row-order and col-order."
   (datagrid--check datagrid)
-  (let* ((cols (datagrid-columns datagrid))
-         (col-num (min (or column-num 5) (datagrid--ncols datagrid)))
+  (let* ((col-num (min (or column-num 5) (datagrid--ncols datagrid)))
          (row-num (min (or row-num 5) (datagrid--nrows datagrid))))
     (datagrid-make
      :columns
-     (vconcat
-      (cl-loop for j from 0 below col-num
-               for src = (aref cols (datagrid--col-at datagrid j))
-               for new = (datagrid-column-copy src)
-               do (setf (datagrid-column-data new)
-                        (seq-take (datagrid-pull datagrid j) row-num))
-               collect new)))))
+     (datagrid--materialize-columns
+      datagrid
+      (lambda (_j data) (seq-take data row-num))
+      col-num))))
 
 (defun datagrid-mutate (datagrid new-heading fn &rest source-cols)
   "Add or replace a column produced by applying FN row-wise.
@@ -71,17 +67,9 @@ SOURCE-COL, in order. SOURCE-COLS are logical column references
 				  (datagrid-get-headings datagrid)
 				  :test #'equal)))
       (if existing
-          (let* ((src-cols (datagrid-columns datagrid))
-                 (ncols (datagrid--ncols datagrid))
-                 (mat (cl-loop for j from 0 below ncols
-                               for src = (aref src-cols
-                                               (datagrid--col-at datagrid j))
-                               for new = (datagrid-column-copy src)
-                               do (setf (datagrid-column-data new)
-                                        (datagrid-pull datagrid j))
-                               collect new)))
-            (setf (nth existing mat) new-col)
-            (datagrid-make :columns (vconcat mat)))
+          (let ((mat (datagrid--materialize-columns datagrid)))
+            (aset mat existing new-col)
+            (datagrid-make :columns mat))
         (datagrid-add-column datagrid new-col)))))
 
 (defun datagrid-rename (datagrid col-or-renames &optional new-heading)
@@ -115,17 +103,8 @@ length."
   (datagrid--check datagrid)
   (unless (cl-every #'datagrid-column-p datagrid-columns)
     (error "All added columns must be datagrid-column structs"))
-  (let* ((ncols (datagrid--ncols datagrid))
-         (col-len (datagrid--nrows datagrid))
-         (materialized
-          (vconcat
-           (cl-loop for j from 0 below ncols
-                    for src = (aref (datagrid-columns datagrid)
-                                    (datagrid--col-at datagrid j))
-                    for new = (datagrid-column-copy src)
-                    do (setf (datagrid-column-data new)
-                             (datagrid-pull datagrid j))
-                    collect new)))
+  (let* ((col-len (datagrid--nrows datagrid))
+         (materialized (datagrid--materialize-columns datagrid))
          (truncd (mapcar (lambda (dg-c) (datagrid-column-set-length dg-c col-len))
                          datagrid-columns)))
     (datagrid-make :columns (seq-concatenate 'vector materialized truncd))))
@@ -143,18 +122,12 @@ sequences by default."
     (dolist (row rows)
       (unless (= ncols (length row))
         (error "Each row must have %d values, one per logical column" ncols)))
-    (let ((src-cols (datagrid-columns datagrid))
-          (trans-seq (apply #'cl-mapcar #'list rows)))
+    (let ((trans-seq (apply #'cl-mapcar #'list rows)))
       (datagrid-make
        :columns
-       (vconcat
-        (cl-loop for j from 0 below ncols
-                 for src = (aref src-cols (datagrid--col-at datagrid j))
-                 for added = (pop trans-seq)
-                 for new = (datagrid-column-copy src)
-                 do (setf (datagrid-column-data new)
-                          (vconcat (datagrid-pull datagrid j) added))
-                 collect new))))))
+       (datagrid--materialize-columns
+        datagrid
+        (lambda (j data) (vconcat data (elt trans-seq j))))))))
 
 (defun datagrid--add-data-by-column (datagrid seqs)
   "Add data to DATAGRID columns.
@@ -164,22 +137,15 @@ as the logical `datagrid-columns' in DATAGRID. The length of SEQS must
 equal the number of logical columns. If the sequences added are not of
 equal length, then nil will be padded onto other columns to make the
 data equal."
-  (let* ((src-cols (datagrid-columns datagrid))
-         (ncols (datagrid--ncols datagrid))
-         (max-len (seq-max (seq-map #'length seqs))))
+  (let ((max-len (seq-max (seq-map #'length seqs))))
     (datagrid-make
      :columns
-     (vconcat
-      (cl-loop for j from 0 below ncols
-               for src = (aref src-cols (datagrid--col-at datagrid j))
-               for added-raw = (elt seqs j)
-               for added = (seq-concatenate
-                            'vector added-raw
-                            (make-list (- max-len (length added-raw)) nil))
-               for new = (datagrid-column-copy src)
-               do (setf (datagrid-column-data new)
-                        (vconcat (datagrid-pull datagrid j) added))
-               collect new)))))
+     (datagrid--materialize-columns
+      datagrid
+      (lambda (j data)
+        (let ((added-raw (elt seqs j)))
+          (vconcat data added-raw
+                   (make-list (- max-len (length added-raw)) nil))))))))
 
 (defun datagrid-add-data (datagrid seqs &optional horizontal)
   "Add elements to each datagrid-column.
@@ -424,12 +390,11 @@ from different sources."
   (unless cols (error ":cols is required"))
   (datagrid--check dg1)
   (datagrid--check dg2)
-  (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v))))
-	      (build-lookup (keys vals)
+  (cl-labels ((build-lookup (keys vals)
 		(let ((ht (make-hash-table :test #'equal)))
 		  (cl-loop for k across keys
 			   for v across vals
-			   unless (or (empty-p k) (empty-p v) (gethash k ht))
+			   unless (or (datagrid--empty-p k) (datagrid--empty-p v) (gethash k ht))
 			   do (puthash k v ht))
 		  ht)))
     (let* ((on-pair (pcase on
@@ -442,16 +407,7 @@ from different sources."
 		      (_ (error "Bad :on value: %S" on))))
 	   (on1 (car on-pair))
 	   (on2 (cdr on-pair))
-           (src-cols1 (datagrid-columns dg1))
-           (ncols1 (datagrid--ncols dg1))
-           (result-cols
-            (vconcat
-             (cl-loop for j from 0 below ncols1
-                      for src = (aref src-cols1 (datagrid--col-at dg1 j))
-                      for new = (datagrid-column-copy src)
-                      do (setf (datagrid-column-data new)
-                               (datagrid-pull dg1 j))
-                      collect new)))
+           (result-cols (datagrid--materialize-columns dg1))
 	   (keys1 (datagrid-pull dg1 on1))
 	   (keys2 (datagrid-pull dg2 on2)))
       (dolist (pair cols)
@@ -461,7 +417,7 @@ from different sources."
 	       (new-col (datagrid-column-copy (aref result-cols fill-idx)))
 	       (new-data (copy-sequence (datagrid-column-data new-col))))
 	  (cl-loop for i from 0 below (length new-data)
-		   when (empty-p (aref new-data i))
+		   when (datagrid--empty-p (aref new-data i))
 		   do (when-let ((found (gethash (aref keys1 i) lookup)))
 			(setf (aref new-data i) found)))
 	  (setf (datagrid-column-data new-col) new-data)
@@ -491,40 +447,31 @@ replaces `phone' with the first non-empty of
 `phone'/`phone_2'/`phone_3', and drops `email_2', `phone_2', and
 `phone_3'."
   (datagrid--check datagrid)
-  (cl-labels ((empty-p (v) (or (null v) (and (stringp v) (string-empty-p v)))))
-    (let* ((src-cols (datagrid-columns datagrid))
-           (ncols (datagrid--ncols datagrid))
-           (n-rows (datagrid--nrows datagrid))
-           (mat (vconcat
-                 (cl-loop for j from 0 below ncols
-                          for src = (aref src-cols (datagrid--col-at datagrid j))
-                          for new = (datagrid-column-copy src)
-                          do (setf (datagrid-column-data new)
-                                   (datagrid-pull datagrid j))
-                          collect new)))
-           (groups (mapcar (lambda (g)
-			     (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
-				     g))
-			   col-groups))
-	   (drops (apply #'append (mapcar #'cdr groups))))
-      (dolist (group groups)
-	(let* ((target (car group))
-	       (vecs (mapcar (lambda (i) (datagrid-column-data (aref mat i)))
-			     group))
-	       (out (make-vector n-rows nil))
-               (new-col (datagrid-column-copy (aref mat target))))
-	  (dotimes (r n-rows)
-	    (aset out r (seq-some (lambda (v) (let ((x (aref v r)))
-						(unless (empty-p x) x)))
-				  vecs)))
-	  (setf (datagrid-column-data new-col) out)
-          (setf (aref mat target) new-col)))
-      (datagrid-make
-       :columns
-       (vconcat (cl-loop for col across mat
-			 for i from 0
-			 unless (memq i drops)
-			 collect col))))))
+  (let* ((n-rows (datagrid--nrows datagrid))
+         (mat (datagrid--materialize-columns datagrid))
+         (groups (mapcar (lambda (g)
+			   (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
+				   g))
+			 col-groups))
+	 (drops (apply #'append (mapcar #'cdr groups))))
+    (dolist (group groups)
+      (let* ((target (car group))
+	     (vecs (mapcar (lambda (i) (datagrid-column-data (aref mat i)))
+			   group))
+	     (out (make-vector n-rows nil))
+             (new-col (datagrid-column-copy (aref mat target))))
+	(dotimes (r n-rows)
+	  (aset out r (seq-some (lambda (v) (let ((x (aref v r)))
+					      (unless (datagrid--empty-p x) x)))
+				vecs)))
+	(setf (datagrid-column-data new-col) out)
+        (setf (aref mat target) new-col)))
+    (datagrid-make
+     :columns
+     (vconcat (cl-loop for col across mat
+		       for i from 0
+		       unless (memq i drops)
+		       collect col)))))
 
 (defun datagrid-create-mask (datagrid pred col)
   "Create a mask for a DATAGRID column at COL.
