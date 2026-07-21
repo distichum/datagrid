@@ -953,6 +953,15 @@ This function will output the following.
                                  vec))))
     (if coded-alist (vconcat coded-alist) vec)))
 
+(defun datagrid--pull-decoded (datagrid col code)
+  "Return DATAGRID column COL as a vector, decoded when CODE is non-nil.
+With CODE non-nil the data is decoded via `datagrid-column-decode';
+otherwise the raw logical vector from `datagrid-pull' is returned. COL
+is a zero-based logical index or a heading string."
+  (if code
+      (datagrid-column-decode datagrid col)
+    (datagrid-pull datagrid col)))
+
 
 
 ;;;; Slicing primitives (used by verbs and stats)

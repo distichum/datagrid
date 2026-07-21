@@ -97,9 +97,7 @@ Examples:
 This function and documentation string are derived from
 SEQ-REDUCE."
   (datagrid--check datagrid)
-  (let* ((vec (if code
-                  (datagrid-column-decode datagrid col)
-                (datagrid-pull datagrid col)))
+  (let* ((vec (datagrid--pull-decoded datagrid col code))
          (vec (if convert
                   (datagrid-unknown-type-to-number vec)
                 vec)))
@@ -125,6 +123,16 @@ Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)"
     (if (floatp it)
         (math-read-number (number-to-string it))
       it)))
+
+(defun datagrid--prep-calc-vec (vec convert)
+  "Return VEC as a nil-free list ready for Calc vector functions.
+When CONVERT is non-nil each value is run through
+`datagrid-prep-for-calc' so floats land in Calc's expected (float M E)
+form; otherwise values pass through unchanged. Either way `seq-keep'
+drops nils and yields a list, which is what Calc wants."
+  (if convert
+      (seq-keep #'datagrid-prep-for-calc vec)
+    (seq-keep #'identity vec)))
 
 (defun datagrid-calc-function-wrapper (func-abbrev lst)
   "Call a Calc vector function for a list.
@@ -186,16 +194,8 @@ example (calc-vector-mean) [vmean].
 
 Nil data values are discarded before the calculation."
   (datagrid--check datagrid)
-  (let* ((vec (if code
-                  (datagrid-column-decode datagrid col)
-                (datagrid-pull datagrid col)))
-         ;; Match datagrid--report-numeric: when CONVERT is non-nil run
-         ;; values through datagrid-prep-for-calc so floats land in Calc's
-         ;; expected (float M E) form; otherwise just drop nils. seq-keep
-         ;; both filters nils and yields a list, which is what Calc wants.
-         (vec (if convert
-                  (seq-keep #'datagrid-prep-for-calc vec)
-                (seq-keep #'identity vec))))
+  (let* ((vec (datagrid--pull-decoded datagrid col code))
+         (vec (datagrid--prep-calc-vec vec convert)))
     (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
 (defun datagrid-summarize (datagrid &rest specs)
@@ -375,9 +375,7 @@ COL is a zero-based column number or a heading string. Sorted by count
 descending. If CODE is non-nil, decode first."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let* ((vec (if code
-                  (datagrid-column-decode datagrid col)
-                (datagrid-pull datagrid col)))
+  (let* ((vec (datagrid--pull-decoded datagrid col code))
          (counts (make-hash-table :test 'equal))
          result)
     (cl-loop for item across vec
@@ -399,9 +397,7 @@ as is. Returns an alist of (value . count) sorted by count descending."
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
 as is."
-  (if-let* ((vec (if code
-                     (datagrid-column-decode datagrid col)
-                   (datagrid-pull datagrid col)))
+  (if-let* ((vec (datagrid--pull-decoded datagrid col code))
             ;; Are there more efficient ways to do this?
             (vec (seq-into (seq-filter #'identity vec) 'vector))
             (vec (seq-sort #'< vec))
@@ -437,8 +433,7 @@ heading string. If CODE is t, then decode data first."
   (declare (obsolete datagrid-distinct "1.0"))
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
-  (let ((vec (if code (datagrid-column-decode datagrid col)
-               (datagrid-pull datagrid col))))
+  (let ((vec (datagrid--pull-decoded datagrid col code)))
     (seq-uniq vec)))
 
 (defun datagrid-column-mad (datagrid col &optional code)
@@ -446,9 +441,7 @@ heading string. If CODE is t, then decode data first."
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
 as is."
-  (let* ((lst (delq nil (append (if code
-                                    (datagrid-column-decode datagrid col)
-                                  (datagrid-pull datagrid col))
+  (let* ((lst (delq nil (append (datagrid--pull-decoded datagrid col code)
                                 nil)))
          (lst-calc (seq-keep #'datagrid-prep-for-calc lst))
          (median1 (datagrid-calc-function-wrapper "vmedian" lst-calc))
@@ -489,14 +482,8 @@ non-nil, append the mean absolute deviation."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((idx (datagrid--resolve-col datagrid col))
-         (vec (if code
-                  (datagrid-column-decode datagrid idx)
-                (datagrid-pull datagrid idx)))
-         ;; Calc cannot handle nil or decimal numbers directly; prep
-         ;; converts and seq-keep drops nils. This also yields a list.
-         (lst (if convert
-                  (seq-keep #'datagrid-prep-for-calc vec)
-                (seq-keep #'identity vec)))
+         (vec (datagrid--pull-decoded datagrid idx code))
+         (lst (datagrid--prep-calc-vec vec convert))
          (stats (cl-loop for statn in stats-name
                          collect (datagrid-calc-function-wrapper statn lst)))
          ;; Non-Calc helpers expect plain numbers.
