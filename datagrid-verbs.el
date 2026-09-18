@@ -418,7 +418,7 @@ from different sources."
                (new-data (copy-sequence (datagrid-column-data new-col))))
           (cl-loop for i from 0 below (length new-data)
                    when (datagrid--empty-p (aref new-data i))
-                   do (when-let ((found (gethash (aref keys1 i) lookup)))
+                   do (when-let* ((found (gethash (aref keys1 i) lookup)))
                         (setf (aref new-data i) found)))
           (setf (datagrid-column-data new-col) new-data)
           (setf (aref result-cols fill-idx) new-col)))
