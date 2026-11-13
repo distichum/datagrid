@@ -651,9 +651,45 @@ vtable."
       (goto-char (point-min))
       (pop-to-buffer buffer-name))))
 
-(defun datagrid-to-org-table (datagrid)
-  "Manipulate DATAGRID to create an Org table."
-  (datagrid-safe-transpose (datagrid-to-alist datagrid t)))
+(defun datagrid--org-cell (value digits)
+  "Return VALUE prepared for an Org table cell.
+Nil becomes an empty string. When DIGITS is non-nil, a finite float
+is rounded to DIGITS decimal places. A vertical bar in a string would
+split the cell, so it is replaced by the Org entity \\vert{}. Other
+values are returned unchanged."
+  (cond ((null value) "")
+        ((and digits (floatp value) (< (abs value) 1.0e+INF))
+         (string-to-number (format (format "%%.%df" digits) value)))
+        ((stringp value) (string-replace "|" "\\vert{}" value))
+        (t value)))
+
+(cl-defun datagrid-to-org-table (datagrid &key (headings t) (hline t)
+                                          digits)
+  "Return DATAGRID as a list of rows for an Org table.
+The result of an Org Mode code block that returns this list is
+inserted as a table.
+
+If HEADINGS is non-nil, the first row holds the column headings. The
+default is t. If HLINE is non-nil, a horizontal rule follows the
+headings row. The default is t. HLINE has no effect when HEADINGS is
+nil. If DIGITS is non-nil, floats are rounded to DIGITS decimal
+places. Integers are never changed.
+
+Nil values become empty cells. Vertical bars in strings become the Org
+entity \\vert{} so they do not split a cell.
+
+Examples:
+ (datagrid-to-org-table dg)
+ (datagrid-to-org-table dg :hline nil)
+ (datagrid-to-org-table dg :headings nil :digits 2)"
+  (let ((rows (cl-loop
+               for row in (datagrid-safe-transpose
+                           (datagrid-to-alist datagrid headings))
+               collect (cl-loop for v in row
+                                collect (datagrid--org-cell v digits)))))
+    (if (and headings hline rows)
+        (cons (car rows) (cons 'hline (cdr rows)))
+      rows)))
 
 (defun datagrid-column-add-code (datagrid cols code)
   "Add coding data to one or more `datagrid-columns'.

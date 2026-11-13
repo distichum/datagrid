@@ -392,20 +392,35 @@ as is. Returns an alist of (value . count) sorted by count descending."
   (declare (obsolete datagrid-count "1.0"))
   (datagrid--frequencies-alist datagrid col code))
 
+(defun datagrid--quantile-sorted (vec p)
+  "Return the P quantile of VEC, a sorted vector of numbers.
+The quantile sits at the 1-based position (N+1)P, interpolating
+linearly between the neighboring values. This is type 6 in Hyndman
+and Fan (1996), the method used by Minitab, SPSS, and Excel's
+QUARTILE.EXC. Positions outside the data are clamped to the minimum
+or maximum. VEC must not be empty."
+  (let* ((n (length vec))
+         (pos (min (float n) (max 1.0 (* p (1+ n)))))
+         (lo (floor pos))
+         (frac (- pos lo))
+         (below (aref vec (1- lo))))
+    (if (or (zerop frac) (>= lo n) (= below (aref vec lo)))
+        below
+      (+ below (* frac (- (aref vec lo) below))))))
+
 (defun datagrid-column-quartiles (datagrid col &optional code)
   "Find the first, second, and third quartile of a column.
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
-as is."
+as is. Nil values are ignored. Quartiles are interpolated with
+`datagrid--quantile-sorted', so the second quartile equals the median."
   (if-let* ((vec (datagrid--pull-decoded datagrid col code))
-            ;; Are there more efficient ways to do this?
             (vec (seq-into (seq-filter #'identity vec) 'vector))
             (vec (seq-sort #'< vec))
-            (len (length vec))
-            ((> len 0))
-            (1Q (aref vec (min (1- len) (/ (+ len 1) 4))))
-            (2Q (aref vec (min (1- len) (/ (+ len 1) 2))))
-            (3Q (aref vec (min (1- len) (/ (* 3 (+ len 1)) 4)))))
+            ((> (length vec) 0))
+            (1Q (datagrid--quantile-sorted vec 0.25))
+            (2Q (datagrid--quantile-sorted vec 0.5))
+            (3Q (datagrid--quantile-sorted vec 0.75)))
       `(("1Q" . ,1Q)
         ("2Q" . ,2Q)
         ("3Q" . ,3Q)

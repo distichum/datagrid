@@ -318,6 +318,54 @@
     (should (equal (datagrid-get-headings dg) [nil nil]))))
 
 
+;;;; datagrid-to-org-table
+
+(defun dg-test--org-grid ()
+  "Return a 2-column, 2-row datagrid for Org table tests."
+  (dg-test--mk (datagrid-column-make :heading "a" :data ["x" "y"])
+               (datagrid-column-make :heading "b" :data [1.2345 2])))
+
+(ert-deftest datagrid-test-to-org-table-default-headings-and-hline ()
+  (should (equal (datagrid-to-org-table (dg-test--org-grid))
+                 '(("a" "b") hline ("x" 1.2345) ("y" 2)))))
+
+(ert-deftest datagrid-test-to-org-table-hline-nil ()
+  (should (equal (datagrid-to-org-table (dg-test--org-grid) :hline nil)
+                 '(("a" "b") ("x" 1.2345) ("y" 2)))))
+
+(ert-deftest datagrid-test-to-org-table-headings-nil ()
+  (should (equal (datagrid-to-org-table (dg-test--org-grid) :headings nil)
+                 '(("x" 1.2345) ("y" 2)))))
+
+(ert-deftest datagrid-test-to-org-table-hline-ignored-without-headings ()
+  (should (equal (datagrid-to-org-table (dg-test--org-grid)
+                                        :headings nil :hline t)
+                 '(("x" 1.2345) ("y" 2)))))
+
+(ert-deftest datagrid-test-to-org-table-digits-rounds-floats-only ()
+  (should (equal (datagrid-to-org-table (dg-test--org-grid) :digits 2)
+                 '(("a" "b") hline ("x" 1.23) ("y" 2))))
+  (should (equal (cadr (nth 2 (datagrid-to-org-table
+                               (dg-test--org-grid) :digits 0)))
+                 1)))
+
+(ert-deftest datagrid-test-to-org-table-nil-becomes-empty ()
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "a"
+                                               :data [nil 1]))))
+    (should (equal (datagrid-to-org-table dg)
+                   '(("a") hline ("") (1))))))
+
+(ert-deftest datagrid-test-to-org-table-escapes-vertical-bar ()
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "a|b"
+                                               :data ["c|d"]))))
+    (should (equal (datagrid-to-org-table dg)
+                   '(("a\\vert{}b") hline ("c\\vert{}d"))))))
+
+(ert-deftest datagrid-test-to-org-table-no-rows ()
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "a" :data []))))
+    (should (equal (datagrid-to-org-table dg) '(("a") hline)))))
+
+
 ;;;; datagrid-col-index-by-heading
 
 (ert-deftest datagrid-test-col-index-by-heading-first ()
@@ -872,9 +920,36 @@
   (let* ((dg (dg-test--mk
               (datagrid-column-make :data [15 1 9 3 13 5 11 7])))
          (q (datagrid-column-quartiles dg 0)))
-    (should (= (cdr (assoc "1Q" q)) 5))
-    (should (= (cdr (assoc "2Q" q)) 9))
-    (should (= (cdr (assoc "3Q" q)) 13))))
+    (should (= (cdr (assoc "1Q" q)) 3.5))
+    (should (= (cdr (assoc "2Q" q)) 8))
+    (should (= (cdr (assoc "3Q" q)) 12.5))))
+
+(ert-deftest datagrid-test-column-quartiles-odd-length-exact ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make
+               :data (vconcat (number-sequence 15 1 -1)))))
+         (q (datagrid-column-quartiles dg 0)))
+    (should (equal (cdr (assoc "1Q" q)) 4))
+    (should (equal (cdr (assoc "2Q" q)) 8))
+    (should (equal (cdr (assoc "3Q" q)) 12))))
+
+(ert-deftest datagrid-test-column-quartiles-interpolates ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [4 1 3 2])))
+         (q (datagrid-column-quartiles dg 0)))
+    (should (= (cdr (assoc "1Q" q)) 1.25))
+    (should (= (cdr (assoc "2Q" q)) 2.5))
+    (should (= (cdr (assoc "3Q" q)) 3.75))))
+
+(ert-deftest datagrid-test-column-quartiles-median-matches-calc ()
+  (let ((dg (dg-test--mk
+             (datagrid-column-make :data [7 2 19 4 11 3 8 30 1 6]))))
+    (should (= (cdr (assoc "2Q" (datagrid-column-quartiles dg 0)))
+               (datagrid-reduce-vec-calc dg "vmedian" 0)))))
+
+(ert-deftest datagrid-test-column-quartiles-single-value ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :data [42])))
+         (q (datagrid-column-quartiles dg 0)))
+    (should (equal (mapcar #'cdr q) '(42 42 42 0)))))
 
 (ert-deftest datagrid-test-column-quartiles-all-nil-returns-nil ()
   (let* ((dg (dg-test--mk (datagrid-column-make :data [nil nil nil]))))
@@ -1272,6 +1347,95 @@
     (should (equal (datagrid-pull out "phone") ["q1" "p2" "q3" nil]))
     (should (equal (datagrid-get-headings dg)
                    ["id" "email" "email_2" "phone" "phone_2"]))))
+
+
+;;;; datagrid-pivot-wider
+
+(defun dg-test--long ()
+  "Return a long datagrid of ids, years, metrics, values, and notes."
+  (dg-test--mk
+   (datagrid-column-make :heading "id" :data ["a" "a" "b" "b" "a"]
+                         :lom "nominal")
+   (datagrid-column-make :heading "year" :data [2024 2024 2024 2024 2025])
+   (datagrid-column-make :heading "metric"
+                         :data ["fte" "exp" "fte" "exp" "fte"])
+   (datagrid-column-make :heading "value" :data [10 100 20 200 11]
+                         :lom "ratio")
+   (datagrid-column-make :heading "note" :data ["x" "x" "y" "y" "z"])))
+
+(ert-deftest datagrid-test-pivot-wider-explicit-id-cols ()
+  (let ((out (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                   :id-cols '("id" "year"))))
+    (should (equal (datagrid-get-headings out) ["id" "year" "fte" "exp"]))
+    (should (equal (datagrid-pull out "id") ["a" "b" "a"]))
+    (should (equal (datagrid-pull out "year") [2024 2024 2025]))
+    (should (equal (datagrid-pull out "fte") [10 20 11]))
+    (should (equal (datagrid-pull out "exp") [100 200 nil]))))
+
+(ert-deftest datagrid-test-pivot-wider-default-id-cols ()
+  (let ((out (datagrid-pivot-wider (dg-test--long) "metric" "value")))
+    (should (equal (datagrid-get-headings out)
+                   ["id" "year" "note" "fte" "exp"]))
+    (should (equal (datagrid-pull out "note") ["x" "y" "z"]))))
+
+(ert-deftest datagrid-test-pivot-wider-integer-refs ()
+  (should (equal (datagrid-to-alist
+                  (datagrid-pivot-wider (dg-test--long) 2 3
+                                        :id-cols '(0 1)))
+                 (datagrid-to-alist
+                  (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                        :id-cols '("id" "year"))))))
+
+(ert-deftest datagrid-test-pivot-wider-values-fill ()
+  (let ((out (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                   :id-cols '("id" "year")
+                                   :values-fill 0)))
+    (should (equal (datagrid-pull out "exp") [100 200 0]))))
+
+(ert-deftest datagrid-test-pivot-wider-values-fn ()
+  (let ((out (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                   :id-cols '("id")
+                                   :values-fn (lambda (vs)
+                                                (apply #'+ vs)))))
+    (should (equal (datagrid-pull out "fte") [21 20]))
+    (should (equal (datagrid-pull out "exp") [100 200]))))
+
+(ert-deftest datagrid-test-pivot-wider-duplicates-list-and-warn ()
+  (let* ((warned nil)
+         (out (cl-letf (((symbol-function 'display-warning)
+                         (lambda (&rest args) (setq warned args))))
+                (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                      :id-cols '("id")))))
+    (should (equal (datagrid-pull out "fte") [(10 11) 20]))
+    (should (equal (datagrid-pull out "exp") [100 200]))
+    (should (string-match-p "1 cells" (cadr warned)))))
+
+(ert-deftest datagrid-test-pivot-wider-formats-headings ()
+  (let ((out (datagrid-pivot-wider (dg-test--long) "year" "value"
+                                   :id-cols '("metric")
+                                   :values-fn (lambda (vs)
+                                                (apply #'+ vs)))))
+    (should (equal (datagrid-get-headings out) ["metric" "2024" "2025"]))
+    (should (equal (datagrid-pull out "2025") [11 nil]))))
+
+(ert-deftest datagrid-test-pivot-wider-keeps-column-metadata ()
+  (let* ((out (datagrid-pivot-wider (dg-test--long) "metric" "value"
+                                    :id-cols '("id" "year")))
+         (cols (datagrid-columns out)))
+    (should (equal (datagrid-column-lom (aref cols 0)) "nominal"))
+    (should (equal (datagrid-column-lom (aref cols 2)) "ratio"))))
+
+(ert-deftest datagrid-test-pivot-wider-respects-row-order ()
+  (let ((out (datagrid-pivot-wider
+              (datagrid-sort (dg-test--long) '(:col "id" :reverse t))
+              "metric" "value" :id-cols '("id" "year"))))
+    (should (equal (datagrid-pull out "id") ["b" "a" "a"]))))
+
+(ert-deftest datagrid-test-pivot-wider-does-not-mutate-source ()
+  (let* ((dg (dg-test--long))
+         (before (datagrid-to-alist dg t)))
+    (datagrid-pivot-wider dg "metric" "value" :id-cols '("id" "year"))
+    (should (equal (datagrid-to-alist dg t) before))))
 
 
 

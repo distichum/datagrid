@@ -95,7 +95,7 @@ dimensions and the first few rows.
 #+end_src
 
 #+RESULTS:
-: ((7 . 20) ((student-id course-code grade study-hours attendance satisfaction enrolled-date) (S01 1 4 12 0.95 5 2025-01-15) (S02 2 3 8 0.8 4 2025-01-15) (S03 1 2 5 0.7 3 2025-01-16)))
+: ((7 . 20) ((student-id course-code grade study-hours attendance satisfaction enrolled-date) hline (S01 Math A 12 0.95 Very satisfied 2025-01-15) (S02 English B 8 0.8 Satisfied 2025-01-15) (S03 Math C 5 0.7 Neutral 2025-01-16)))
 
 * Functions from datagrid.el
 
@@ -126,9 +126,10 @@ out to the longest length.
 
 #+RESULTS:
 | name  | score | grade |
+|-------+-------+-------|
 | Ada   |    90 | A     |
 | Brian |    85 | B     |
-| Cleo  |   nil | C     |
+| Cleo  |       | C     |
 
 The =score= column was only two values long, so the third row gets a
 =nil= in that column. If you had passed =nil= for =extend-uneven=, the
@@ -151,6 +152,9 @@ integer codes — the form that statistical functions can compute on.
   (datagrid-column-decode dg "course-code")
   ;; => [1 2 1 3 4 ...]
 #+end_src
+
+#+RESULTS:
+: [1 2 1 3 4 2 5 1 3 2 4 5 1 2 3 4 1 5 2 3]
 
 Note the direction: =:data= holds the human-readable values and
 decoding produces the codes. That follows
@@ -185,7 +189,7 @@ share a single Likert scale.
 #+end_src
 
 #+RESULTS:
-: #s(datagrid [#s(datagrid-column "student-id" ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10" "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5))) #s(datagrid-column "course-code" [1 2 1 3 4 2 5 1 3 2 4 5 1 2 3 4 1 5 2 3] "nominal" ((1 . "Math") (2 . "English") (3 . "Science") (4 . "History") (5 . "Art"))) #s(datagrid-column "grade" [4 3 2 4 3 1 4 3 0 2 4 3 3 2 4 1 3 4 2 3] "ordinal" ((0 . "F") (1 . "D") (2 . "C") (3 . "B") (4 . "A"))) #s(datagrid-column "study-hours" [12 8 5 15 9 3 18 11 0 7 14 10 9 6 16 4 11 13 7 10] "ratio" nil) #s(datagrid-column "attendance" [0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86] "ratio" nil) #s(datagrid-column "satisfaction" [5 4 3 5 4 2 5 4 1 3 5 4 4 3 5 2 4 5 3 4] "ordinal" ((1 . "Very dissatisfied") (2 . "Dissatisfied") (3 . "Neutral") (4 . "Satisfied") (5 . "Very satisfied"))) #s(datagrid-column "enrolled-date" ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17" "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19" "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22" "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5)))] nil nil)
+: #s(datagrid [#s(datagrid-column "student-id" ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10" "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5))) #s(datagrid-column "course-code" ["Math" "English" "Math" "Science" "History" "English" "Art" "Math" "Science" "English" "History" "Art" "Math" "English" "Science" "History" "Math" "Art" "English" "Science"] "nominal" (("Math" . 1) ("English" . 2) ("Science" . 3) ("History" . 4) ("Art" . 5))) #s(datagrid-column "grade" ["A" "B" "C" "A" "B" "D" "A" "B" "F" "C" "A" "B" "B" "C" "A" "D" "B" "A" "C" "B"] "ordinal" (("F" . 0) ("D" . 1) ("C" . 2) ("B" . 3) ("A" . 4))) #s(datagrid-column "study-hours" [12 8 5 15 9 3 18 11 0 7 14 10 9 6 16 4 11 13 7 10] "ratio" nil) #s(datagrid-column "attendance" [0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86] "ratio" nil) #s(datagrid-column "satisfaction" ["Very satisfied" "Satisfied" "Neutral" "Very satisfied" "Satisfied" "Dissatisfied" "Very satisfied" "Satisfied" "Very dissatisfied" "Neutral" "Very satisfied" "Satisfied" "Satisfied" "Neutral" "Very satisfied" "Dissatisfied" "Satisfied" "Very satisfied" "Neutral" "Satisfied"] "ordinal" (("Very dissatisfied" . 1) ("Dissatisfied" . 2) ("Neutral" . 3) ("Satisfied" . 4) ("Very satisfied" . 5))) #s(datagrid-column "enrolled-date" ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17" "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19" "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22" "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5)))] nil nil)
 
 The example above is deliberately silly: =student-id= and
 =enrolled-date= have nothing to do with a Likert scale, but the call
@@ -227,13 +231,14 @@ ten hours and attended at least 90 percent of class.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction | enrolled-date | engaged |
-| S01        |           1 |     4 |          12 |       0.95 |            5 |    2025-01-15 | yes     |
-| S02        |           2 |     3 |           8 |        0.8 |            4 |    2025-01-15 | no      |
-| S03        |           1 |     2 |           5 |        0.7 |            3 |    2025-01-16 | no      |
-| S04        |           3 |     4 |          15 |       0.98 |            5 |    2025-01-16 | yes     |
-| S05        |           4 |     3 |           9 |       0.85 |            4 |    2025-01-17 | no      |
-| S06        |           2 |     1 |           3 |        0.6 |            2 |    2025-01-17 | no      |
+| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date | engaged |
+|------------+-------------+-------+-------------+------------+----------------+---------------+---------|
+| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 | yes     |
+| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 | no      |
+| S03        | Math        | C     |           5 |        0.7 | Neutral        |    2025-01-16 | no      |
+| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 | yes     |
+| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 | no      |
+| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 | no      |
 
 The next example shows the replace behavior, and it also shows how to
 do an inline decode by reaching into the column's =:code= slot. We
@@ -254,6 +259,7 @@ numeric code in parentheses, like ="A (4)"=. Because the heading
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S01        | Math        | A (4) |          12 |       0.95 | Very satisfied |    2025-01-15 |
 | S02        | English     | B (3) |           8 |        0.8 | Satisfied      |    2025-01-15 |
 | S03        | Math        | C (2) |           5 |        0.7 | Neutral        |    2025-01-16 |
@@ -296,6 +302,7 @@ operations like =datagrid-head=.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
 | S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
 | S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
@@ -320,6 +327,7 @@ the column into a new mutated column and sort by that.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | grade-num |
+|------------+-------------+-------+-------------+------------+-------------------+---------------+-----------|
 | S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |         0 |
 | S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |         1 |
 | S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |         1 |
@@ -345,6 +353,7 @@ the six students with the most study hours.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
 | S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
 | S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
@@ -368,6 +377,7 @@ each grade to its numeric severity inside the spec.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+-------------+------------+-------------------+---------------|
 | S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
 | S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
 | S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
@@ -391,6 +401,7 @@ original relative order.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
 | S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
 | S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
@@ -423,6 +434,7 @@ percent.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
 | S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
 | S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
@@ -445,6 +457,7 @@ label strings, so the second mask compares strings.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
 
 ** datagrid-select and datagrid-slice
@@ -464,6 +477,7 @@ readability.
 
 #+RESULTS:
 | student-id | grade | study-hours |
+|------------+-------+-------------|
 | S01        | A     |          12 |
 | S05        | B     |           9 |
 | S10        | C     |           7 |
@@ -489,6 +503,7 @@ datagrid that means the label strings, not the numeric codes.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+-------------+------------+-------------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
 | S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
 | S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
@@ -548,6 +563,7 @@ provides fresher attendance figures.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+-------------+------------+-------------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
 | S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
 | S03        | Math        | C     |           5 |       0.99 | Neutral           |    2025-01-16 |
@@ -604,6 +620,7 @@ the two rows where the backup has a value, and then coalesce the pair.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+-------------+------------+-------------------+---------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
 | S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
 | S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
@@ -628,6 +645,43 @@ the two rows where the backup has a value, and then coalesce the pair.
 After the call, =grade-backup= is gone from the result and the two
 rows that had been blanked out are filled from the backup column.
 
+** datagrid-pivot-wider
+
+=datagrid-pivot-wider= reshapes long data into wide data, like
+=pivot_wider= in the R package tidyr. Each distinct value in the
+HEADINGS-FROM column becomes a new column, filled from the VALUES-FROM
+column. The =:id-cols= keyword picks the columns that identify a row.
+It defaults to every other column.
+
+When several rows land in the same cell, =:values-fn= combines them.
+Here each grade becomes a row and each course a column. The cells
+count students, and =:values-fill= puts 0 where no student has that
+grade in that course.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table
+   (datagrid-sort
+    (datagrid-pivot-wider dg "course-code" "study-hours"
+                          :id-cols '("grade")
+                          :values-fn #'length
+                          :values-fill 0)
+    "grade"))
+#+end_src
+
+#+RESULTS:
+| grade | Math | English | Science | History | Art |
+|-------+------+---------+---------+---------+-----|
+| A     |    1 |       0 |       2 |       1 |   2 |
+| B     |    3 |       1 |       1 |       1 |   1 |
+| C     |    1 |       3 |       0 |       0 |   0 |
+| D     |    0 |       1 |       0 |       1 |   0 |
+| F     |    0 |       0 |       1 |       0 |   0 |
+
+Without =:values-fn=, a cell with several values holds the list of
+them and Emacs shows a warning. A cell with one value holds just that
+value, which is the usual case for data that is already one row per
+id and heading.
+
 * Functions from datagrid-stats.el
 
 This file holds reductions, summary statistics, and the dplyr-style
@@ -648,6 +702,7 @@ columns appear in the result. This makes it a convenient way to ask
 
 #+RESULTS:
 | course-code | grade |
+|-------------+-------|
 | Math        | A     |
 | English     | B     |
 | Math        | C     |
@@ -745,6 +800,7 @@ columns follow.
 
 #+RESULTS:
 | course-code | student-id | grade |        study-hours |         attendance | satisfaction | enrolled-date |
+|-------------+------------+-------+--------------------+--------------------+--------------+---------------|
 | Math        |          5 |     5 |                9.6 |              0.852 |            5 |             5 |
 | English     |          5 |     5 |                6.2 | 0.7300000000000001 |            5 |             5 |
 | Science     |          4 |     4 |              10.25 | 0.8024999999999999 |            4 |             4 |
@@ -780,6 +836,7 @@ rows by study-hours within each course."
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+-------------+------------+-------------------+---------------|
 | S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
 | S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
 | S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
@@ -815,6 +872,7 @@ decoded before counting.
 
 #+RESULTS:
 | course-code | n |
+|-------------+---|
 |           1 | 5 |
 |           2 | 5 |
 |           3 | 4 |
@@ -867,13 +925,13 @@ numbers are converted automatically. The result is a list of
 #+end_src
 
 #+RESULTS:
-| student-id    | student-id    | (cardinality . 5) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
-| course-code   | course-code   | (cardinality . 5) | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
-| grade         | grade         | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                             |
-| study-hours   | study-hours   | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)       | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 7) (2Q . 10) (3Q . 13) (IQR . 6))                          |
-| attendance    | attendance    | (vcount . 20)     | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.75) (2Q . 0.85) (3Q . 0.95) (IQR . 0.19999999999999996)) |
-| satisfaction  | satisfaction  | (vcount . 20)     | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                             |
-| enrolled-date | enrolled-date | (cardinality . 5) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                             |
+| student-id    | student-id    | (cardinality . 5) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
+| course-code   | course-code   | (cardinality . 5) | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
+| grade         | grade         | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
+| study-hours   | study-hours   | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)       | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 6.25) (2Q . 9.5) (3Q . 12.75) (IQR . 6.5))                     |
+| attendance    | attendance    | (vcount . 20)     | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
+| satisfaction  | satisfaction  | (vcount . 20)     | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
+| enrolled-date | enrolled-date | (cardinality . 5) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
 
 The full report is verbose. If you only want one column, call the
 lower-level reports directly. =:code t= tells a report to decode
@@ -889,10 +947,10 @@ the column first.
 #+end_src
 
 #+RESULTS:
-| course-code  | (cardinality . 5) | (mode Math English) | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3)) |                  |                  |                                                  |                               |                                                  |                                                                                                       |                                                                             |
-| satisfaction | (vcount . 20)     | (vmin . 1)          | (vmax . 5)                                                                                 | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                                                  |                                                                                                       |                                                                             |
-| grade        | (vcount . 20)     | (vmin . 0)          | (vmax . 4)                                                                                 | (vmedian . 3)    | (vmean . 2.75)   | (vsdev . 1.16415770319)                          | (mode 3)                      | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) |                                                                                                       |                                                                             |
-| attendance   | (vcount . 20)     | (vmin . 0.4)        | (vmax . 0.99)                                                                              | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737)                           | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.75) (2Q . 0.85) (3Q . 0.95) (IQR . 0.19999999999999996)) |
+| course-code  | (cardinality . 5) | (mode Math English) | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3)) |                  |                  |                                                  |                               |                                                  |                                                                                                       |                                                                                 |
+| satisfaction | (vcount . 20)     | (vmin . 1)          | (vmax . 5)                                                                                 | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                                                  |                                                                                                       |                                                                                 |
+| grade        | (vcount . 20)     | (vmin . 0)          | (vmax . 4)                                                                                 | (vmedian . 3)    | (vmean . 2.75)   | (vsdev . 1.16415770319)                          | (mode 3)                      | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) |                                                                                                       |                                                                                 |
+| attendance   | (vcount . 20)     | (vmin . 0.4)        | (vmax . 0.99)                                                                              | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737)                           | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
 
 * Functions from datagrid-join.el
 
@@ -943,6 +1001,7 @@ subset with =:cols=.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date | department |
+|------------+-------------+-------+-------------+------------+----------------+---------------+------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 | STEM       |
 | S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 | Humanities |
 | S03        | Math        | C     |           5 |        0.7 | Neutral        |    2025-01-16 | STEM       |
@@ -971,6 +1030,7 @@ right grid's projected columns get their actual values.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | department | credit-hours |
+|------------+-------------+-------+-------------+------------+-------------------+---------------+------------+--------------|
 | S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 | STEM       |            3 |
 | S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 | Humanities |            3 |
 | S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 | STEM       |            3 |
@@ -991,7 +1051,7 @@ right grid's projected columns get their actual values.
 | S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 | Arts       |            2 |
 | S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 | Humanities |            3 |
 | S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 | STEM       |            4 |
-| nil        | Business    | nil   |         nil |        nil | nil               |           nil | Business   |            3 |
+|            | Business    |       |             |            |                   |               | Business   |            3 |
 
 The extra row at the bottom corresponds to ="Business"=, which
 appears in =dg-courses= but never in =dg=. On that final row,
@@ -1025,6 +1085,7 @@ only want to filter.
 
 #+RESULTS:
 | student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+-------------+------------+----------------+---------------|
 | S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
 | S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
 | S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |

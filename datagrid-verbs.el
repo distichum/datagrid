@@ -18,8 +18,8 @@
 ;; Datagrid transformation verbs that take a datagrid and return a
 ;; datagrid: head, mutate, rename, add-column, add-row, add-data,
 ;; set-headings, select, slice, remove-column, remove-row, sort,
-;; rows-patch, coalesce, plus the mask-based filter helpers
-;; (create-mask, filter-by-mask).
+;; rows-patch, coalesce, pivot-wider, plus the mask-based filter
+;; helpers (create-mask, filter-by-mask).
 
 ;; Verbs that are tightly coupled to reductions (summarize, group-by,
 ;; distinct) live in datagrid-stats.el instead.
@@ -472,6 +472,105 @@ replaces `phone' with the first non-empty of
                        for i from 0
                        unless (memq i drops)
                        collect col)))))
+
+(cl-defun datagrid-pivot-wider (datagrid headings-from values-from
+                                         &key id-cols values-fn values-fill)
+  "Return DATAGRID reshaped from long to wide format.
+Each distinct value in column HEADINGS-FROM becomes the heading of a
+new column, and the cells of that column come from column VALUES-FROM.
+HEADINGS-FROM and VALUES-FROM are zero-based integer indices or heading
+strings. Values that are not strings become headings through `format'.
+New columns appear in the order their headings are first seen, and
+they keep the level of measurement and coding of VALUES-FROM.
+
+ID-COLS is a list of column references that identify a row of the
+result. It defaults to every column except HEADINGS-FROM and
+VALUES-FROM. Columns that are not ID-COLS, HEADINGS-FROM, or
+VALUES-FROM are dropped. Rows appear in the order their ID-COLS values
+are first seen, and ID-COLS keep their heading, level of measurement,
+and coding.
+
+VALUES-FN, when non-nil, is called with the list of values for each
+cell, in row order, and its result fills the cell. Without VALUES-FN,
+a cell with one value holds that value. A cell with several values
+holds the list of them, and a warning reports how many such cells
+there are.
+
+VALUES-FILL fills cells that have no value. The default is nil.
+
+This follows `pivot_wider' from the R package tidyr.
+
+Example:
+ (datagrid-pivot-wider long \"metric\" \"value\"
+                       :id-cols \\='(\"id\" \"year\") :values-fill 0)"
+  (datagrid--check datagrid)
+  (let* ((cols (datagrid-columns datagrid))
+         (heading-idx (datagrid--resolve-col datagrid headings-from))
+         (value-idx (datagrid--resolve-col datagrid values-from))
+         (id-idxs (if id-cols
+                      (cl-loop for c in id-cols
+                               collect (datagrid--resolve-col datagrid c))
+                    (cl-loop for j from 0 below (datagrid--ncols datagrid)
+                             unless (memql j (list heading-idx value-idx))
+                             collect j)))
+         (id-vecs (cl-loop for j in id-idxs
+                           collect (datagrid-pull datagrid j)))
+         (headings (datagrid-pull datagrid heading-idx))
+         (values (datagrid-pull datagrid value-idx))
+         (cells (make-hash-table :test #'equal))
+         (seen (make-hash-table :test #'equal))
+         (row-keys nil)
+         (heading-order nil)
+         (multi 0))
+    ;; Collect each cell's values, keyed by (ROW-KEY . HEADING).
+    (cl-loop for r from 0 below (datagrid--nrows datagrid)
+             for key = (cl-loop for v in id-vecs collect (aref v r))
+             for heading = (aref headings r)
+             do (unless (gethash (cons 'row key) seen)
+                  (puthash (cons 'row key) t seen)
+                  (push key row-keys))
+             do (unless (gethash (cons 'heading heading) seen)
+                  (puthash (cons 'heading heading) t seen)
+                  (push heading heading-order))
+             do (push (aref values r) (gethash (cons key heading) cells)))
+    (setq row-keys (nreverse row-keys)
+          heading-order (nreverse heading-order))
+    (let* ((id-columns
+            (cl-loop for j in id-idxs
+                     for i from 0
+                     collect (let ((col (datagrid-column-copy
+                                         (aref cols (datagrid--col-at
+                                                     datagrid j)))))
+                               (setf (datagrid-column-data col)
+                                     (vconcat (cl-loop for k in row-keys
+                                                       collect (nth i k))))
+                               col)))
+           (template (aref cols (datagrid--col-at datagrid value-idx)))
+           (value-columns
+            (cl-loop
+             for heading in heading-order
+             collect
+             (let ((col (datagrid-column-copy template)))
+               (setf (datagrid-column-heading col)
+                     (if (stringp heading) heading (format "%s" heading)))
+               (setf (datagrid-column-data col)
+                     (vconcat
+                      (cl-loop
+                       for k in row-keys
+                       for vals = (reverse (gethash (cons k heading) cells))
+                       collect (cond ((null vals) values-fill)
+                                     (values-fn (funcall values-fn vals))
+                                     ((cdr vals) (cl-incf multi) vals)
+                                     (t (car vals))))))
+               col))))
+      (when (> multi 0)
+        (display-warning
+         'datagrid
+         (format (concat "datagrid-pivot-wider: %d cells have more than "
+                         "one value and hold lists. Use :values-fn to "
+                         "combine them.")
+                 multi)))
+      (datagrid-make :columns (vconcat id-columns value-columns)))))
 
 (defun datagrid-create-mask (datagrid pred col)
   "Create a mask for a DATAGRID column at COL.

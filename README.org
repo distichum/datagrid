@@ -149,6 +149,7 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 - =datagrid-remove-column (datagrid index)=: Remove the DATAGRID column at INDEX. 
 - =datagrid-remove-row (datagrid &rest indices)=: Remove the DATAGRID rows at INDICES.
 - =datagrid-sort (datagrid &rest keys)=: Sort a datagrid by one or more KEYS. Each key is a column reference or a sort spec plist =(:col REF :key FN :lessp PRED :reverse BOOL)=, borrowing the vocabulary of Emacs's own =sort=. The first key is primary; later keys break ties. The sort is stable. See the worked examples in =examples.org=.
+- =datagrid-pivot-wider (datagrid headings-from values-from &key id-cols values-fn values-fill)=: Reshape long data to wide, like tidyr's =pivot_wider=. Each distinct value of HEADINGS-FROM becomes a column filled from VALUES-FROM. ID-COLS identify a row and default to every other column. VALUES-FN combines several values that land in one cell. Without it, such a cell holds a list and a warning is shown. VALUES-FILL fills empty cells (default nil).
 * Filters and masks
 - =datagrid-create-mask (datagrid pred index)=: Create a mask for a DATAGRID column at INDEX. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
 - =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID.
@@ -165,7 +166,7 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 * Statistical functions
 Some statistical measures of survey data are not included in Emacs. Therefore, datagrid.el includes the following:
 - =datagrid-column-frequencies (datagrid index &optional code)=: Find the frequency of elements occuring in a column.
-- =datagrid-column-quartiles (datagrid index &optional code)=: Find the first, second, and third quartile of data in a column.
+- =datagrid-column-quartiles (datagrid index &optional code)=: Find the first, second, and third quartile of data in a column. Quartiles use the (n+1)p position with linear interpolation (Hyndman and Fan type 6, as in Minitab, SPSS, and Excel's QUARTILE.EXC), so the second quartile equals the median.
 - =datagrid-column-mode (datagrid index &optional code)=: Find the mode, most often occurring item, of a column.
 - =datagrid-column-unique (datagrid index &optional code)=: Return unique items from a column.
 - =datagrid-column-mad (datagrid index &optional code)=: Calculate the median absolute deviation.
@@ -232,4 +233,15 @@ In Org Mode, you can create tables from datagrids.
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table datagrid-example)
+#+end_src
+
+=datagrid-to-org-table (datagrid &key headings hline digits)= takes these keyword options:
+- =:headings=: non-nil (the default) puts the column headings in the first row.
+- =:hline=: non-nil (the default) adds a horizontal rule after the headings. It has no effect without headings.
+- =:digits=: rounds floats to that many decimal places. The default nil leaves them as they are.
+
+Nil values become empty cells, and a =|= inside a string becomes the Org entity =\vert{}= so it cannot split a cell.
+
+#+begin_src emacs-lisp
+  (datagrid-to-org-table datagrid-example :hline nil :digits 2)
 #+end_src
