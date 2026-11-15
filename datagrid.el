@@ -351,9 +351,11 @@ Code must be an alist."
 Data may be truncated, extended with nils, or left the same. DG-C is the
 datagrid column. N is the length.
 
-This creates a new vector and replaces the old."
-  (when-let* ((datagrid-column-p dg-c)
-              (vec (datagrid-column-data dg-c))
+This creates a new vector and replaces the old. Signal an error
+unless DG-C satisfies `datagrid-column-p'."
+  (unless (datagrid-column-p dg-c)
+    (error "Argument must be a datagrid-column"))
+  (when-let* ((vec (datagrid-column-data dg-c))
               (len (length (datagrid-column-data dg-c))))
     (if (= len N)
         dg-c
@@ -370,9 +372,11 @@ DG-C is the datagrid column. SEQ is a sequence. The result of this
 function is a datagrid-column.
 
 WARNING. Use only in conjunction with DATAGRID-ADD-ROW which keeps the
-datagrid column lengths in sync."
-  (when-let* ((datagrid-column-p dg-c)
-              (data (datagrid-column-data dg-c))
+datagrid column lengths in sync. Signal an error unless DG-C
+satisfies `datagrid-column-p'."
+  (unless (datagrid-column-p dg-c)
+    (error "Argument must be a datagrid-column"))
+  (when-let* ((data (datagrid-column-data dg-c))
               (new (datagrid-column-copy dg-c)))
     (setf (datagrid-column-data new) (vconcat data seq))
     new))

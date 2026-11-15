@@ -155,11 +155,11 @@ If you create a datagrid-column structure on its own, it is better to use datagr
 - =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID.
 - =datagrid-group-by (datagrid index)=: Group data in DATAGRID according to INDEX. This function will be slow for medium to large datasets that have many groupings. Filter the datagrid by what is needed first and then group. See the examples later in this document.
 * Data analysis
-- =datagrid-reduce-vec (datagrid function index &key code convert)=: Reduce a FUNCTION using DATAGRID data at INDEX. As an example, the following code finds the sum of all data values from the column indexed at 2.
+- =datagrid-reduce-vec (datagrid function index &key code convert initial-value)=: Reduce a FUNCTION using DATAGRID data at INDEX. The reduction starts from INITIAL-VALUE when given, otherwise from the first value, as in =cl-reduce=. As an example, the following code finds the sum of all data values from the column indexed at 2.
   #+begin_src emacs-lisp
     (datagrid-reduce-vec datagrid-example #'+ 2)
   #+end_src
-- =datagrid-reduce-vec-calc (datagrid func-abbrev index &key code convert)=: Reduce an Emacs Calc function, FUNC-ABBREV, using DATAGRID data. It operates only on single vector Calc functions. See the function document string for more details. The following example duplicates the results above.
+- =datagrid-reduce-vec-calc (datagrid func-abbrev index &key code convert)=: Reduce an Emacs Calc function, FUNC-ABBREV, using DATAGRID data. It operates only on single vector Calc functions. Nil values are dropped, and the result is nil when Calc cannot produce a real number, such as the standard deviation of a single value. See the function document string for more details. The following example duplicates the results above.
   #+begin_src emacs-lisp
     (datagrid-reduce-vec-calc datagrid-example "vsum" 2)
   #+end_src

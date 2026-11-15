@@ -762,9 +762,9 @@ than an Emacs Lisp function.
    '(:name "max-hours"   :fn max :col "study-hours")
    ;; Calc statistics: pass :calc t and a Calc abbreviation as a string.
    '(:name "median-hours" :fn "vmedian" :col "study-hours" :calc t)
-   ;; The attendance column holds floats, so we pass :convert t to
-   ;; reformat the values for Calc.
-   '(:name "median-att" :fn "vmedian" :col "attendance" :calc t :convert t)
+   ;; Floats need no conversion; :convert t is for numbers stored
+   ;; as strings.
+   '(:name "median-att" :fn "vmedian" :col "attendance" :calc t)
    ;; The grade column stores label strings, so we decode to the numeric
    ;; codes first with :code t before asking Calc for the mean.
    '(:name "mean-grade-code" :fn "vmean" :col "grade" :calc t :code t))
@@ -893,16 +893,16 @@ set of statistical functions Calc already provides. The abbreviation
 is a string like ="vmean"=, ="vmedian"=, ="vsdev"=, or ="rms"=. Calc
 cannot handle =nil= directly, so the function strips =nil= values for
 you. If the data is stored as strings, pass =:convert t= so the
-values get coerced.
+values get coerced. When Calc cannot produce a real number, such as
+the standard deviation of a single value, the result is =nil=.
 
 #+begin_src emacs-lisp
   (list :mean-hrs   (datagrid-reduce-vec-calc dg "vmean"   "study-hours")
         :median-hrs (datagrid-reduce-vec-calc dg "vmedian" "study-hours")
         :sdev-hrs   (datagrid-reduce-vec-calc dg "vsdev"   "study-hours")
-        ;; The attendance column holds floating-point numbers. Pass
-        ;; :convert t so the values are reformatted into Calc's
-        ;; expected (float M E) shape before Calc sees them.
-        :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance" :convert t)
+        ;; The attendance column holds floats, which Calc accepts
+        ;; as they are.
+        :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance")
         ;; The satisfaction column holds label strings. Pass :code t
         ;; so the column is decoded into its numeric codes (1..5)
         ;; before Calc averages them.
@@ -925,13 +925,13 @@ numbers are converted automatically. The result is a list of
 #+end_src
 
 #+RESULTS:
-| student-id    | student-id    | (cardinality . 5) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
-| course-code   | course-code   | (cardinality . 5) | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
-| grade         | grade         | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
-| study-hours   | study-hours   | (vcount . 20)     | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)       | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 6.25) (2Q . 9.5) (3Q . 12.75) (IQR . 6.5))                     |
-| attendance    | attendance    | (vcount . 20)     | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
-| satisfaction  | satisfaction  | (vcount . 20)     | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
-| enrolled-date | enrolled-date | (cardinality . 5) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                               |                        |                                                                                                       |                                                                                 |
+| student-id    | student-id    | (cardinality . 20) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
+| course-code   | course-code   | (cardinality . 5)  | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
+| grade         | grade         | (vcount . 20)      | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (median absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
+| study-hours   | study-hours   | (vcount . 20)      | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)         | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 6.25) (2Q . 9.5) (3Q . 12.75) (IQR . 6.5))                     |
+| attendance    | attendance    | (vcount . 20)      | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)         | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
+| satisfaction  | satisfaction  | (vcount . 20)      | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (median absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
+| enrolled-date | enrolled-date | (cardinality . 10) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
 
 The full report is verbose. If you only want one column, call the
 lower-level reports directly. =:code t= tells a report to decode
@@ -941,16 +941,16 @@ the column first.
   (list (datagrid-report-nominal  dg "course-code")
         (datagrid-report-ordinal  dg "satisfaction" :code t)
         (datagrid-report-interval dg "grade" :code t)
-        ;; attendance holds raw floats: the column is not coded, so
-        ;; pass only :convert t so the values get reformatted for Calc.
-        (datagrid-report-ratio    dg "attendance" :convert t))
+        ;; attendance holds raw floats and is not coded, so it needs
+        ;; neither :code nor :convert.
+        (datagrid-report-ratio    dg "attendance"))
 #+end_src
 
 #+RESULTS:
-| course-code  | (cardinality . 5) | (mode Math English) | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3)) |                  |                  |                                                  |                               |                                                  |                                                                                                       |                                                                                 |
-| satisfaction | (vcount . 20)     | (vmin . 1)          | (vmax . 5)                                                                                 | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (mean absolute deviation . 1) |                                                  |                                                                                                       |                                                                                 |
-| grade        | (vcount . 20)     | (vmin . 0)          | (vmax . 4)                                                                                 | (vmedian . 3)    | (vmean . 2.75)   | (vsdev . 1.16415770319)                          | (mode 3)                      | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) |                                                                                                       |                                                                                 |
-| attendance   | (vcount . 20)     | (vmin . 0.4)        | (vmax . 0.99)                                                                              | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)       | (rms . 0.825793557737)                           | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
+| course-code  | (cardinality . 5) | (mode Math English) | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3)) |                  |                  |                                                  |                                 |                                                  |                                                                                                       |                                                                                 |
+| satisfaction | (vcount . 20)     | (vmin . 1)          | (vmax . 5)                                                                                 | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (median absolute deviation . 1) |                                                  |                                                                                                       |                                                                                 |
+| grade        | (vcount . 20)     | (vmin . 0)          | (vmax . 4)                                                                                 | (vmedian . 3)    | (vmean . 2.75)   | (vsdev . 1.16415770319)                          | (mode 3)                        | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) |                                                                                                       |                                                                                 |
+| attendance   | (vcount . 20)     | (vmin . 0.4)        | (vmax . 0.99)                                                                              | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)         | (rms . 0.825793557737)                           | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
 
 * Functions from datagrid-join.el
 

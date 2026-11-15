@@ -127,6 +127,27 @@
          (result (datagrid-column-set-length col 3)))
     (should (eq result col))))
 
+(ert-deftest datagrid-test-column-set-length-rejects-invalid ()
+  ;; Regression: the `datagrid-column-p' check was a variable binding.
+  (should-error (datagrid-column-set-length
+                 (datagrid-column-make :heading 5 :data [1 2]) 3))
+  (should-error (datagrid-column-set-length
+                 (datagrid-column-make :data [1 2] :lom 'ratio) 3))
+  (should-error (datagrid-column-set-length nil 3))
+  (should-error (datagrid-column-set-length [1 2] 3)))
+
+(ert-deftest datagrid-test-column-add-data-rejects-invalid ()
+  (should-error (datagrid--column-add-data
+                 (datagrid-column-make :heading 5 :data [1]) [2]))
+  (should-error (datagrid--column-add-data nil [2]))
+  (let ((out (datagrid--column-add-data
+              (datagrid-column-make :heading "h" :data [1]) [2 3])))
+    (should (equal (datagrid-column-data out) [1 2 3]))))
+
+(ert-deftest datagrid-test-add-column-still-validates ()
+  (should-error (datagrid-add-column (dg-test--simple)
+                                     (datagrid-column-make :heading 5 :data [1]))))
+
 (ert-deftest datagrid-test-column-set-length-preserves-metadata ()
   (let* ((col (datagrid-column-make :heading "h" :data [1 2 3]
                                     :lom "ratio" :code '(("a" . 1))))
@@ -820,6 +841,118 @@
   (let ((dg (dg-test--mk (datagrid-column-make :data ["10" "20" "30"]))))
     (should (= (datagrid-reduce-vec dg #'+ 0 :convert t) 60))))
 
+(defun dg-test--nums (&rest nums)
+  "Return a one-column datagrid headed \"v\" holding NUMS."
+  (dg-test--mk (datagrid-column-make :heading "v" :data (vconcat nums))))
+
+(ert-deftest datagrid-test-reduce-vec-max-all-negative ()
+  ;; Regression: a 0 seed made this 0.
+  (should (= (datagrid-reduce-vec (dg-test--nums -3 -7 -1) #'max 0) -1)))
+
+(ert-deftest datagrid-test-reduce-vec-min-all-positive ()
+  ;; Regression: a 0 seed made this 0.
+  (should (= (datagrid-reduce-vec (dg-test--nums 5 3 9) #'min 0) 3)))
+
+(ert-deftest datagrid-test-reduce-vec-product ()
+  ;; Regression: a 0 seed made every product 0.
+  (should (= (datagrid-reduce-vec (dg-test--nums 2 3 4) #'* 0) 24)))
+
+(ert-deftest datagrid-test-reduce-vec-floats ()
+  (should (= (datagrid-reduce-vec (dg-test--nums 0.5 0.25 -1.5) #'max 0) 0.5)))
+
+(ert-deftest datagrid-test-reduce-vec-single-element ()
+  (let ((calls 0))
+    (should (= (datagrid-reduce-vec (dg-test--nums -4)
+                                    (lambda (a b) (cl-incf calls) (+ a b))
+                                    0)
+               -4))
+    (should (= calls 0))))
+
+(ert-deftest datagrid-test-reduce-vec-left-fold-order ()
+  ;; Left fold in row order: (- (- 10 3) 2) = 5.
+  (should (= (datagrid-reduce-vec (dg-test--nums 10 3 2) #'- 0) 5))
+  (should (equal (datagrid-reduce-vec (dg-test--nums 1 2 3)
+                                      (lambda (acc x) (append acc (list x)))
+                                      0 :initial-value nil)
+                 '(1 2 3))))
+
+(ert-deftest datagrid-test-reduce-vec-non-numeric ()
+  (let ((dg (dg-test--mk (datagrid-column-make :data ["a" "b" "c"]))))
+    (should (equal (datagrid-reduce-vec dg #'concat 0) "abc"))))
+
+(ert-deftest datagrid-test-reduce-vec-empty-column ()
+  (let ((dg (dg-test--nums)))
+    ;; Zero-argument identity when FUNCTION has one.
+    (should (equal (datagrid-reduce-vec dg #'+ 0) 0))
+    (should (equal (datagrid-reduce-vec dg #'* 0) 1))
+    ;; nil when FUNCTION needs arguments.
+    (should (null (datagrid-reduce-vec dg #'max 0)))
+    (should (null (datagrid-reduce-vec dg (lambda (a b) (+ a b)) 0)))
+    ;; INITIAL-VALUE wins on an empty column.
+    (should (equal (datagrid-reduce-vec dg #'max 0 :initial-value 7) 7))))
+
+(ert-deftest datagrid-test-reduce-vec-initial-value ()
+  (let ((dg (dg-test--nums 1 2 3)))
+    (should (= (datagrid-reduce-vec dg #'+ 0 :initial-value 100) 106))
+    (should (= (datagrid-reduce-vec dg #'max 0 :initial-value 50) 50))
+    (should (= (datagrid-reduce-vec dg #'* 0 :initial-value 0) 0))
+    ;; An explicit nil seed is honored, not treated as absent.
+    (should (equal (datagrid-reduce-vec dg (lambda (acc x) (cons x acc))
+                                        0 :initial-value nil)
+                   '(3 2 1)))))
+
+(ert-deftest datagrid-test-reduce-vec-heading-string ()
+  (should (= (datagrid-reduce-vec (dg-test--simple) #'max "score") 40))
+  (should (= (datagrid-reduce-vec (dg-test--simple) #'min "score") 10)))
+
+(ert-deftest datagrid-test-reduce-vec-code-product ()
+  ;; "Agree"=4 "Disagree"=2 "Neutral"=3 "Agree"=4 -> 96, min 2.
+  (should (= (datagrid-reduce-vec (dg-test--coded) #'* 0 :code t) 96))
+  (should (= (datagrid-reduce-vec (dg-test--coded) #'min 0 :code t) 2)))
+
+(ert-deftest datagrid-test-reduce-vec-convert-negative-strings ()
+  (let ((dg (dg-test--mk (datagrid-column-make :data ["-5" "-2" "-9"]))))
+    (should (= (datagrid-reduce-vec dg #'max 0 :convert t) -2))
+    (should (= (datagrid-reduce-vec dg #'* 0 :convert t) -90))))
+
+(ert-deftest datagrid-test-reduce-vec-respects-row-order ()
+  ;; Sorting, slicing, and filtering set a row-order; the reduction
+  ;; must see the logical rows only, in logical order.
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "k" :data [3 1 2 4])
+              (datagrid-column-make :heading "v" :data [-30 -10 -20 -40])))
+         (sorted (datagrid-sort dg "k"))
+         (sliced (datagrid-slice dg 0 2))
+         (filtered (datagrid-filter-by-mask dg [nil t t nil])))
+    (should (equal (datagrid-reduce-vec sorted (lambda (acc x) (append acc (list x)))
+                                        "v" :initial-value nil)
+                   '(-10 -20 -30 -40)))
+    (should (= (datagrid-reduce-vec sorted #'- "v") 80))
+    (should (= (datagrid-reduce-vec sliced #'max "v") -20))
+    (should (= (datagrid-reduce-vec sliced #'* "v") 600))
+    (should (= (datagrid-reduce-vec filtered #'min "v") -20))
+    (should (= (datagrid-reduce-vec filtered #'+ "v") -30))))
+
+(ert-deftest datagrid-test-reduce-vec-respects-col-order ()
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "a" :data [1 2])
+              (datagrid-column-make :heading "b" :data [-5 -6])))
+         (proj (datagrid-select dg "b" "a")))
+    (should (= (datagrid-reduce-vec proj #'max 0) -5))
+    (should (= (datagrid-reduce-vec proj #'* 1) 2))))
+
+(ert-deftest datagrid-test-reduce-vec-empty-after-filter ()
+  (let ((none (datagrid-filter-by-mask (dg-test--nums -1 -2) [nil nil])))
+    (should (null (datagrid-reduce-vec none #'max 0)))
+    (should (equal (datagrid-reduce-vec none #'+ 0) 0))))
+
+(ert-deftest datagrid-test-reduce-vec-does-not-mutate ()
+  (let* ((dg (dg-test--nums 3 1 2))
+         (before (copy-sequence (datagrid-pull dg 0))))
+    (datagrid-reduce-vec dg #'* 0)
+    (datagrid-reduce-vec dg #'+ 0 :initial-value 10)
+    (should (equal (datagrid-pull dg 0) before))))
+
 
 ;;;; datagrid-prep-for-calc
 
@@ -860,6 +993,65 @@
 
 (ert-deftest datagrid-test-calc-function-wrapper-count ()
   (should (= (datagrid-calc-function-wrapper "vcount" '(1 2 3)) 3.0)))
+
+(ert-deftest datagrid-test-calc-function-wrapper-ignores-display-modes ()
+  ;; Regression: results were printed with the user's display modes
+  ;; and read back, so digit grouping turned 1234567 into 1.
+  (let ((calc-group-digits t)
+        (calc-float-format '(fix 2))
+        (calc-point-char ",")
+        (calc-number-radix 16))
+    (should (equal (datagrid-calc-function-wrapper "vsum" '(1234567)) 1234567))
+    (should (equal (datagrid-calc-function-wrapper "vmean" '(1 2 2))
+                   1.66666666667))
+    (should (equal (datagrid-calc-function-wrapper "vmean" '(1 2)) 1.5))))
+
+(ert-deftest datagrid-test-calc-function-wrapper-number-types ()
+  ;; Whole results are integers, others floats.
+  (should (equal (datagrid-calc-function-wrapper "vsum" '(1 2 3)) 6))
+  (should (equal (datagrid-calc-function-wrapper "vmax" '(-3 -1)) -1))
+  (should (equal (datagrid-calc-function-wrapper "vmean" '(1 2)) 1.5))
+  ;; Large integers stay exact.
+  (should (equal (datagrid-calc-function-wrapper "vsum" '(1234567890123 1))
+                 1234567890124))
+  (should (equal (datagrid-calc-function-wrapper "vmax" '(1234567890123 1))
+                 1234567890123))
+  ;; Very small and negative floats survive the round trip.
+  (should (equal (datagrid-calc-function-wrapper "vmean" '(1e-30 3e-30)) 2e-30))
+  (should (equal (datagrid-calc-function-wrapper "vmean" '(-0.5 -0.25)) -0.375)))
+
+(ert-deftest datagrid-test-calc-function-wrapper-input-forms ()
+  ;; Plain Lisp floats work, as do Calc numbers from prep-for-calc.
+  (should (equal (datagrid-calc-function-wrapper "vmean" '(1.5 2.5)) 2))
+  (should (equal (datagrid-calc-function-wrapper
+                  "vmean" (seq-keep #'datagrid-prep-for-calc '(1.5 "2.5" 3)))
+                 2.33333333333))
+  (should (equal (datagrid-calc-function-wrapper "vsum" '((frac 1 3) (frac 2 3)))
+                 1)))
+
+(ert-deftest datagrid-test-calc-function-wrapper-non-real-result-is-nil ()
+  ;; Regression: these all printed as non-numbers and read back as 0.
+  (should (null (datagrid-calc-function-wrapper "vsdev" '(5))))
+  (should (null (datagrid-calc-function-wrapper "vmedian" '())))
+  (should (null (datagrid-calc-function-wrapper "vmin" '())))
+  (should (null (datagrid-calc-function-wrapper "vgmean" '(-2 8))))
+  (should (null (datagrid-calc-function-wrapper "vflat" '(1 2 3)))))
+
+(ert-deftest datagrid-test-calc-function-wrapper-rejects-bad-input ()
+  (should-error (datagrid-calc-function-wrapper "vsum" '(1 "2")))
+  (should-error (datagrid-calc-function-wrapper "vsum" '(1 nil)))
+  (should-error (datagrid-calc-function-wrapper "vsum" '(1 1.0e+INF)))
+  (should-error (datagrid-calc-function-wrapper "vsum" '(1 0.0e+NaN))))
+
+(ert-deftest datagrid-test-calc-function-wrapper-uses-internal-prec ()
+  (let ((calc-internal-prec 6))
+    (should (equal (datagrid-calc-function-wrapper "vmean" '(1 2 2)) 1.66667))))
+
+(ert-deftest datagrid-test-calc-function-wrapper-leaves-modes-alone ()
+  (let ((calc-group-digits t) (calc-internal-prec 15))
+    (datagrid-calc-function-wrapper "vmean" '(1 2 2))
+    (should (eq calc-group-digits t))
+    (should (= calc-internal-prec 15))))
 
 
 ;;;; datagrid-reduce-vec-calc
@@ -1092,6 +1284,77 @@
   (let ((report (datagrid-report-nominal (dg-test--simple) 2)))
     (should (assoc "frequency - five or fewer" report))))
 
+(ert-deftest datagrid-test-report-nominal-cardinality-over-five ()
+  ;; Regression: cardinality was the length of the top-5 list.
+  (let* ((dg (dg-test--mk (datagrid-column-make
+                           :heading "c" :data ["a" "b" "c" "d" "e" "f" "g" "a"])))
+         (report (datagrid-report-nominal dg "c")))
+    (should (= (cdr (assoc "cardinality" report)) 7))
+    (should (= (length (cdr (assoc "frequency - five or fewer" report))) 5))))
+
+(ert-deftest datagrid-test-report-nominal-cardinality-respects-row-order ()
+  (let* ((dg (dg-test--mk (datagrid-column-make
+                           :heading "c" :data ["a" "b" "c" "d" "e" "f" "g"])))
+         (sliced (datagrid-slice dg 0 1 2 0)))
+    (should (= (cdr (assoc "cardinality" (datagrid-report-nominal sliced 0))) 3))))
+
+
+;;;; Calc-backed functions
+
+(ert-deftest datagrid-test-reduce-vec-calc-floats-without-convert ()
+  ;; Plain Lisp floats used to need :convert t.
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [0.5 0.25 1.75]))))
+    (should (equal (datagrid-reduce-vec-calc dg "vsum" "v") 2.5))
+    (should (equal (datagrid-reduce-vec-calc dg "vmax" "v") 1.75))))
+
+(ert-deftest datagrid-test-reduce-vec-calc-sorted-grid ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "k" :data [3 1 2 4])
+                          (datagrid-column-make :heading "v" :data [30.5 10 20 40])))
+         (view (datagrid-slice (datagrid-sort dg "k") 0 1 2)))
+    (should (equal (datagrid-reduce-vec-calc view "vsum" "v") 60.5))
+    (should (equal (datagrid-reduce-vec-calc view "vmax" "v") 30.5))))
+
+(ert-deftest datagrid-test-report-interval-single-value ()
+  ;; Regression: the standard deviation of one value used to signal.
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [5])))
+         (report (datagrid-report-interval dg "v")))
+    (should (equal (cdr (assoc "vmean" report)) 5))
+    (should (assoc "vsdev" report))
+    (should (null (cdr (assoc "vsdev" report))))))
+
+(ert-deftest datagrid-test-reports-all-nil-column ()
+  ;; Regression: reports on an all-nil column used to signal.
+  (let ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [nil nil]))))
+    (dolist (fn '(datagrid-report-ordinal datagrid-report-interval
+                                          datagrid-report-ratio))
+      (let ((report (funcall fn dg "v")))
+        (should (equal (cdr (assoc "vcount" report)) 0))
+        (should (null (cdr (assoc "vmedian" report))))))))
+
+(ert-deftest datagrid-test-report-ratio-gmean-of-negative-is-nil ()
+  ;; Regression: a complex geometric mean used to come back as 0.
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [0.5 -0.5 2.0])))
+         (report (datagrid-report-ratio dg "v")))
+    (should (assoc "vgmean" report))
+    (should (null (cdr (assoc "vgmean" report))))
+    (should (equal (cdr (assoc "vmax" report)) 2))))
+
+(ert-deftest datagrid-test-column-mad-mixed-floats ()
+  ;; Median 4.75; deviations 5.25 2.25 2.25 5.75; their median 3.75.
+  (let ((dg (dg-test--mk (datagrid-column-make :data [10 2.5 7 -1]))))
+    (should (equal (datagrid-column-mad dg 0) 3.75))))
+
+(ert-deftest datagrid-test-column-mad-skips-empty-strings ()
+  ;; Regression: "" was dropped from the median but counted as 0 in
+  ;; the deviations, giving 4.75.
+  (let ((dg (dg-test--mk (datagrid-column-make :data ["10" "2.5" "" "7" "-1"]))))
+    (should (equal (datagrid-column-mad dg 0) 3.75))))
+
+(ert-deftest datagrid-test-column-mad-coded-and-empty ()
+  (should (equal (datagrid-column-mad (dg-test--coded) 0 t) 0.5))
+  (should (null (datagrid-column-mad
+                 (dg-test--mk (datagrid-column-make :data [nil nil])) 0))))
+
 
 ;;;; datagrid-report-ordinal
 
@@ -1102,7 +1365,7 @@
 (ert-deftest datagrid-test-report-ordinal-stats-keys ()
   (let ((report (datagrid-report-ordinal (dg-test--ordinal-dg) 0)))
     (dolist (k '("vcount" "vmin" "vmax" "vmedian" "mode" "quartiles"
-                 "mean absolute deviation"))
+                 "median absolute deviation"))
       (should (assoc k report)))))
 
 (ert-deftest datagrid-test-report-ordinal-stat-values ()
@@ -1211,7 +1474,7 @@
                                     :lom "ratio")))
          (reports (datagrid-report-all-lom dg)))
     (should (assoc "cardinality" (cdr (nth 0 reports))))
-    (should (assoc "mean absolute deviation" (cdr (nth 1 reports))))
+    (should (assoc "median absolute deviation" (cdr (nth 1 reports))))
     (should-not (assoc "vmean" (cdr (nth 1 reports))))
     (should (assoc "vmean" (cdr (nth 2 reports))))
     (should-not (assoc "vgmean" (cdr (nth 2 reports))))
@@ -1306,6 +1569,38 @@
                '(:name "sum" :fn + :col 1)
                '(:name "max" :fn max :col "score"))))
     (should (equal out '(("sum" . 100) ("max" . 40))))))
+
+(ert-deftest datagrid-test-summarize-negative-and-product ()
+  ;; Regression: the 0 seed leaked through summarize too.
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "v" :data [-4 -2 -8])))
+         (out (datagrid-summarize
+               dg
+               '(:name "max" :fn max :col "v")
+               '(:name "min" :fn min :col "v")
+               '(:name "prod" :fn * :col 0)
+               '(:name "sum" :fn + :col 0))))
+    (should (equal out '(("max" . -2) ("min" . -8)
+                         ("prod" . -64) ("sum" . -14))))))
+
+(ert-deftest datagrid-test-summarize-initial-value ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [1 2 3])))
+         (out (datagrid-summarize
+               dg
+               '(:name "seeded" :fn + :col "v" :initial-value 10)
+               '(:name "nil-seed" :fn (lambda (acc x) (cons x acc))
+                       :col "v" :initial-value nil)
+               '(:name "unseeded" :fn + :col "v"))))
+    (should (equal out '(("seeded" . 16)
+                         ("nil-seed" . (3 2 1))
+                         ("unseeded" . 6))))))
+
+(ert-deftest datagrid-test-summarize-calc-ignores-initial-value ()
+  (let* ((dg (dg-test--mk (datagrid-column-make :heading "v" :data [1 2 3])))
+         (out (datagrid-summarize
+               dg '(:name "m" :fn "vmax" :col "v" :calc t
+                          :initial-value 100))))
+    (should (equal out '(("m" . 3))))))
 
 
 (ert-deftest datagrid-test-rows-patch-fills-only-empties ()

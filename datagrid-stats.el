@@ -81,27 +81,46 @@ column data vectors restricted to that group's rows."
 
 
 ;;;; Data analysis
-(cl-defun datagrid-reduce-vec (datagrid function col &key code convert)
+(cl-defun datagrid-reduce-vec (datagrid function col
+                                         &key code convert
+                                         (initial-value nil initial-value-p))
   "Reduce a FUNCTION across DATAGRID data at COL.
-Return the result of calling FUNCTION on the data vector at COL
-from a datagrid column. COL is a zero-based column number or a
-heading string. If CODE is nil, then column data is not decoded.
-If CODE is non-nil then decode data using the alist in the code
-slot of the datagrid column structure. If CONVERT is non-nil,
+Return the result of reducing the data vector at COL from a datagrid
+column with the two-argument FUNCTION. COL is a zero-based column
+number or a heading string. If CODE is nil, then column data is not
+decoded. If CODE is non-nil then decode data using the alist in the
+code slot of the datagrid column structure. If CONVERT is non-nil,
 loop over the data to convert strings to numbers as needed.
+
+If INITIAL-VALUE is supplied, the reduction starts from it, so
+FUNCTION is first called with INITIAL-VALUE and the first element.
+Otherwise the reduction starts from the first element, so `max' of
+\[-3 -1] is -1 and `*' of [2 3] is 6. A column with one element
+returns that element without calling FUNCTION.
+
+An empty column returns INITIAL-VALUE when it is supplied. Without
+it, the result is (funcall FUNCTION) when FUNCTION accepts zero
+arguments, so `+' gives 0 and `*' gives 1, and nil otherwise, so
+`max' gives nil.
 
 Examples:
 \ (datagrid-reduce-vec datagrid-example #\\='+ 2)
 \ (datagrid-reduce-vec datagrid #\\='max col :code t :convert t)
+\ (datagrid-reduce-vec datagrid #\\='+ col :initial-value 100)
 
-This function and documentation string are derived from
-SEQ-REDUCE."
+This follows `cl-reduce'."
   (datagrid--check datagrid)
   (let* ((vec (datagrid--pull-decoded datagrid col code))
          (vec (if convert
                   (datagrid-unknown-type-to-number vec)
                 vec)))
-    (seq-reduce function vec 0)))
+    (cond (initial-value-p
+           (cl-reduce function vec :initial-value initial-value))
+          ((> (length vec) 0)
+           (cl-reduce function vec))
+          ((zerop (car (func-arity function)))
+           (funcall function))
+          (t nil))))
 
 (defun datagrid-prep-for-calc (item)
   "Prepare the ITEM for use in a Calc function.
@@ -125,14 +144,12 @@ Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)"
       it)))
 
 (defun datagrid--prep-calc-vec (vec convert)
-  "Return VEC as a nil-free list ready for Calc vector functions.
-When CONVERT is non-nil each value is run through
-`datagrid-prep-for-calc' so floats land in Calc's expected (float M E)
-form; otherwise values pass through unchanged. Either way `seq-keep'
-drops nils and yields a list, which is what Calc wants."
-  (if convert
-      (seq-keep #'datagrid-prep-for-calc vec)
-    (seq-keep #'identity vec)))
+  "Return VEC as a nil-free list for `datagrid-calc-function-wrapper'.
+When CONVERT is non-nil, strings are converted to numbers with
+`datagrid-unknown-type-to-number' first, and empty strings are
+dropped; otherwise values pass through unchanged."
+  (seq-keep #'identity
+            (if convert (datagrid-unknown-type-to-number vec) vec)))
 
 (defun datagrid-calc-function-wrapper (func-abbrev lst)
   "Call a Calc vector function for a list.
@@ -145,12 +162,14 @@ Examples:
 \ (datagrid-calc-function-wrapper \"vflat\" `(1 2 3 4 5 5000))
 \ (datagrid-calc-function-wrapper \"vmedian\" `(1 2 3 4 5 5000))
 
-Lists must include only numbers, those numbers must be in Calc
-understandable form, and not include nil. Calc cannot handle
-decimal numbers for division. Use the following to prepare a
-list.
+LST must hold only numbers, without nil. They may be Lisp numbers
+or Calc numbers such as those from `datagrid-prep-for-calc'.
 
-  (seq-keep #`datagrid-prep-for-calc your-list)
+The calculation runs through `calc-eval' with Calc's default modes,
+apart from `calc-internal-prec', so display settings such as digit
+grouping cannot change the result. Return a Lisp number, or nil
+when Calc cannot reduce the input to a real number, as for the
+median of an empty list or the standard deviation of one value.
 
 You can find Calc functions by doing \\[describe-function] (C-h
 f) and typing calcFunc- and viewing completions. You can also
@@ -164,9 +183,29 @@ vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
 Also see the Calc function index. Usually you will find the Emacs
 Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean]."
-  (let* ((func-name (intern (concat "calcFunc-" func-abbrev)))
-         (result (funcall func-name (cons 'vec lst))))
-    (string-to-number (math-format-number (math-float result)))))
+  (let ((result (calc-eval (list (concat func-abbrev "($)")
+                                 'calc-internal-prec calc-internal-prec
+                                 'calc-display-working-message nil)
+                           nil
+                           (concat "["
+                                   (mapconcat #'datagrid--calc-literal lst ", ")
+                                   "]"))))
+    (cond ((consp result)
+           (error "Calc error in %s: %s" func-abbrev (cadr result)))
+          ((string-match-p "\\`-?[0-9]+\\.?[0-9]*\\(?:e-?[0-9]+\\)?\\'"
+                           result)
+           (string-to-number result)))))
+
+(defun datagrid--calc-literal (x)
+  "Return the number X as a string that Calc reads back as X.
+X is a Lisp integer, a finite Lisp float, or a Calc float or fraction."
+  (pcase x
+    ((pred integerp) (number-to-string x))
+    ((and (pred floatp) (guard (< (abs x) 1.0e+INF)))
+     (number-to-string x))
+    (`(float ,mant ,exp) (format "%de%d" mant exp))
+    (`(frac ,num ,den) (format "%d:%d" num den))
+    (_ (error "Not a finite number for Calc: %S" x))))
 
 (cl-defun datagrid-reduce-vec-calc (datagrid func-abbrev col &key code convert)
   "Reduce an Emacs Calc function, FUNC-ABBREV, across DATAGRID data.
@@ -208,6 +247,8 @@ Each spec in SPECS is a plist with the following keywords:
   :code    non-nil to decode the column data first
   :convert non-nil to convert strings to numbers first
   :calc    non-nil to interpret :fn as a Calc function abbreviation
+  :initial-value  starting value for the reduction; see
+           `datagrid-reduce-vec'. Ignored when :calc is non-nil.
 
 Returns ((NAME . VALUE) ...) in the order of SPECS."
   (mapcar (lambda (spec)
@@ -217,13 +258,21 @@ Returns ((NAME . VALUE) ...) in the order of SPECS."
                    (code (plist-get spec :code))
                    (convert (plist-get spec :convert))
                    (calc (plist-get spec :calc))
+                   (init (plist-member spec :initial-value))
                    (idx (datagrid--resolve-col datagrid col)))
               (cons name
-                    (if calc
-                        (datagrid-reduce-vec-calc datagrid fn idx
-                                                  :code code :convert convert)
-                      (datagrid-reduce-vec datagrid fn idx
-                                           :code code :convert convert)))))
+                    (cond (calc
+                           (datagrid-reduce-vec-calc datagrid fn idx
+                                                     :code code
+                                                     :convert convert))
+                          (init
+                           (datagrid-reduce-vec datagrid fn idx
+                                                :code code :convert convert
+                                                :initial-value (cadr init)))
+                          (t
+                           (datagrid-reduce-vec datagrid fn idx
+                                                :code code
+                                                :convert convert))))))
           specs))
 
 (defun datagrid-first-non-empty (seq)
@@ -453,22 +502,20 @@ heading string. If CODE is t, then decode data first."
 
 (defun datagrid-column-mad (datagrid col &optional code)
   "Calculate the median absolute deviation.
+This is the median of each value's absolute distance from the median.
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
-as is."
-  (let* ((lst (delq nil (append (datagrid--pull-decoded datagrid col code)
-                                nil)))
-         (lst-calc (seq-keep #'datagrid-prep-for-calc lst))
-         (median1 (datagrid-calc-function-wrapper "vmedian" lst-calc))
-         (lst-nums (mapcar (lambda (x) (if (stringp x)
-                                           (string-to-number x)
-                                         x))
-                           lst))
-         ;; It would be nice to do this in Calc formulas so the prep
-         ;; for Calc function doesn't have to done again.
-         (lst2 (mapcar (lambda (x) (abs (- x median1))) lst-nums)))
-    (datagrid-calc-function-wrapper
-     "vmedian" (seq-keep #'datagrid-prep-for-calc lst2))))
+as is.
+
+The result is unscaled, like R's mad(x, constant = 1). R's mad()
+multiplies by 1.4826 by default so the result estimates the standard
+deviation of normally distributed data."
+  (let* ((nums (datagrid--prep-calc-vec
+                (datagrid--pull-decoded datagrid col code) t))
+         (median (datagrid-calc-function-wrapper "vmedian" nums)))
+    (when median
+      (datagrid-calc-function-wrapper
+       "vmedian" (mapcar (lambda (x) (abs (- x median))) nums)))))
 
 
 ;;;; Summary reports
@@ -480,11 +527,12 @@ zero-based column number or a heading string."
     (error "Argument must be a datagrid"))
   (let* ((idx (datagrid--resolve-col datagrid col))
          (cols (datagrid-columns datagrid))
-         (freq (seq-take (datagrid--frequencies-alist datagrid idx nil) 5)))
+         (all-freq (datagrid--frequencies-alist datagrid idx nil))
+         (freq (seq-take all-freq 5)))
     (append
      (list (datagrid-column-heading
             (elt cols (datagrid--col-at datagrid idx))))
-     (list (cons "cardinality" (length freq)))
+     (list (cons "cardinality" (length all-freq)))
      (list (cons "mode" (datagrid-column-mode datagrid idx)))
      (list (cons "frequency - five or fewer" freq)))))
 
@@ -493,7 +541,7 @@ zero-based column number or a heading string."
 COL is a zero-based column number or a heading string. STATS-NAME is a
 list of Calc function abbreviations to compute. CODE, CONVERT have the
 same meaning as in the public report functions. If INCLUDE-MAD is
-non-nil, append the mean absolute deviation."
+non-nil, append the median absolute deviation."
   (unless (datagridp datagrid)
     (error "Argument must be a datagrid"))
   (let* ((idx (datagrid--resolve-col datagrid col))
@@ -514,7 +562,7 @@ non-nil, append the mean absolute deviation."
      (list (cons "mode" (datagrid-column-mode new-dg 0)))
      (list (cons "quartiles" (datagrid-column-quartiles new-dg 0)))
      (when include-mad
-       (list (cons "mean absolute deviation"
+       (list (cons "median absolute deviation"
                    (datagrid-column-mad new-dg 0)))))))
 
 (cl-defun datagrid-report-ordinal (datagrid col &key code convert)
