@@ -157,7 +157,7 @@ data equal."
 
 (defun datagrid-add-data (datagrid seqs &optional horizontal)
   "Add elements to each datagrid-column.
-DATAGRID a datagrid structure. SEQS is a sequence of sequences. If
+DATAGRID is a datagrid structure. SEQS is a sequence of sequences. If
 HORIZONTAL is nil, then each sub-sequence is one column's data. If non-nil,
 then each sequence is one row's data. The default is nil. The sequences
 are extended to keep `datagrid-column-data' lengths equal.
@@ -177,12 +177,12 @@ sequences by default, while `datagrid-add-row' takes rows."
 Columns are aligned by heading. The unified column set is the union
 of all headings, preserved in first-seen order. Columns absent from a
 given source contribute nil for that source's rows. Per-column metadata
-\(lom, code, etc.\) is taken from the first source in which each heading
+\(lom, code, etc.) is taken from the first source in which each heading
 appears. Nil arguments are skipped. Row and column orders of sources
 are respected (logical view, not physical)."
   (let ((grids (cl-remove-if #'null datagrids)))
     (unless grids
-      (error "datagrid-bind-rows: No datagrids given"))
+      (error "No datagrids given"))
     (mapc #'datagrid--check grids)
     (let ((total-rows (apply #'+ (mapcar #'datagrid--nrows grids)))
           (heading-order nil)
@@ -297,7 +297,7 @@ as with `datagrid-slice' and `datagrid-filter-by-mask'."
 (defun datagrid--sort-spec (spec)
   "Normalize a single sort SPEC into a plist.
 A bare column reference (integer index or heading string) becomes
-\(:col SPEC).  A plist is returned unchanged.  Signal an error when no
+\(:col SPEC). A plist is returned unchanged. Signal an error when no
 `:col' is present."
   (let ((plist (if (or (integerp spec) (stringp spec))
                    (list :col spec)
@@ -309,9 +309,9 @@ A bare column reference (integer index or heading string) becomes
 (defun datagrid--sort-1 (datagrid spec)
   "Return DATAGRID sorted by a single SPEC, composing its row-order.
 SPEC is a column reference (integer index or heading string) or a
-plist (:col REF :key FN :lessp PRED :reverse BOOL).  KEY transforms
-each value before comparison.  PRED is the less-than predicate
-\(default `datagrid-unknown-type-sort').  A non-nil REVERSE inverts
+plist (:col REF :key FN :lessp PRED :reverse BOOL). KEY transforms
+each value before comparison. PRED is the less-than predicate
+\(default `datagrid-unknown-type-sort'). A non-nil REVERSE inverts
 the order while preserving the stable handling of ties.
 
 Column data is shared with DATAGRID; the result records a row-order
@@ -347,16 +347,16 @@ or a heading string) or a plist:
 
   (:col REF :key FN :lessp PRED :reverse BOOL)
 
-REF names the column.  KEY, when given, is a one-argument function
+REF names the column. KEY, when given, is a one-argument function
 applied to each cell before comparison (e.g. `length' or `abs').
 PRED is the less-than predicate, defaulting to
-`datagrid-unknown-type-sort'.  A non-nil REVERSE sorts that key in
+`datagrid-unknown-type-sort'. A non-nil REVERSE sorts that key in
 descending order.
 
 The sort is stable, so keys compose by folding stable single-column
-sorts from the last key to the first.  Column data is shared with
+sorts from the last key to the first. Column data is shared with
 DATAGRID; the result records a row-order permutation that composes
-with any existing row-order on DATAGRID.  With no KEYS, DATAGRID is
+with any existing row-order on DATAGRID. With no KEYS, DATAGRID is
 returned unchanged.
 
 Examples:
@@ -509,8 +509,9 @@ VALUES-FILL fills cells that have no value. The default is nil.
 This follows `pivot_wider' from the R package tidyr.
 
 Example:
- (datagrid-pivot-wider long \"metric\" \"value\"
-                       :id-cols \\='(\"id\" \"year\") :values-fill 0)"
+
+  (datagrid-pivot-wider long \"metric\" \"value\"
+                        :id-cols \\='(\"id\" \"year\") :values-fill 0)"
   (datagrid--check datagrid)
   (let* ((cols (datagrid-columns datagrid))
          (heading-idx (datagrid--resolve-col datagrid headings-from))
@@ -574,9 +575,8 @@ Example:
       (when (> multi 0)
         (display-warning
          'datagrid
-         (format (concat "datagrid-pivot-wider: %d cells have more than "
-                         "one value and hold lists. Use :values-fn to "
-                         "combine them.")
+         (format (concat "Pivot: %d cells have more than one value and "
+                         "hold lists. Use :values-fn to combine them.")
                  multi)))
       (datagrid-make :columns (vconcat id-columns value-columns)))))
 
@@ -588,28 +588,27 @@ string naming the column heading.
 
 This simply returns a vector.
 
-See the Info Manual for built-in predicates, equality functions,
+These Info nodes describe built-in predicates, equality functions,
 and other useful functions to make predicate functions:
 
-2.7 Type Predicates
-2.8 Equality Predicates
-3.3 Type Predicates for Numbers
-3.4 Comparison of Numbers
-4.2 Predicates for Strings
-4.5 Comparison of Characters and Strings
-5.2 Predicates on Lists
-32.2 Predicates on Markers
+  Info node `(elisp) Type Predicates'
+  Info node `(elisp) Equality Predicates'
+  Info node `(elisp) Predicates on Numbers'
+  Info node `(elisp) Comparison of Numbers'
+  Info node `(elisp) Predicates for Strings'
+  Info node `(elisp) Text Comparison'
+  Info node `(elisp) List-related Predicates'
+  Info node `(elisp) Predicates on Markers'
 
 Other common predicate function examples using lambdas:
 
- (lambda (x) (= x 15))
- (lambda (x) (eq x 15))
- (lambda (x) (equal x 15))
- (lambda (x) (string-equal x \"2025-03-31\"))
- (lambda (x) (string-prefix-p x \"2025\"))
- (lambda (x) (string-prefix-p x \"2025\"))
- (lambda (x) (> x \"2025\"))
- (lambda (x) (<= x \"2025\"))"
+  (lambda (x) (= x 15))
+  (lambda (x) (eq x 15))
+  (lambda (x) (equal x 15))
+  (lambda (x) (string-equal x \"2025-03-31\"))
+  (lambda (x) (string-prefix-p \"2025\" x))
+  (lambda (x) (string< x \"2025\"))
+  (lambda (x) (string> x \"2025\"))"
   (datagrid--check datagrid)
   (let* ((cols (datagrid-columns datagrid))
          (vec (datagrid-pull datagrid col))
@@ -623,8 +622,8 @@ Other common predicate function examples using lambdas:
   "Filter a datagrid-column struct by a boolean MASK.
 COLUMN-STRUCT is a datagrid-column structure. MASK must be a vector
 with the same length as datagrid columns and the values must only be t
-or nil. It is typically created by datagrid-create-mask-s. This is a
-helper function for DATAGRID-FILTER-BY-MASK. It returns a
+or nil. It is typically created by `datagrid-create-mask'. This is a
+helper function for `datagrid-filter-by-mask'. It returns a
 datagrid-column structure that copies the original but with the data
 slot filtered."
   (let ((vec (datagrid-column-data column-struct))
@@ -639,15 +638,15 @@ slot filtered."
   "Use a boolean MASK to filter a DATAGRID.
 MASK must be a sequence with the same length as datagrid columns
 and the values must only be t or nil. The function returns a
-DATAGRID. You can use DATAGRID-CREATE-MASK to create a mask.
+DATAGRID. You can use `datagrid-create-mask' to create a mask.
 
-The following code show an example workflow when using masks.
+The following code shows an example workflow when using masks.
 
- (let* ((mygrid (datagrid-from-csv-buffer \"name-of-file.csv\" t))
-        (index (datagrid-col-index-by-heading mygrid \"heading-name\"))
-        (func (lambda (x) (string-equal x \"filter-string\")))
-        (mask (datagrid-create-mask mygrid func index)))
-   (datagrid-filter-by-mask mygrid mask))"
+  (let* ((mygrid (datagrid-from-csv-buffer \"name-of-file.csv\" t))
+         (index (datagrid-col-index-by-heading mygrid \"heading-name\"))
+         (func (lambda (x) (string-equal x \"filter-string\")))
+         (mask (datagrid-create-mask mygrid func index)))
+    (datagrid-filter-by-mask mygrid mask))"
   (datagrid--check datagrid)
   (let* ((mask-vec (vconcat mask))
          (kept (cl-loop for i from 0

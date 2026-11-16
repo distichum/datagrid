@@ -158,6 +158,28 @@
     (should (equal (datagrid-column-lom result) "ratio"))
     (should (equal (datagrid-column-code result) '(("a" . 1))))))
 
+(ert-deftest datagrid-test-column-set-length-nil-data ()
+  ;; Regression: a column with no data returned nil instead of a column.
+  (let ((result (datagrid-column-set-length
+                 (datagrid-column-make :heading "x") 3)))
+    (should (datagrid-column-p result))
+    (should (equal (datagrid-column-data result) [nil nil nil]))))
+
+(ert-deftest datagrid-test-column-add-data-nil-data ()
+  ;; Regression: a column with no data returned nil instead of a column.
+  (let ((out (datagrid--column-add-data
+              (datagrid-column-make :heading "h") [1 2])))
+    (should (datagrid-column-p out))
+    (should (equal (datagrid-column-data out) [1 2]))))
+
+(ert-deftest datagrid-test-column-seq-subseq ()
+  ;; Regression: omitting END signaled an error.
+  (let ((col (datagrid-column-make :heading "h" :data [1 2 3 4])))
+    (should (equal (datagrid-column-data (seq-subseq col 2)) [3 4]))
+    (should (equal (datagrid-column-data (seq-subseq col 1 3)) [2 3]))
+    (should (equal (datagrid-column-data (seq-subseq col -2)) [3 4]))
+    (should (equal (datagrid-column-heading (seq-subseq col 1)) "h"))))
+
 
 ;;;; datagridp
 
@@ -424,6 +446,43 @@
 (ert-deftest datagrid-test-column-decode-no-code-returns-data ()
   (let ((dg (dg-test--mk (datagrid-column-make :data [1 2 3]))))
     (should (equal (datagrid-column-decode dg 0) [1 2 3]))))
+
+(ert-deftest datagrid-test-column-decode-numeric-keys ()
+  ;; Regression: numeric data signaled an error from `string-equal'.
+  (let ((dg (dg-test--mk (datagrid-column-make
+                          :heading "x"
+                          :data [1 2 3]
+                          :code '((1 . "Disagree") (2 . "Agree"))))))
+    (should (equal (datagrid-column-decode dg 0) ["Disagree" "Agree" nil]))))
+
+(ert-deftest datagrid-test-column-decode-numbers-against-string-keys ()
+  (let ((dg (dg-test--mk (datagrid-column-make
+                          :heading "I like Emacs."
+                          :data [5 5 5 5 5]
+                          :code '(("Strongly disagree" . 1)
+                                  ("Agree" . 4)
+                                  ("Strongly agree" . 5))))))
+    (should (equal (datagrid-column-decode dg 0 'unmapped)
+                   [unmapped unmapped unmapped unmapped unmapped]))))
+
+(ert-deftest datagrid-test-column-decode-symbol-matches-string-key ()
+  (let ((dg (dg-test--mk (datagrid-column-make
+                          :heading "x"
+                          :data (vector 'Agree "Agree")
+                          :code '(("Agree" . 4))))))
+    (should (equal (datagrid-column-decode dg 0) [4 4]))))
+
+(ert-deftest datagrid-test-to-vtable ()
+  ;; Regression: `make-vtable' is not autoloaded, so this failed unless
+  ;; vtable was already loaded.
+  (skip-unless (locate-library "vtable"))
+  (let ((name (generate-new-buffer-name " *datagrid-vtable-test*")))
+    (unwind-protect
+        (progn
+          (datagrid-to-vtable (dg-test--simple) name t)
+          (with-current-buffer name
+            (should (string-match-p "Alice" (buffer-string)))))
+      (when (get-buffer name) (kill-buffer name)))))
 
 
 ;;;; datagrid-column-add-code

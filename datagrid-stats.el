@@ -187,15 +187,15 @@ median of an empty list or the standard deviation of one value.
 
 You can find Calc functions by doing \\[describe-function] and
 typing calcFunc- and viewing completions. You can also find the
-functions in the Calc documentation in many places. Find
-the single-variable statistics at 10.7.1 - Single Variable
-Statistics. That list includes:
+functions in the Calc documentation in many places. Info node
+`(calc) Single-Variable Statistics' lists the single-variable
+statistics, which include:
 
 vcount, vsum, vprod, vmax, vmean, vmeane, vmedian, vhmean,
 vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
 
-Also see the Calc function index. Usually you will find the Emacs
-Lisp function name followed by the abbreviation. For
+Also see Info node `(calc) Function Index'. Usually you will find
+the Emacs Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean]."
   (require 'calc)
   (let ((result (calc-eval (list (concat func-abbrev "($)")
@@ -235,15 +235,15 @@ needed.
 FUNC-ABBREV is a string for the Calc abbreviation for a function.
 You can find these functions by doing \\[describe-function] and
 typing calcFunc- and viewing completions. You can also find the
-functions in the Calc documentation in many places. Find the
-single-variable statistics at 10.7.1 - Single Variable Statistics.
-That list includes:
+functions in the Calc documentation in many places. Info node
+`(calc) Single-Variable Statistics' lists the single-variable
+statistics, which include:
 
 vcount, vsum, vprod, vmax, vmean, vmeane, vmedian, vhmean,
 vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
 
-Also see the Calc function index. Usually you will find the Emacs
-Lisp function name followed by the abbreviation. For
+Also see Info node `(calc) Function Index'. Usually you will find
+the Emacs Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean].
 
 Nil data values are discarded before the calculation."
