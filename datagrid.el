@@ -13,18 +13,18 @@
 
 ;; This file is NOT part of GNU Emacs.
 
-;; GNU Emacs is free software: you can redistribute it and/or modify
+;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
 ;;
-;; GNU Emacs is distributed in the hope that it will be useful,
+;; This program is distributed in the hope that it will be useful,
 ;; but WITHOUT ANY WARRANTY; without even the implied warranty of
 ;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ;; GNU General Public License for more details.
 ;;
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -77,8 +77,6 @@
 (require 'cl-print)
 (require 'subr-x)
 (require 'seq)
-(require 'calc)
-(require 'calc-vec)
 
 (declare-function csv-mode "csv-mode")
 (declare-function csv-parse-current-row "csv-mode")
@@ -225,9 +223,9 @@ vectors, or nil for natural order."
        (datagrid--columns-equal-length-p (datagrid-columns x))))
 
 (defsubst datagrid--check (dg)
-  "Signal an error unless DG satisfies `datagridp'."
+  "Signal `wrong-type-argument' unless DG satisfies `datagridp'."
   (unless (datagridp dg)
-    (error "Argument must be a datagrid")))
+    (signal 'wrong-type-argument (list 'datagridp dg))))
 
 (defvar datagrid-column-example
   (datagrid-column-make :heading "I like Emacs."

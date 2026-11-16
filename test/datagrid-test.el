@@ -8,6 +8,8 @@
              (file-name-directory (or load-file-name buffer-file-name)))
 (require 'datagrid)
 (require 'datagrid-join)
+;; Load Calc so its display variables are special when the tests bind them.
+(require 'calc)
 
 
 ;;;; Fixtures
@@ -1796,6 +1798,21 @@
             (dg-test--mk (datagrid-column-make :heading "g"     :data (vector (aref ks 0)))
                          (datagrid-column-make :heading "other" :data vs)))))
       "g"))))
+
+(ert-deftest datagrid-test-group-modify-first-result-not-datagrid ()
+  ;; The first group's result must be validated too, not just the rest.
+  (let* ((dg (dg-test--mk
+              (datagrid-column-make :heading "g" :data ["a" "b"])
+              (datagrid-column-make :heading "v" :data [1 2])))
+         (err (should-error
+               (datagrid-group-modify
+                dg
+                (lambda (sub)
+                  (if (equal (aref (datagrid-pull sub "g") 0) "a")
+                      'not-a-datagrid
+                    sub))
+                "g"))))
+    (should (string-match-p "not a datagrid" (error-message-string err)))))
 
 
 ;;;; Logical print representation

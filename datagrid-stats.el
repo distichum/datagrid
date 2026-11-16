@@ -8,10 +8,18 @@
 
 ;; This file is NOT part of GNU Emacs.
 
-;; GNU Emacs is free software: you can redistribute it and/or modify
+;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
 ;; the Free Software Foundation, either version 3 of the License, or
 ;; (at your option) any later version.
+;;
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;;
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -22,9 +30,11 @@
 ;;; Code:
 (require 'cl-lib)
 (require 'seq)
-(require 'calc)
-(require 'calc-vec)
 (require 'datagrid)
+
+;; Calc is loaded on first use by the functions that need it.
+(defvar calc-internal-prec)
+(declare-function math-read-number "calc" (s &optional decimal))
 
 (defun datagrid-distinct (datagrid &rest cols)
   "Return DATAGRID with duplicate rows removed.
@@ -43,7 +53,7 @@ for each one, so it can be slow on large datagrids."
          (n-rows (datagrid--nrows datagrid))
          (logical-cols (mapcar (lambda (i) (datagrid-pull datagrid i))
                                indices))
-         (seen (make-hash-table :test 'equal))
+         (seen (make-hash-table :test #'equal))
          (kept nil))
     (dotimes (r n-rows)
       (let ((key (mapcar (lambda (v) (aref v r)) logical-cols)))
@@ -58,7 +68,7 @@ for each one, so it can be slow on large datagrids."
 (defun datagrid-group-by (datagrid col)
   "Group data in DATAGRID according to COL.
 COL is a zero-based column number or a heading string. Rows and
-columns are taken in logical order. Returns a vector of groups in
+columns are taken in logical order. Return a vector of groups in
 first-seen order, one group per unique value in column COL. Each
 group is a list (VALUE COLUMNS) where COLUMNS is a vector of
 column data vectors restricted to that group's rows."
@@ -94,8 +104,8 @@ loop over the data to convert strings to numbers as needed.
 
 If INITIAL-VALUE is supplied, the reduction starts from it, so
 FUNCTION is first called with INITIAL-VALUE and the first element.
-Otherwise the reduction starts from the first element, so `max' of
-\[-3 -1] is -1 and `*' of [2 3] is 6. A column with one element
+Otherwise the reduction starts from the first element, so `max'
+of [-3 -1] is -1 and `*' of [2 3] is 6. A column with one element
 returns that element without calling FUNCTION.
 
 An empty column returns INITIAL-VALUE when it is supplied. Without
@@ -104,9 +114,10 @@ arguments, so `+' gives 0 and `*' gives 1, and nil otherwise, so
 `max' gives nil.
 
 Examples:
-\ (datagrid-reduce-vec datagrid-example #\\='+ 2)
-\ (datagrid-reduce-vec datagrid #\\='max col :code t :convert t)
-\ (datagrid-reduce-vec datagrid #\\='+ col :initial-value 100)
+
+  (datagrid-reduce-vec datagrid-example #\\='+ 2)
+  (datagrid-reduce-vec datagrid #\\='max col :code t :convert t)
+  (datagrid-reduce-vec datagrid #\\='+ col :initial-value 100)
 
 This follows `cl-reduce'."
   (datagrid--check datagrid)
@@ -132,15 +143,17 @@ understand. Calc floating points must look like (float 25 -2).
 Use this to prepare a sequence of items.
 
 Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)"
-  (let* ((it (cond ((stringp item) (if (equal item "")
-                                       nil
-                                     (string-to-number item)))
-                   ((numberp item) item)
-                   ((null item) item)
-                   (t (error "%s cannot be coerced into a number"
-                             item)))))
+  (let ((it (cond ((stringp item) (if (equal item "")
+                                      nil
+                                    (string-to-number item)))
+                  ((numberp item) item)
+                  ((null item) item)
+                  (t (error "%S cannot be coerced into a number"
+                            item)))))
     (if (floatp it)
-        (math-read-number (number-to-string it))
+        (progn
+          (require 'calc)
+          (math-read-number (number-to-string it)))
       it)))
 
 (defun datagrid--prep-calc-vec (vec convert)
@@ -158,9 +171,10 @@ LST is a list. This function only handles single-variable vector
 statistics.
 
 Examples:
-\ (datagrid-calc-function-wrapper \"vmax\" `(1 2 3 4 5 5000))
-\ (datagrid-calc-function-wrapper \"vflat\" `(1 2 3 4 5 5000))
-\ (datagrid-calc-function-wrapper \"vmedian\" `(1 2 3 4 5 5000))
+
+  (datagrid-calc-function-wrapper \"vmax\" \\='(1 2 3 4 5 5000))
+  (datagrid-calc-function-wrapper \"vflat\" \\='(1 2 3 4 5 5000))
+  (datagrid-calc-function-wrapper \"vmedian\" \\='(1 2 3 4 5 5000))
 
 LST must hold only numbers, without nil. They may be Lisp numbers
 or Calc numbers such as those from `datagrid-prep-for-calc'.
@@ -171,9 +185,9 @@ grouping cannot change the result. Return a Lisp number, or nil
 when Calc cannot reduce the input to a real number, as for the
 median of an empty list or the standard deviation of one value.
 
-You can find Calc functions by doing \\[describe-function] (C-h
-f) and typing calcFunc- and viewing completions. You can also
-find the functions in the Calc documentation in many places. Find
+You can find Calc functions by doing \\[describe-function] and
+typing calcFunc- and viewing completions. You can also find the
+functions in the Calc documentation in many places. Find
 the single-variable statistics at 10.7.1 - Single Variable
 Statistics. That list includes:
 
@@ -183,6 +197,7 @@ vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
 Also see the Calc function index. Usually you will find the Emacs
 Lisp function name followed by the abbreviation. For
 example (calc-vector-mean) [vmean]."
+  (require 'calc)
   (let ((result (calc-eval (list (concat func-abbrev "($)")
                                  'calc-internal-prec calc-internal-prec
                                  'calc-display-working-message nil)
@@ -218,11 +233,11 @@ non-nil, loop over the data to convert strings to numbers as
 needed.
 
 FUNC-ABBREV is a string for the Calc abbreviation for a function.
-You can find these functions by doing \\[describe-function] (C-h f) and typing calcFunc-
-and viewing completions. You can also find the functions in the
-Calc documentation in many places. Find the single-variable
-statistics at 10.7.1 - Single Variable Statistics. That list
-includes:
+You can find these functions by doing \\[describe-function] and
+typing calcFunc- and viewing completions. You can also find the
+functions in the Calc documentation in many places. Find the
+single-variable statistics at 10.7.1 - Single Variable Statistics.
+That list includes:
 
 vcount, vsum, vprod, vmax, vmean, vmeane, vmedian, vhmean,
 vgmean, agmean, rms, vsdev, vpsdev, vvar, vpvar, vflat
@@ -241,8 +256,9 @@ Nil data values are discarded before the calculation."
   "Compute reductions over DATAGRID columns and return an alist.
 Each spec in SPECS is a plist with the following keywords:
   :name    heading for this reduction (used as the alist key)
-  :fn      reducer (binary function for `seq-reduce', or a Calc
-           abbreviation string when :calc is non-nil)
+  :fn      reducer (a two-argument function, as for
+           `datagrid-reduce-vec', or a Calc abbreviation string
+           when :calc is non-nil)
   :col     column index or heading string
   :code    non-nil to decode the column data first
   :convert non-nil to convert strings to numbers first
@@ -250,7 +266,7 @@ Each spec in SPECS is a plist with the following keywords:
   :initial-value  starting value for the reduction; see
            `datagrid-reduce-vec'. Ignored when :calc is non-nil.
 
-Returns ((NAME . VALUE) ...) in the order of SPECS."
+Return ((NAME . VALUE) ...) in the order of SPECS."
   (mapcar (lambda (spec)
             (let* ((name (plist-get spec :name))
                    (fn (plist-get spec :fn))
@@ -286,11 +302,10 @@ Returns ((NAME . VALUE) ...) in the order of SPECS."
 COLS are column refs (zero-based integers or heading strings); they
 identify the grouping key. For every other column, FN is called once per
 group on the list of that column's values within the group, producing
-one cell. Returns a new datagrid with the COLS columns first (one row
+one cell. Return a new datagrid with the COLS columns first (one row
 per group, in first-seen order), followed by the reduced columns in
 their original order."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((key-indices (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
                               cols))
          (n-cols (datagrid--ncols datagrid))
@@ -301,7 +316,7 @@ their original order."
          (src-cols (datagrid-columns datagrid))
          (key-vecs (mapcar (lambda (i) (datagrid-pull datagrid i))
                            key-indices))
-         (groups (make-hash-table :test 'equal))
+         (groups (make-hash-table :test #'equal))
          (order nil))
     (dotimes (r n-rows)
       (let ((key (mapcar (lambda (v) (aref v r)) key-vecs)))
@@ -346,15 +361,14 @@ rows. FN must return a datagrid; its column count and headings must
 match across all groups. The per-group results are rbound and returned
 as a single datagrid. Unlike `datagrid-summarize-across', no columns are
 auto-prepended -- FN is responsible for whatever schema it returns.
-Returns an empty datagrid when DATAGRID has no rows."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+Return an empty datagrid when DATAGRID has no rows."
+  (datagrid--check datagrid)
   (let* ((key-indices (cl-loop for c in key-cols
                                collect (datagrid--resolve-col datagrid c)))
          (n-rows (datagrid--nrows datagrid))
          (key-vecs (cl-loop for i in key-indices
                             collect (datagrid-pull datagrid i)))
-         (groups (make-hash-table :test 'equal))
+         (groups (make-hash-table :test #'equal))
          (order nil))
     (dotimes (r n-rows)
       (let ((key (cl-loop for v in key-vecs collect (aref v r))))
@@ -369,16 +383,17 @@ Returns an empty datagrid when DATAGRID has no rows."
                        collect (nreverse (gethash k groups))))
              (results
               (cl-loop for rows in group-row-lists
-                       collect (funcall fn
-                                        (apply #'datagrid-slice datagrid rows))))
+                       for r = (funcall fn (apply #'datagrid-slice datagrid rows))
+                       unless (datagridp r)
+                       do (error "Group function returned %S, not a datagrid" r)
+                       collect r))
              (proto (car results))
              (proto-headings (datagrid-get-headings proto))
              (proto-ncols (datagrid--ncols proto)))
         (cl-loop for r in (cdr results)
-                 unless (and (datagridp r)
-                             (= (datagrid--ncols r) proto-ncols)
+                 unless (and (= (datagrid--ncols r) proto-ncols)
                              (equal (datagrid-get-headings r) proto-headings))
-                 do (error "datagrid-group-modify: FN result schema mismatch"))
+                 do (error "Group results differ in column count or headings"))
         (let ((out-cols
                (cl-loop for j from 0 below proto-ncols
                         for proto-col = (aref (datagrid-columns proto)
@@ -396,13 +411,12 @@ Returns an empty datagrid when DATAGRID has no rows."
 ;;;; Statistical functions
 (cl-defun datagrid-count (datagrid col &key sort name code)
   "Count occurrences of values in column COL of DATAGRID.
-COL is a zero-based integer index or heading string. Returns a
+COL is a zero-based integer index or heading string. Return a
 two-column datagrid: the unique values from COL, plus a count column.
 If SORT is non-nil, rows are ordered by descending count. NAME is the
 heading of the count column (default \"n\"). If CODE is non-nil, decode
 the source column's data before counting."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((idx (datagrid--resolve-col datagrid col))
          (cols (datagrid-columns datagrid))
          (heading (datagrid-column-heading
@@ -422,10 +436,9 @@ the source column's data before counting."
   "Return ((value . count) ...) for column COL of DATAGRID.
 COL is a zero-based column number or a heading string. Sorted by count
 descending. If CODE is non-nil, decode first."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((vec (datagrid--pull-decoded datagrid col code))
-         (counts (make-hash-table :test 'equal))
+         (counts (make-hash-table :test #'equal))
          result)
     (cl-loop for item across vec
              do (puthash item (1+ (gethash item counts 0)) counts))
@@ -433,11 +446,11 @@ descending. If CODE is non-nil, decode first."
     (nreverse (seq-sort-by #'cdr #'datagrid-unknown-type-sort result))))
 
 (defun datagrid-column-frequencies (datagrid col &optional code)
-  "Find the frequency of elements occuring in a column.
+  "Find the frequency of elements occurring in a column.
 Deprecated. Use `datagrid-count' instead.
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
-as is. Returns an alist of (value . count) sorted by count descending."
+as is. Return an alist of (value . count) sorted by count descending."
   (declare (obsolete datagrid-count "1.0"))
   (datagrid--frequencies-alist datagrid col code))
 
@@ -495,8 +508,7 @@ Deprecated. Use `datagrid-distinct' for a datagrid-shaped result, or
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first."
   (declare (obsolete datagrid-distinct "1.0"))
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let ((vec (datagrid--pull-decoded datagrid col code)))
     (seq-uniq vec)))
 
@@ -520,11 +532,14 @@ deviation of normally distributed data."
 
 ;;;; Summary reports
 (defun datagrid-report-nominal (datagrid col)
-  "Display column statistics for nominal data.
+  "Return summary statistics for COL of DATAGRID as nominal data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
-zero-based column number or a heading string."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+zero-based column number or a heading string.
+
+The result is a list whose first element is the column heading,
+followed by (LABEL . VALUE) pairs for the cardinality, the mode,
+and the five most frequent values."
+  (datagrid--check datagrid)
   (let* ((idx (datagrid--resolve-col datagrid col))
          (cols (datagrid-columns datagrid))
          (all-freq (datagrid--frequencies-alist datagrid idx nil))
@@ -542,8 +557,7 @@ COL is a zero-based column number or a heading string. STATS-NAME is a
 list of Calc function abbreviations to compute. CODE, CONVERT have the
 same meaning as in the public report functions. If INCLUDE-MAD is
 non-nil, append the median absolute deviation."
-  (unless (datagridp datagrid)
-    (error "Argument must be a datagrid"))
+  (datagrid--check datagrid)
   (let* ((idx (datagrid--resolve-col datagrid col))
          (vec (datagrid--pull-decoded datagrid idx code))
          (lst (datagrid--prep-calc-vec vec convert))
@@ -566,35 +580,41 @@ non-nil, append the median absolute deviation."
                    (datagrid-column-mad new-dg 0)))))))
 
 (cl-defun datagrid-report-ordinal (datagrid col &key code convert)
-  "Display column statistics for ordinal data.
+  "Return summary statistics for COL of DATAGRID as ordinal data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as is.
 CONVERT tells the function to convert strings to numbers.
 
-Mean and standard deviation are not included because this is
-ordinal data."
+The result is a list whose first element is the column heading,
+followed by (LABEL . VALUE) pairs. Mean and standard deviation are
+not included because this is ordinal data."
   (datagrid--report-numeric
    datagrid col '("vcount" "vmin" "vmax" "vmedian") code convert t))
 
 (cl-defun datagrid-report-interval (datagrid col &key code convert)
-  "Display column statistics for interval data.
+  "Return summary statistics for COL of DATAGRID as interval data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as is.
-CONVERT tells the function to convert strings to numbers."
+CONVERT tells the function to convert strings to numbers.
+
+The result is a list whose first element is the column heading,
+followed by (LABEL . VALUE) pairs."
   (datagrid--report-numeric
    datagrid col '("vcount" "vmin" "vmax" "vmedian" "vmean" "vsdev")
    code convert nil))
 
 (cl-defun datagrid-report-ratio (datagrid col &key code convert)
-  "Display column statistics for ratio data.
+  "Return summary statistics for COL of DATAGRID as ratio data.
 DATAGRID is a datagrid struct. COL is the column to analyze: a
 zero-based column number or a heading string. If CODE is t then decode
 the data before using the data. If CODE is nil take the data as is.
 CONVERT tells the function to convert strings to numbers.
 
-RMS stands for root-mean-square or coefficient of variation."
+The result is a list whose first element is the column heading,
+followed by (LABEL . VALUE) pairs. The \"rms\" entry is the root
+mean square."
   (datagrid--report-numeric
    datagrid col
    '("vcount" "vmin" "vmax" "vmedian" "vmean" "vgmean" "vsdev" "rms")
@@ -609,8 +629,10 @@ provided for a datagrid-column struct. It will always convert strings to
 Calc understandable numbers. This function will be slow for large data
 sets.
 
-This returns a cons structure. All columns with no specified level of
-measurement are treated as nominal data."
+Return an alist of (HEADING . REPORT), one entry per column, where
+REPORT is the result of the matching `datagrid-report-*' function.
+All columns with no specified level of measurement are treated as
+nominal data."
   (let ((cols (datagrid-columns datagrid))
         (ncols (datagrid--ncols datagrid)))
     (cl-loop for x from 0 below ncols
