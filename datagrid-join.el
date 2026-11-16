@@ -55,9 +55,9 @@
 
 ;;;; Internal helpers
 
-(defalias 'datagrid-join--empty-p 'datagrid--empty-p)
+(defalias 'datagrid--join-empty-p 'datagrid--empty-p)
 
-(defun datagrid-join--normalize-on (on dg1 dg2)
+(defun datagrid--join-normalize-on (on dg1 dg2)
   "Resolve the :on argument ON into a cons (IDX1 . IDX2).
 Also validates that DG1 and DG2 are well-formed datagrids."
   (unless on (error ":on is required"))
@@ -72,17 +72,17 @@ Also validates that DG1 and DG2 are well-formed datagrids."
            (datagrid--resolve-col dg2 b)))
     (_ (error "Bad :on value: %S" on))))
 
-(defalias 'datagrid-join--build-index 'datagrid--build-index)
+(defalias 'datagrid--join-build-index 'datagrid--build-index)
 
-(defun datagrid-join--row-map (keys1 lookup)
+(defun datagrid--join-row-map (keys1 lookup)
   "Return a vector mapping each key in KEYS1 to its row index in LOOKUP.
 Empty keys and keys not found in LOOKUP map to nil."
   (cl-map 'vector
           (lambda (k)
-            (and (not (datagrid-join--empty-p k)) (gethash k lookup)))
+            (and (not (datagrid--join-empty-p k)) (gethash k lookup)))
           keys1))
 
-(defun datagrid-join--uniquify (heading used suffix)
+(defun datagrid--join-uniquify (heading used suffix)
   "Return HEADING modified so it does not collide with USED.
 On first collision, append SUFFIX. On further collisions,
 escalate with `_2', `_3', ... after SUFFIX."
@@ -95,12 +95,12 @@ escalate with `_2', `_3', ... after SUFFIX."
                         for c = (format "%s_%d" base n)
                         unless (member c used) return c))))))
 
-(defun datagrid-join--default-cols (dg2 on2)
+(defun datagrid--join-default-cols (dg2 on2)
   "Return the logical column indices of DG2 except the key column ON2."
   (cl-loop for i from 0 below (datagrid--ncols dg2)
            unless (= i on2) collect i))
 
-(defun datagrid-join--project (dg-base dg2 cols row-map suffix)
+(defun datagrid--join-project (dg-base dg2 cols row-map suffix)
   "Append projected DG2 COLS to DG-BASE, aligned via ROW-MAP.
 COLS is a list of logical DG2 column indices. ROW-MAP is a vector
 whose length is the number of logical rows in DG-BASE, each
@@ -113,7 +113,7 @@ preserved; headings uniquified using SUFFIX)."
     (dolist (idx cols result)
       (let* ((src (aref (datagrid-columns dg2) (datagrid--col-at dg2 idx)))
              (data (datagrid-pull dg2 idx))
-             (heading (datagrid-join--uniquify
+             (heading (datagrid--join-uniquify
                        (datagrid-column-heading src) used suffix)))
         (when heading (push heading used))
         (setq result
@@ -127,17 +127,17 @@ preserved; headings uniquified using SUFFIX)."
                               (lambda (i) (and i (aref data i)))
                               row-map))))))))
 
-(defun datagrid-join--filter-rows (dg1 dg2 on keep-matched)
+(defun datagrid--join-filter-rows (dg1 dg2 on keep-matched)
   "Filter DG1 rows by whether their key matches in DG2.
 ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
 \(semi-join), nil keeps unmatched rows (anti-join)."
-  (let* ((on (datagrid-join--normalize-on on dg1 dg2))
+  (let* ((on (datagrid--join-normalize-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
-         (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
+         (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
          (mask (cl-map 'vector
                        (lambda (k)
-                         (let ((m (and (not (datagrid-join--empty-p k))
+                         (let ((m (and (not (datagrid--join-empty-p k))
                                        (gethash k lookup))))
                            (if keep-matched m (not m))))
                        (datagrid-pull dg1 on1))))
@@ -162,14 +162,14 @@ defaults to every DG2 column except the join key. SUFFIX
 disambiguates DG2 headings that collide with DG1 headings and
 defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid-join--normalize-on on dg1 dg2))
+         (on (datagrid--join-normalize-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
                         collect (datagrid--resolve-col dg2 c)))
-         (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
-         (row-map (datagrid-join--row-map (datagrid-pull dg1 on1) lookup)))
-    (datagrid-join--project dg1 dg2 cols row-map suffix)))
+         (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
+         (row-map (datagrid--join-row-map (datagrid-pull dg1 on1) lookup)))
+    (datagrid--join-project dg1 dg2 cols row-map suffix)))
 
 (cl-defun datagrid-inner-join (dg1 dg2 &key on cols suffix)
   "Return the rows of DG1 that match DG2, with DG2 columns appended.
@@ -183,17 +183,17 @@ COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid-join--normalize-on on dg1 dg2))
+         (on (datagrid--join-normalize-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
                         collect (datagrid--resolve-col dg2 c)))
-         (lookup (datagrid-join--build-index (datagrid-pull dg2 on2)))
-         (row-map (datagrid-join--row-map (datagrid-pull dg1 on1) lookup))
+         (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
+         (row-map (datagrid--join-row-map (datagrid-pull dg1 on1) lookup))
          (mask (cl-map 'vector (lambda (i) (if i t nil)) row-map))
          (dg1-f (datagrid-filter-by-mask dg1 mask))
          (rm-f (vconcat (cl-loop for i across row-map when i collect i))))
-    (datagrid-join--project dg1-f dg2 cols rm-f suffix)))
+    (datagrid--join-project dg1-f dg2 cols rm-f suffix)))
 
 (cl-defun datagrid-full-join (dg1 dg2 &key on cols suffix)
   "Return the union of DG1 and DG2 by key.
@@ -214,19 +214,19 @@ COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid-join--normalize-on on dg1 dg2))
+         (on (datagrid--join-normalize-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid-join--default-cols dg2 on2))
+         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
                         collect (datagrid--resolve-col dg2 c)))
          (keys2 (datagrid-pull dg2 on2))
          (keys1 (datagrid-pull dg1 on1))
-         (lookup2 (datagrid-join--build-index keys2))
-         (lookup1 (datagrid-join--build-index keys1))
-         (row-map (datagrid-join--row-map keys1 lookup2))
-         (left (datagrid-join--project dg1 dg2 cols row-map suffix))
+         (lookup2 (datagrid--join-build-index keys2))
+         (lookup1 (datagrid--join-build-index keys1))
+         (row-map (datagrid--join-row-map keys1 lookup2))
+         (left (datagrid--join-project dg1 dg2 cols row-map suffix))
          (extras (cl-loop for k across keys2 for i from 0
-                          unless (or (datagrid-join--empty-p k)
+                          unless (or (datagrid--join-empty-p k)
                                      (gethash k lookup1))
                           collect i))
          (n-extra (length extras)))
@@ -267,7 +267,7 @@ ON identifies the join key: an integer (same column index in
 both grids), a string (heading present in both), or a cons
 \(X . Y) for per-grid index or heading. Keys are compared with
 `equal'."
-  (datagrid-join--filter-rows dg1 dg2 on nil))
+  (datagrid--join-filter-rows dg1 dg2 on nil))
 
 (cl-defun datagrid-semi-join (dg1 dg2 &key on)
   "Return rows of DG1 whose join key is present in DG2.
@@ -277,7 +277,7 @@ ON identifies the join key: an integer (same column index in
 both grids), a string (heading present in both), or a cons
 \(X . Y) for per-grid index or heading. Keys are compared with
 `equal'; empty keys (nil or empty string) never match."
-  (datagrid-join--filter-rows dg1 dg2 on t))
+  (datagrid--join-filter-rows dg1 dg2 on t))
 
 ;;;; Deprecated
 

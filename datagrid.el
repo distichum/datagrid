@@ -110,7 +110,7 @@ for example:
 ;; presentation.
 (cl-defstruct (datagrid-column (:constructor datagrid-column-make)
                                (:copier datagrid-column-copy)
-                               (:predicate datagrid-column--p))
+                               (:predicate datagrid--column-type-p))
   "A datagrid column holds a data vector and attributes of that vector.
 The data vector may contain anything an Emacs vector may
 contain, but some functions in datagrid.el expect a single
@@ -212,7 +212,7 @@ COLUMNS is a vector of datagrid-column structs."
       (zerop (length columns))
       (let ((first-len (length (datagrid-column-data (aref columns 0)))))
         (cl-every (lambda (c)
-                    (and (datagrid-column--p c)
+                    (and (datagrid--column-type-p c)
                          (= (length (datagrid-column-data c)) first-len)))
                   columns))))
 
@@ -356,7 +356,7 @@ time."
   "Return non-nil if DG-C is a datagrid-column, nil otherwise.
 Headings must be strings. Data must be a vector. LOM must be a string.
 Code must be an alist."
-  (and (datagrid-column--p dg-c)
+  (and (datagrid--column-type-p dg-c)
        (or (null (datagrid-column-heading dg-c))
            (stringp (datagrid-column-heading dg-c)))
        (or (null (datagrid-column-data dg-c))
