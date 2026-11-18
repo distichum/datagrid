@@ -313,6 +313,9 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
                           (:name "top" :fn max :col "v")))
   #+end_src
 - The functions listed under Deprecated functions are obsolete. They still work, and byte-compiling a call to one shows a warning.
+- New: =datagrid-column-coerce= converts columns value by value, for example from CSV strings to numbers. Converted columns keep their =lom= and =code= slots.
+- When =datagrid-mutate= replaces an existing column, the column keeps its =lom= and =code= slots. Before, they were dropped. Code alists are not updated, so their keys may stop matching converted data.
+- =datagrid-mutate= signals an error unless NEW-HEADING is a string. Before, a nil heading on a grid without headings replaced the first column.
 
 The version before 1.1 was 0.1. Changes between 0.1 and 1.1 are recorded only in the git history.
 
