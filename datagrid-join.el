@@ -287,7 +287,7 @@ Rows are matched by comparing the JOIN-ON-1 column of DATAGRID1
 with the JOIN-ON-2 column of DATAGRID2.
 
 Deprecated. Use `datagrid-left-join' instead."
-  (declare (obsolete datagrid-left-join "1.0"))
+  (declare (obsolete datagrid-left-join "1.1"))
   (datagrid-left-join datagrid1 datagrid2
                       :on (cons join-on-1 join-on-2)
                       :cols dg2-indices))

@@ -889,6 +889,51 @@
     (should (equal (aref (cadr (aref result 0)) 1) [1 2 3]))))
 
 
+;;;; datagrid--group-rows
+
+(ert-deftest datagrid-test-group-rows-first-seen-order ()
+  (let ((dg (datagrid-test-simple)))
+    (should (equal (datagrid--group-rows dg '(2))
+                   '((("x") 0 2) (("y") 1 3))))))
+
+(ert-deftest datagrid-test-group-rows-two-keys ()
+  (let ((dg (datagrid-test-mk
+             (datagrid-column-make :heading "a" :data [1 1 2 1])
+             (datagrid-column-make :heading "b" :data ["p" "q" "p" "p"]))))
+    (should (equal (datagrid--group-rows dg '(0 1))
+                   '(((1 "p") 0 3) ((1 "q") 1) ((2 "p") 2))))))
+
+(ert-deftest datagrid-test-group-rows-no-keys-is-one-group ()
+  (let ((dg (datagrid-test-simple)))
+    (should (equal (datagrid--group-rows dg nil)
+                   '((nil 0 1 2 3))))))
+
+(ert-deftest datagrid-test-group-rows-nil-and-equal-keys ()
+  "Nil is its own group and keys are compared with `equal'."
+  (let ((dg (datagrid-test-mk
+             (datagrid-column-make :heading "k"
+                                   :data [nil "a" nil "a" 1 1.0]))))
+    (should (equal (datagrid--group-rows dg '(0))
+                   '(((nil) 0 2) (("a") 1 3) ((1) 4) ((1.0) 5))))))
+
+(ert-deftest datagrid-test-group-rows-uses-logical-rows ()
+  "Row indices are logical, so they match a sorted view."
+  (let* ((dg (datagrid-sort (datagrid-test-simple)
+                            '(:col "score" :reverse t)))
+         (groups (datagrid--group-rows dg '(2))))
+    (should (equal groups '((("y") 0 2) (("x") 1 3))))
+    (should (equal (datagrid-pull (datagrid--slice-rows
+                                   dg (cdr (assoc '("y") groups)))
+                                  "name")
+                   ["Dave" "Bob"]))))
+
+(ert-deftest datagrid-test-group-rows-empty-datagrid ()
+  (let ((dg (datagrid-test-mk
+             (datagrid-column-make :heading "g" :data []))))
+    (should-not (datagrid--group-rows dg '(0)))
+    (should-not (datagrid--group-rows dg nil))))
+
+
 ;;;; datagrid-reduce-vec
 
 (ert-deftest datagrid-test-reduce-vec-sum ()
@@ -1623,13 +1668,15 @@
     (should (equal (datagrid-pull rows 1) [1 2 3 9]))
     (should (equal (datagrid-pull subset 0) ["a" "b" "c" "b"]))))
 
-(ert-deftest datagrid-test-summarize-returns-alist ()
+(ert-deftest datagrid-test-summarize-returns-one-row-datagrid ()
   (let* ((dg (datagrid-test-simple))
          (out (datagrid-summarize
                dg
-               '(:name "sum" :fn + :col 1)
-               '(:name "max" :fn max :col "score"))))
-    (should (equal out '(("sum" . 100) ("max" . 40))))))
+               '((:name "sum" :fn + :col 1)
+                 (:name "max" :fn max :col "score")))))
+    (should (datagridp out))
+    (should (equal (datagrid-dimensions out) '(2 . 1)))
+    (should (equal (datagrid-to-alist out t) '(("sum" 100) ("max" 40))))))
 
 (ert-deftest datagrid-test-summarize-negative-and-product ()
   ;; Regression: the 0 seed leaked through summarize too.
@@ -1637,31 +1684,201 @@
               (datagrid-column-make :heading "v" :data [-4 -2 -8])))
          (out (datagrid-summarize
                dg
-               '(:name "max" :fn max :col "v")
-               '(:name "min" :fn min :col "v")
-               '(:name "prod" :fn * :col 0)
-               '(:name "sum" :fn + :col 0))))
-    (should (equal out '(("max" . -2) ("min" . -8)
-                         ("prod" . -64) ("sum" . -14))))))
+               '((:name "max" :fn max :col "v")
+                 (:name "min" :fn min :col "v")
+                 (:name "prod" :fn * :col 0)
+                 (:name "sum" :fn + :col 0)))))
+    (should (equal (datagrid-to-alist out t)
+                   '(("max" -2) ("min" -8) ("prod" -64) ("sum" -14))))))
 
 (ert-deftest datagrid-test-summarize-initial-value ()
-  (let* ((dg (datagrid-test-mk (datagrid-column-make :heading "v" :data [1 2 3])))
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "v" :data [1 2 3])))
          (out (datagrid-summarize
                dg
-               '(:name "seeded" :fn + :col "v" :initial-value 10)
-               '(:name "nil-seed" :fn (lambda (acc x) (cons x acc))
-                       :col "v" :initial-value nil)
-               '(:name "unseeded" :fn + :col "v"))))
-    (should (equal out '(("seeded" . 16)
-                         ("nil-seed" . (3 2 1))
-                         ("unseeded" . 6))))))
+               '((:name "seeded" :fn + :col "v" :initial-value 10)
+                 (:name "nil-seed" :fn (lambda (acc x) (cons x acc))
+                        :col "v" :initial-value nil)
+                 (:name "unseeded" :fn + :col "v")))))
+    (should (equal (datagrid-to-alist out t)
+                   '(("seeded" 16)
+                     ("nil-seed" (3 2 1))
+                     ("unseeded" 6))))))
 
 (ert-deftest datagrid-test-summarize-calc-ignores-initial-value ()
-  (let* ((dg (datagrid-test-mk (datagrid-column-make :heading "v" :data [1 2 3])))
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "v" :data [1 2 3])))
          (out (datagrid-summarize
-               dg '(:name "m" :fn "vmax" :col "v" :calc t
-                          :initial-value 100))))
-    (should (equal out '(("m" . 3))))))
+               dg '((:name "m" :fn "vmax" :col "v" :calc t
+                           :initial-value 100)))))
+    (should (equal (datagrid-to-alist out t) '(("m" 3))))))
+
+(ert-deftest datagrid-test-summarize-old-forms-explain-change ()
+  "Calls in the pre-1.1 form signal an error that names the change."
+  (let ((dg (datagrid-test-simple)))
+    (dolist (thunk
+             (list (lambda ()
+                     (datagrid-summarize dg '(:name "sum" :fn + :col 1)))
+                   (lambda ()
+                     (datagrid-summarize dg
+                                         '(:name "sum" :fn + :col 1)
+                                         '(:name "max" :fn max :col 1)))))
+      (let ((err (should-error (funcall thunk))))
+        (should (string-match-p "Since version 1\\.1"
+                                (error-message-string err)))))))
+
+(ert-deftest datagrid-test-summarize-rejects-unknown-keyword ()
+  (let* ((dg (datagrid-test-simple))
+         (err (should-error
+               (datagrid-summarize dg '((:name "sum" :fn + :col 1))
+                                   :bye "group"))))
+    (should (string-match-p "Unknown keyword argument :bye"
+                            (error-message-string err)))))
+
+(ert-deftest datagrid-test-summarize-help-shows-new-signature ()
+  (should (string-match-p
+           "(fn DATAGRID SPECS &key BY)"
+           (documentation 'datagrid-summarize t))))
+
+(ert-deftest datagrid-test-summarize-ungrouped-empty-datagrid ()
+  "Without BY, an empty datagrid still gives one row."
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "v" :data [])))
+         (out (datagrid-summarize
+               dg '((:name "sum" :fn + :col "v")
+                    (:name "max" :fn max :col "v")))))
+    (should (equal (datagrid-to-alist out t) '(("sum" 0) ("max" nil))))))
+
+(ert-deftest datagrid-test-summarize-by-one-column ()
+  (let* ((dg (datagrid-test-simple))
+         (out (datagrid-summarize
+               dg
+               '((:name "total" :fn + :col "score")
+                 (:name "top" :fn max :col "score"))
+               :by "group")))
+    (should (equal (datagrid-get-headings out) ["group" "total" "top"]))
+    (should (equal (datagrid-pull out "group") ["x" "y"]))
+    (should (equal (datagrid-pull out "total") [40 60]))
+    (should (equal (datagrid-pull out "top") [30 40]))))
+
+(ert-deftest datagrid-test-summarize-by-index-and-list-forms-agree ()
+  (let* ((dg (datagrid-test-simple))
+         (specs '((:name "total" :fn + :col "score")))
+         (by-heading (datagrid-summarize dg specs :by "group"))
+         (by-index (datagrid-summarize dg specs :by 2))
+         (by-list (datagrid-summarize dg specs :by '("group"))))
+    (should (equal (datagrid-to-alist by-heading t)
+                   (datagrid-to-alist by-index t)))
+    (should (equal (datagrid-to-alist by-heading t)
+                   (datagrid-to-alist by-list t)))))
+
+(ert-deftest datagrid-test-summarize-by-two-columns ()
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "site"
+                                    :data ["a" "a" "b" "a" "b"])
+              (datagrid-column-make :heading "year"
+                                    :data [1 2 1 1 1])
+              (datagrid-column-make :heading "v"
+                                    :data [1 10 100 2 200])))
+         (out (datagrid-summarize
+               dg '((:name "sum" :fn + :col "v"))
+               :by '("site" "year"))))
+    (should (equal (datagrid-get-headings out) ["site" "year" "sum"]))
+    (should (equal (datagrid-pull out "site") ["a" "a" "b"]))
+    (should (equal (datagrid-pull out "year") [1 2 1]))
+    (should (equal (datagrid-pull out "sum") [3 10 300]))))
+
+(ert-deftest datagrid-test-summarize-by-keeps-key-metadata ()
+  "Key columns keep their level of measurement and coding."
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "rating"
+                                    :data ["Agree" "Neutral" "Agree"]
+                                    :lom "ordinal"
+                                    :code '(("Neutral" . 3)
+                                            ("Agree" . 4)))
+              (datagrid-column-make :heading "v" :data [1 2 3])))
+         (out (datagrid-summarize
+               dg '((:name "sum" :fn + :col "v")) :by "rating"))
+         (key (aref (datagrid-columns out) 0))
+         (sum (aref (datagrid-columns out) 1)))
+    (should (equal (datagrid-column-lom key) "ordinal"))
+    (should (equal (datagrid-column-code key)
+                   '(("Neutral" . 3) ("Agree" . 4))))
+    (should (equal (datagrid-column-decode out "rating") [4 3]))
+    (should-not (datagrid-column-lom sum))
+    (should (equal (datagrid-pull out "sum") [4 2]))))
+
+(ert-deftest datagrid-test-summarize-by-code-and-calc-per-group ()
+  "Spec options such as :code and :calc apply within each group."
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "g" :data ["a" "b" "a" "b"])
+              (datagrid-column-make :heading "r"
+                                    :data ["lo" "hi" "hi" "hi"]
+                                    :code '(("lo" . 1) ("hi" . 5)))))
+         (out (datagrid-summarize
+               dg '((:name "coded-sum" :fn + :col "r" :code t)
+                    (:name "coded-max" :fn "vmax" :col "r"
+                           :code t :calc t))
+               :by "g")))
+    (should (equal (datagrid-pull out "coded-sum") [6 10]))
+    (should (equal (datagrid-pull out "coded-max") [5 5]))))
+
+(ert-deftest datagrid-test-summarize-by-nil-key-is-a-group ()
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "g" :data ["a" nil "a" nil])
+              (datagrid-column-make :heading "v" :data [1 2 3 4])))
+         (out (datagrid-summarize
+               dg '((:name "sum" :fn + :col "v")) :by "g")))
+    (should (equal (datagrid-pull out "g") ["a" nil]))
+    (should (equal (datagrid-pull out "sum") [4 6]))))
+
+(ert-deftest datagrid-test-summarize-by-follows-row-order ()
+  "Groups appear in the datagrid's logical row order."
+  (let* ((dg (datagrid-sort (datagrid-test-simple)
+                            '(:col "score" :reverse t)))
+         (out (datagrid-summarize
+               dg '((:name "first" :fn (lambda (acc _x) acc)
+                           :col "name"))
+               :by "group")))
+    (should (equal (datagrid-pull out "group") ["y" "x"]))
+    (should (equal (datagrid-pull out "first") ["Dave" "Carol"]))))
+
+(ert-deftest datagrid-test-summarize-by-on-filtered-view ()
+  "Grouping a filtered view sees only the kept rows."
+  (let* ((dg (datagrid-filter-by-mask (datagrid-test-simple)
+                                      [t t nil t]))
+         (out (datagrid-summarize
+               dg '((:name "total" :fn + :col "score")) :by "group")))
+    (should (equal (datagrid-pull out "group") ["x" "y"]))
+    (should (equal (datagrid-pull out "total") [10 60]))))
+
+(ert-deftest datagrid-test-summarize-by-empty-datagrid ()
+  "With BY and no rows, the result has headings and no rows."
+  (let* ((dg (datagrid-test-mk
+              (datagrid-column-make :heading "g" :data [] :lom "nominal")
+              (datagrid-column-make :heading "v" :data [])))
+         (out (datagrid-summarize
+               dg '((:name "sum" :fn + :col "v")) :by "g")))
+    (should (equal (datagrid-get-headings out) ["g" "sum"]))
+    (should (equal (datagrid-dimensions out) '(2 . 0)))))
+
+(ert-deftest datagrid-test-summarize-bad-column-errors-without-rows ()
+  "Column references are checked even when there are no groups."
+  (let ((dg (datagrid-test-mk
+             (datagrid-column-make :heading "g" :data [])
+             (datagrid-column-make :heading "v" :data []))))
+    (should-error (datagrid-summarize
+                   dg '((:name "sum" :fn + :col "missing")) :by "g"))
+    (should-error (datagrid-summarize
+                   dg '((:name "sum" :fn + :col "v")) :by "missing"))))
+
+(ert-deftest datagrid-test-summarize-chains-with-thread-first ()
+  (let ((out (thread-first (datagrid-test-simple)
+               (datagrid-summarize '((:name "total" :fn + :col "score"))
+                                   :by "group")
+               (datagrid-sort '(:col "total" :reverse t)))))
+    (should (equal (datagrid-pull out "group") ["y" "x"]))
+    (should (equal (datagrid-pull out "total") [60 40]))))
 
 
 (ert-deftest datagrid-test-rows-patch-fills-only-empties ()

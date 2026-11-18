@@ -4,7 +4,7 @@
 ;; Author: Joshua Lambert <jlambert@missouristate.edu>
 ;; Maintainer: Joshua Lambert <jlambert@missouristate.edu>
 ;; Created: 2025-03-31
-;; Version: 0.1
+;; Version: 1.1
 ;; Keywords: tools, convenience, sorting
 ;; URL: https://github.com/distichum/datagrid
 ;; Package-Requires: ((emacs "28.1"))
@@ -614,7 +614,7 @@ the LOM and CODE slots are not preserved."
     (datagrid--insert-csv datagrid headings)))
 
 (define-obsolete-function-alias 'datagrid-write-csv
-  #'datagrid-to-csv-file "1.0")
+  #'datagrid-to-csv-file "1.1")
 
 (defun datagrid-to-csv-buffer (datagrid buffer-name &optional headings)
   "Insert DATAGRID as CSV into a new buffer named BUFFER-NAME and display it.
@@ -629,7 +629,7 @@ buffer. This is lossy: the LOM and CODE slots are not preserved."
     buf))
 
 (define-obsolete-function-alias 'datagrid-to-csvbuf
-  #'datagrid-to-csv-buffer "1.0")
+  #'datagrid-to-csv-buffer "1.1")
 
 (defun datagrid-to-vec-of-vec (datagrid)
   "Create a vector of vectors from DATAGRID in logical order.
@@ -847,7 +847,7 @@ J and that column's pulled data, and its result replaces the data slot."
 (defun datagrid-get-col-data (datagrid index)
   "Extract a column vector from DATAGRID at logical INDEX.
 Deprecated. Use `datagrid-pull' instead."
-  (declare (obsolete datagrid-pull "1.0"))
+  (declare (obsolete datagrid-pull "1.1"))
   (datagrid-pull datagrid index))
 
 (defun datagrid-get-row-data (datagrid row-num)
@@ -957,12 +957,12 @@ Return nil if the heading is not found."
              return j)))
 
 (define-obsolete-function-alias 'datagrid-col-index-by-header
-  #'datagrid-col-index-by-heading "1.0")
+  #'datagrid-col-index-by-heading "1.1")
 
 (defun datagrid-col-data-by-header (datagrid header-text)
   "Extract column data from DATAGRID by HEADER-TEXT.
 Deprecated. Use `datagrid-pull' instead."
-  (declare (obsolete datagrid-pull "1.0"))
+  (declare (obsolete datagrid-pull "1.1"))
   (datagrid-pull datagrid header-text))
 
 (defun datagrid--code-key-equal (a b)
@@ -1046,6 +1046,27 @@ existing row-order."
     (datagrid-make :columns (datagrid-columns datagrid)
                    :row-order new-order
                    :col-order (datagrid-col-order datagrid))))
+
+(defun datagrid--group-rows (datagrid key-indices)
+  "Return the rows of DATAGRID grouped by the columns at KEY-INDICES.
+KEY-INDICES is a list of zero-based logical column indices. Return a
+list ((KEY . ROWS) ...) with one element per group, in first-seen
+order. KEY is a list of the group's values, one per key column. ROWS
+is a list of the group's logical row indices in ascending order.
+
+Keys are compared with `equal', so nil is a key like any other value.
+Return nil when DATAGRID has no rows."
+  (let ((key-vecs (cl-loop for i in key-indices
+                           collect (datagrid-pull datagrid i)))
+        (groups (make-hash-table :test #'equal))
+        (order nil))
+    (dotimes (r (datagrid--nrows datagrid))
+      (let ((key (cl-loop for v in key-vecs collect (aref v r))))
+        (unless (gethash key groups)
+          (push key order))
+        (push r (gethash key groups))))
+    (cl-loop for key in (nreverse order)
+             collect (cons key (nreverse (gethash key groups))))))
 
 
 ;;;; Provide

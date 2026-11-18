@@ -226,11 +226,13 @@ Keys are compared with =equal=, so ="1"= and =1= do not match. Empty keys never 
   #+begin_src emacs-lisp
     (datagrid-reduce-vec-calc datagrid-example "vsum" 2)
   #+end_src
-- =datagrid-summarize (datagrid &rest specs)=: Compute several reductions at once and return an alist of results. Each spec is a plist with =:name=, =:fn=, and =:col=, plus the optional =:code=, =:convert=, =:calc=, and =:initial-value=. With =:calc t=, =:fn= is a Calc abbreviation.
+- =datagrid-summarize (datagrid specs &key by)=: Compute several reductions at once and return a datagrid with one column per spec. SPECS is a list of plists, each with =:name=, =:fn=, and =:col=, plus the optional =:code=, =:convert=, =:calc=, and =:initial-value=. =:name= is the heading of the result column. With =:calc t=, =:fn= is a Calc abbreviation. Without BY, the result has one row. BY is a column or a list of columns. With BY, the result has one row per group in first-seen order, and the BY columns come first.
   #+begin_src emacs-lisp
     (datagrid-summarize datagrid-example
-                        '(:name "total-rain" :fn + :col "precipitation")
-                        '(:name "max-temp" :fn "vmax" :col "high-temp" :calc t))
+                        '((:name "total-rain" :fn + :col "precipitation")
+                          (:name "max-temp" :fn "vmax" :col "high-temp"
+                                 :calc t))
+                        :by "location")
   #+end_src
 - =datagrid-summarize-across (datagrid fn &rest cols)=: Return a datagrid with one row per unique combination of values in COLS. Every other column is reduced by calling FN on the list of its values in each group.
 - =datagrid-group-modify (datagrid fn &rest key-cols)=: Group the rows of DATAGRID by KEY-COLS, call FN on each group as a datagrid, and stack the datagrids FN returns.
@@ -283,7 +285,7 @@ You can use any of the sequence functions (=seq-=) to work with datagrid columns
 These functions see a column's stored order, not a datagrid's row-order. Use =datagrid-pull= to get the data in row order.
 
 * Deprecated functions
-These functions still work but are obsolete since version 1.0. Byte-compiling code that calls them shows a warning.
+These functions still work but are obsolete since version 1.1. Byte-compiling code that calls them shows a warning.
 
 | Deprecated                      | Use instead                      |
 |---------------------------------+----------------------------------|
@@ -295,6 +297,23 @@ These functions still work but are obsolete since version 1.0. Byte-compiling co
 | =datagrid-join=                 | =datagrid-left-join=             |
 | =datagrid-write-csv=            | =datagrid-to-csv-file=           |
 | =datagrid-to-csvbuf=            | =datagrid-to-csv-buffer=         |
+
+* Changes
+** 1.1
+- Breaking: =datagrid-summarize= takes one list of spec plists and returns a datagrid instead of an alist. Without =:by=, the result has one row. The new =:by= keyword groups the rows, and the result has one row per group. Calls in the old form, with each spec as a separate argument, signal an error that explains the change. To update a call, wrap its specs in a list:
+  #+begin_src emacs-lisp
+    ;; Before 1.1
+    (datagrid-summarize dg
+                        '(:name "total" :fn + :col "v")
+                        '(:name "top" :fn max :col "v"))
+    ;; Since 1.1
+    (datagrid-summarize dg
+                        '((:name "total" :fn + :col "v")
+                          (:name "top" :fn max :col "v")))
+  #+end_src
+- The functions listed under Deprecated functions are obsolete. They still work, and byte-compiling a call to one shows a warning.
+
+The version before 1.1 was 0.1. Changes between 0.1 and 1.1 are recorded only in the git history.
 
 * Examples
 datagrid.el includes an example datagrid named =datagrid-example=. The file =examples.org= has worked examples of every function, with their results.

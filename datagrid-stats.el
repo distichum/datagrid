@@ -50,20 +50,13 @@ for each one, so it can be slow on large datagrids."
                       (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
                               cols)
                     (number-sequence 0 (1- (datagrid--ncols datagrid)))))
-         (n-rows (datagrid--nrows datagrid))
-         (logical-cols (mapcar (lambda (i) (datagrid-pull datagrid i))
-                               indices))
-         (seen (make-hash-table :test #'equal))
-         (kept nil))
-    (dotimes (r n-rows)
-      (let ((key (mapcar (lambda (v) (aref v r)) logical-cols)))
-        (unless (gethash key seen)
-          (puthash key t seen)
-          (push r kept))))
-    (let ((subset (if cols
-                      (apply #'datagrid-select datagrid indices)
-                    datagrid)))
-      (datagrid--slice-rows subset (nreverse kept)))))
+         (kept (cl-loop for (_key . rows)
+                        in (datagrid--group-rows datagrid indices)
+                        collect (car rows)))
+         (subset (if cols
+                     (apply #'datagrid-select datagrid indices)
+                   datagrid)))
+    (datagrid--slice-rows subset kept)))
 
 (defun datagrid-group-by (datagrid col)
   "Group data in DATAGRID according to COL.
@@ -73,21 +66,12 @@ first-seen order, one group per unique value in column COL. Each
 group is a list (VALUE COLUMNS) where COLUMNS is a vector of
 column data vectors restricted to that group's rows."
   (datagrid--check datagrid)
-  (let* ((idx (datagrid--resolve-col datagrid col))
-         (col-data (datagrid-pull datagrid idx))
-         (index-map (make-hash-table :test #'equal))
-         (n (length col-data))
-         (order nil))
-    (cl-loop for i from 0 below n
-             for v = (aref col-data i)
-             do (unless (gethash v index-map) (push v order))
-             do (push i (gethash v index-map)))
+  (let ((idx (datagrid--resolve-col datagrid col)))
     (vconcat
-     (cl-loop for val in (nreverse order)
-              collect (list val
+     (cl-loop for (key . rows) in (datagrid--group-rows datagrid (list idx))
+              collect (list (car key)
                             (datagrid-to-vec-of-vec
-                             (datagrid--slice-rows
-                              datagrid (nreverse (gethash val index-map)))))))))
+                             (datagrid--slice-rows datagrid rows)))))))
 
 
 ;;;; Data analysis
@@ -252,10 +236,30 @@ Nil data values are discarded before the calculation."
          (vec (datagrid--prep-calc-vec vec convert)))
     (when vec (datagrid-calc-function-wrapper func-abbrev vec))))
 
-(defun datagrid-summarize (datagrid &rest specs)
-  "Compute reductions over DATAGRID columns and return an alist.
-Each spec in SPECS is a plist with the following keywords:
-  :name    heading for this reduction (used as the alist key)
+(defun datagrid--summarize-spec (datagrid spec idx)
+  "Return the value of the reduction SPEC over DATAGRID.
+SPEC is a plist as described in `datagrid-summarize'. IDX is the
+logical index of the column that SPEC's :col names."
+  (let ((fn (plist-get spec :fn))
+        (code (plist-get spec :code))
+        (convert (plist-get spec :convert))
+        (init (plist-member spec :initial-value)))
+    (cond ((plist-get spec :calc)
+           (datagrid-reduce-vec-calc datagrid fn idx
+                                     :code code :convert convert))
+          (init
+           (datagrid-reduce-vec datagrid fn idx
+                                :code code :convert convert
+                                :initial-value (cadr init)))
+          (t
+           (datagrid-reduce-vec datagrid fn idx
+                                :code code :convert convert)))))
+
+(cl-defun datagrid-summarize (datagrid specs &rest options
+                                        &key by &allow-other-keys)
+  "Compute reductions over DATAGRID columns and return a datagrid.
+SPECS is a list of spec plists. Each spec has these keywords:
+  :name    heading of the result column for this reduction
   :fn      reducer (a two-argument function, as for
            `datagrid-reduce-vec', or a Calc abbreviation string
            when :calc is non-nil)
@@ -263,33 +267,72 @@ Each spec in SPECS is a plist with the following keywords:
   :code    non-nil to decode the column data first
   :convert non-nil to convert strings to numbers first
   :calc    non-nil to interpret :fn as a Calc function abbreviation
-  :initial-value  starting value for the reduction; see
+  :initial-value  starting value for the reduction. See
            `datagrid-reduce-vec'. Ignored when :calc is non-nil.
 
-Return ((NAME . VALUE) ...) in the order of SPECS."
-  (mapcar (lambda (spec)
-            (let* ((name (plist-get spec :name))
-                   (fn (plist-get spec :fn))
-                   (col (plist-get spec :col))
-                   (code (plist-get spec :code))
-                   (convert (plist-get spec :convert))
-                   (calc (plist-get spec :calc))
-                   (init (plist-member spec :initial-value))
-                   (idx (datagrid--resolve-col datagrid col)))
-              (cons name
-                    (cond (calc
-                           (datagrid-reduce-vec-calc datagrid fn idx
-                                                     :code code
-                                                     :convert convert))
-                          (init
-                           (datagrid-reduce-vec datagrid fn idx
-                                                :code code :convert convert
-                                                :initial-value (cadr init)))
-                          (t
-                           (datagrid-reduce-vec datagrid fn idx
-                                                :code code
-                                                :convert convert))))))
-          specs))
+BY is a column reference (an index or heading string) or a list of
+them. Without BY, return a datagrid with one row and one column per
+spec, in the order of SPECS. With BY, rows that share the same values
+in the BY columns form a group, and the result has one row per group
+in first-seen order. The BY columns come first, keeping their level of
+measurement and coding, followed by one column per spec.
+
+Keys are compared with `equal', so nil is a group like any other
+value. With BY and no rows, the result has the headings and no rows.
+
+Example:
+
+  (datagrid-summarize datagrid-example
+                      \\='((:name \"rain\" :fn + :col \"precipitation\")
+                        (:name \"high\" :fn max :col \"high-temp\"))
+                      :by \"location\")
+
+Before version 1.1, each spec was a separate argument and the result
+was an alist. Calls in that form signal an error.
+
+\(fn DATAGRID SPECS &key BY)"
+  (datagrid--check datagrid)
+  (when (keywordp (car-safe specs))
+    (error (concat "Since version 1.1, `datagrid-summarize' takes one list"
+                   " of specs and returns a datagrid. Wrap the specs in a"
+                   " list, as in (datagrid-summarize DG (list SPEC ...))")))
+  (unless (and (listp specs) (cl-every #'consp specs))
+    (error "SPECS must be a list of spec plists: %S" specs))
+  (cl-loop for key in options by #'cddr
+           unless (eq key :by)
+           do (error "Unknown keyword argument %S" key))
+  (let* ((key-indices (cl-loop for c in (ensure-list by)
+                               collect (datagrid--resolve-col datagrid c)))
+         (spec-indices (cl-loop for spec in specs
+                                collect (datagrid--resolve-col
+                                         datagrid (plist-get spec :col))))
+         (groups (and key-indices
+                      (datagrid--group-rows datagrid key-indices)))
+         (subs (if key-indices
+                   (cl-loop for (_key . rows) in groups
+                            collect (datagrid--slice-rows datagrid rows))
+                 (list datagrid)))
+         (key-cols
+          (cl-loop for ki in key-indices
+                   for pos from 0
+                   collect (let ((new (datagrid-column-copy
+                                       (aref (datagrid-columns datagrid)
+                                             (datagrid--col-at datagrid ki)))))
+                             (setf (datagrid-column-data new)
+                                   (vconcat
+                                    (cl-loop for (key . _rows) in groups
+                                             collect (nth pos key))))
+                             new)))
+         (spec-cols
+          (cl-loop for spec in specs
+                   for idx in spec-indices
+                   collect (datagrid-column-make
+                            :heading (plist-get spec :name)
+                            :data (vconcat
+                                   (cl-loop for sub in subs
+                                            collect (datagrid--summarize-spec
+                                                     sub spec idx)))))))
+    (datagrid-make :columns (vconcat key-cols spec-cols))))
 
 (defun datagrid-first-non-empty (seq)
   "Return the first element of SEQ that is not nil and not the empty string."
@@ -309,47 +352,39 @@ their original order."
   (let* ((key-indices (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
                               cols))
          (n-cols (datagrid--ncols datagrid))
-         (n-rows (datagrid--nrows datagrid))
          (other-indices (cl-loop for i from 0 below n-cols
                                  unless (memq i key-indices)
                                  collect i))
          (src-cols (datagrid-columns datagrid))
-         (key-vecs (mapcar (lambda (i) (datagrid-pull datagrid i))
-                           key-indices))
-         (groups (make-hash-table :test #'equal))
-         (order nil))
-    (dotimes (r n-rows)
-      (let ((key (mapcar (lambda (v) (aref v r)) key-vecs)))
-        (unless (gethash key groups)
-          (push key order))
-        (push r (gethash key groups))))
-    (let* ((order (nreverse order))
-           (group-rows (mapcar (lambda (k) (nreverse (gethash k groups))) order))
-           (key-cols
-            (cl-loop for ki in key-indices
-                     for src = (datagrid-pull datagrid ki)
-                     for proto = (aref src-cols (datagrid--col-at datagrid ki))
-                     collect (let ((new (datagrid-column-copy proto)))
-                               (setf (datagrid-column-data new)
-                                     (vconcat
-                                      (mapcar (lambda (rows) (aref src (car rows)))
-                                              group-rows)))
-                               new)))
-           (reduced-cols
-            (cl-loop for oi in other-indices
-                     for src = (datagrid-pull datagrid oi)
-                     for proto = (aref src-cols (datagrid--col-at datagrid oi))
-                     collect (let ((new (datagrid-column-copy proto)))
-                               (setf (datagrid-column-data new)
-                                     (vconcat
-                                      (mapcar
-                                       (lambda (rows)
-                                         (funcall fn
-                                                  (mapcar (lambda (r) (aref src r))
-                                                          rows)))
-                                       group-rows)))
-                               new))))
-      (datagrid-make :columns (vconcat (append key-cols reduced-cols))))))
+         (group-rows (mapcar #'cdr (datagrid--group-rows datagrid
+                                                         key-indices)))
+         (key-cols
+          (cl-loop for ki in key-indices
+                   for src = (datagrid-pull datagrid ki)
+                   for proto = (aref src-cols (datagrid--col-at datagrid ki))
+                   collect (let ((new (datagrid-column-copy proto)))
+                             (setf (datagrid-column-data new)
+                                   (vconcat
+                                    (mapcar (lambda (rows)
+                                              (aref src (car rows)))
+                                            group-rows)))
+                             new)))
+         (reduced-cols
+          (cl-loop for oi in other-indices
+                   for src = (datagrid-pull datagrid oi)
+                   for proto = (aref src-cols (datagrid--col-at datagrid oi))
+                   collect (let ((new (datagrid-column-copy proto)))
+                             (setf (datagrid-column-data new)
+                                   (vconcat
+                                    (mapcar
+                                     (lambda (rows)
+                                       (funcall fn
+                                                (mapcar (lambda (r)
+                                                          (aref src r))
+                                                        rows)))
+                                     group-rows)))
+                             new))))
+    (datagrid-make :columns (vconcat (append key-cols reduced-cols)))))
 
 (defun datagrid-group-modify (datagrid fn &rest key-cols)
   "Group DATAGRID rows by KEY-COLS, apply FN to each group, rbind results.
@@ -365,23 +400,11 @@ Return an empty datagrid when DATAGRID has no rows."
   (datagrid--check datagrid)
   (let* ((key-indices (cl-loop for c in key-cols
                                collect (datagrid--resolve-col datagrid c)))
-         (n-rows (datagrid--nrows datagrid))
-         (key-vecs (cl-loop for i in key-indices
-                            collect (datagrid-pull datagrid i)))
-         (groups (make-hash-table :test #'equal))
-         (order nil))
-    (dotimes (r n-rows)
-      (let ((key (cl-loop for v in key-vecs collect (aref v r))))
-        (unless (gethash key groups)
-          (push key order))
-        (push r (gethash key groups))))
-    (if (null order)
+         (group-row-lists (mapcar #'cdr (datagrid--group-rows datagrid
+                                                              key-indices))))
+    (if (null group-row-lists)
         (datagrid-make :columns (vector))
-      (let* ((order (nreverse order))
-             (group-row-lists
-              (cl-loop for k in order
-                       collect (nreverse (gethash k groups))))
-             (results
+      (let* ((results
               (cl-loop for rows in group-row-lists
                        for r = (funcall fn (apply #'datagrid-slice datagrid rows))
                        unless (datagridp r)
@@ -451,7 +474,7 @@ Deprecated. Use `datagrid-count' instead.
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first. If nil, take code
 as is. Return an alist of (value . count) sorted by count descending."
-  (declare (obsolete datagrid-count "1.0"))
+  (declare (obsolete datagrid-count "1.1"))
   (datagrid--frequencies-alist datagrid col code))
 
 (defun datagrid--quantile-sorted (vec p)
@@ -507,7 +530,7 @@ Deprecated. Use `datagrid-distinct' for a datagrid-shaped result, or
 `datagrid-pull' + `seq-uniq' for the bare vector.
 DATAGRID is a datagrid struct. COL is a zero-based column number or a
 heading string. If CODE is t, then decode data first."
-  (declare (obsolete datagrid-distinct "1.0"))
+  (declare (obsolete datagrid-distinct "1.1"))
   (datagrid--check datagrid)
   (let ((vec (datagrid--pull-decoded datagrid col code)))
     (seq-uniq vec)))

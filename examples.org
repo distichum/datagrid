@@ -749,34 +749,70 @@ the decoded column.
 
 ** datagrid-summarize
 
-=datagrid-summarize= runs one or more reductions and returns an alist
-of =(name . value)=. Each spec is a plist that names the reducer, the
-column, and whether to decode or convert values first. The =:calc= key
-tells the function to interpret =:fn= as a Calc abbreviation rather
-than an Emacs Lisp function.
+=datagrid-summarize= runs one or more reductions and returns a
+datagrid. Its second argument is a list of specs. Each spec is a plist
+that names the result column, the reducer, the source column, and
+whether to decode or convert values first. The =:calc= key tells the
+function to interpret =:fn= as a Calc abbreviation rather than an
+Emacs Lisp function. Without =:by=, the result has one row.
 
 #+begin_src emacs-lisp
-  (datagrid-summarize
-   dg
-   '(:name "total-hours" :fn + :col "study-hours")
-   '(:name "max-hours"   :fn max :col "study-hours")
-   ;; Calc statistics: pass :calc t and a Calc abbreviation as a string.
-   '(:name "median-hours" :fn "vmedian" :col "study-hours" :calc t)
-   ;; Floats need no conversion; :convert t is for numbers stored
-   ;; as strings.
-   '(:name "median-att" :fn "vmedian" :col "attendance" :calc t)
-   ;; The grade column stores label strings, so we decode to the numeric
-   ;; codes first with :code t before asking Calc for the mean.
-   '(:name "mean-grade-code" :fn "vmean" :col "grade" :calc t :code t))
+  (datagrid-to-org-table
+   (datagrid-summarize
+    dg
+    '((:name "total-hours" :fn + :col "study-hours")
+      (:name "max-hours" :fn max :col "study-hours")
+      ;; Calc statistics: pass :calc t and a Calc abbreviation string.
+      (:name "median-hours" :fn "vmedian" :col "study-hours" :calc t)
+      ;; Floats need no conversion. :convert t is for numbers stored
+      ;; as strings.
+      (:name "median-att" :fn "vmedian" :col "attendance" :calc t)
+      ;; The grade column stores label strings, so we decode to the
+      ;; numeric codes first with :code t before asking Calc for the
+      ;; mean.
+      (:name "mean-grade-code" :fn "vmean" :col "grade"
+             :calc t :code t))))
 #+end_src
 
 #+RESULTS:
-: ((total-hours . 188) (max-hours . 18) (median-hours . 9.5) (median-att . 0.84) (mean-grade-code . 2.75))
+| total-hours | max-hours | median-hours | median-att | mean-grade-code |
+|-------------+-----------+--------------+------------+-----------------|
+|         188 |        18 |          9.5 |       0.84 |            2.75 |
 
 Setting =:code t= tells the summarizer to decode through the column's
 coding alist before reducing. That is essential here because Calc
 cannot average the strings ="A"=, ="B"=, ="C"= directly. Decoding
 turns them into integers Calc can handle.
+
+*** Summaries by group
+
+Pass =:by= to get one row per group instead. =:by= takes one column or
+a list of columns. Groups appear in the order they are first seen, and
+the =:by= columns come first in the result, keeping their level of
+measurement and coding. Because the result is a datagrid, it chains
+with the other verbs in =thread-first=.
+
+#+begin_src emacs-lisp
+  (thread-first dg
+    (datagrid-summarize
+     '((:name "students" :fn (lambda (n _x) (1+ n)) :col "student-id"
+              :initial-value 0)
+       (:name "mean-hours" :fn "vmean" :col "study-hours" :calc t)
+       (:name "mean-grade-code" :fn "vmean" :col "grade"
+              :calc t :code t))
+     :by "course-code")
+    (datagrid-sort '(:col "mean-hours" :reverse t))
+    (datagrid-to-org-table :digits 2))
+#+end_src
+
+#+RESULTS:
+| course-code | students | mean-hours | mean-grade-code |
+|-------------+----------+------------+-----------------|
+| Art         |        3 |      13.67 |            3.67 |
+| Science     |        4 |      10.25 |            2.75 |
+| Math        |        5 |        9.6 |               3 |
+| History     |        3 |          9 |            2.67 |
+| English     |        5 |        6.2 |               2 |
 
 ** datagrid-summarize-across
 
