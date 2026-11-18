@@ -739,6 +739,45 @@ of the research data and the value is another. For example:
                    :row-order (datagrid-row-order datagrid)
                    :col-order (datagrid-col-order datagrid))))
 
+(defun datagrid-column-coerce (datagrid converters)
+  "Return a copy of DATAGRID with some columns converted value by value.
+CONVERTERS is an alist of (COLS . FN). COLS is a column ref (zero-based
+integer or heading string) or a list of such refs. FN is a function
+of one argument that is called on every value in those columns, and
+its result replaces the value. FN is a function, not a type name.
+
+Converted columns keep their lom and code slots. The code alist is
+not updated, so its keys may no longer match the converted data.
+Signal an error if a column appears more than once in CONVERTERS.
+DATAGRID is not modified.
+
+For example, this reads a CSV file and converts two columns to
+numbers:
+
+  (datagrid-column-coerce
+   (datagrid-from-csv-file \"data.csv\" t)
+   \\='((\"age\" . string-to-number)
+     ((\"q1\" \"q2\") . string-to-number)))"
+  (datagrid--check datagrid)
+  (let ((ncols (datagrid--ncols datagrid))
+        (fns nil))
+    (cl-loop for (cols . fn) in converters
+             do (unless (functionp fn)
+                  (error "Not a function: %S" fn))
+             do (cl-loop for c in (if (listp cols) cols (list cols))
+                         for j = (datagrid--resolve-col datagrid c)
+                         do (unless (and (>= j 0) (< j ncols))
+                              (error "Column index out of range: %S" c))
+                         do (when (assq j fns)
+                              (error "Column listed more than once: %S" c))
+                         do (push (cons j fn) fns)))
+    (datagrid-make
+     :columns (datagrid--materialize-columns
+               datagrid
+               (lambda (j data)
+                 (let ((fn (alist-get j fns)))
+                   (if fn (cl-map 'vector fn data) data)))))))
+
 
 ;;;; Datagrid utilities; results are not datagrids
 (defun datagrid-dimensions (datagrid)

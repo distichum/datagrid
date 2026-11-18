@@ -58,8 +58,16 @@ DATAGRID is a datagrid. NEW-HEADING is the heading for the produced
 column; if a column with that heading already exists it is replaced,
 otherwise a new column is appended. FN receives one value per
 SOURCE-COL, in order. SOURCE-COLS are logical column references
-\(integer index or heading string)."
+\(integer index or heading string).
+
+A replaced column keeps its lom and code slots. This lets FN convert
+a column in place, for example from strings to numbers. The code
+alist is kept as is, so its keys may no longer match the new data.
+Signal an error unless NEW-HEADING is a string. To convert columns
+that have no headings, use `datagrid-column-coerce'."
   (datagrid--check datagrid)
+  (unless (stringp new-heading)
+    (error "NEW-HEADING must be a string: %S" new-heading))
   (let* ((n-rows (datagrid--nrows datagrid))
          (col-vecs (mapcar
                     (lambda (c)
@@ -70,15 +78,18 @@ SOURCE-COL, in order. SOURCE-COLS are logical column references
     (dotimes (r n-rows)
       (aset new-data r
             (apply fn (mapcar (lambda (v) (aref v r)) col-vecs))))
-    (let* ((new-col (datagrid-column-make :heading new-heading :data new-data))
-           (existing (cl-position new-heading
-                                  (datagrid-get-headings datagrid)
-                                  :test #'equal)))
+    (let ((existing (cl-position new-heading
+                                 (datagrid-get-headings datagrid)
+                                 :test #'equal)))
       (if existing
+          ;; Materialized columns are fresh copies, so setting the data
+          ;; slot keeps the old metadata without touching DATAGRID.
           (let ((mat (datagrid--materialize-columns datagrid)))
-            (aset mat existing new-col)
+            (setf (datagrid-column-data (aref mat existing)) new-data)
             (datagrid-make :columns mat))
-        (datagrid-add-column datagrid new-col)))))
+        (datagrid-add-column
+         datagrid
+         (datagrid-column-make :heading new-heading :data new-data))))))
 
 (defun datagrid-rename (datagrid col-or-renames &optional new-heading)
   "Return a new DATAGRID with one or more headings renamed.

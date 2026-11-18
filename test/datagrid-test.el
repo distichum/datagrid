@@ -1635,6 +1635,62 @@
     (should (equal (datagrid-get-headings replaced) ["name" "score" "group"]))
     (should (equal (datagrid-pull replaced "score") [11 21 31 41]))))
 
+(ert-deftest datagrid-test-mutate-replace-keeps-metadata ()
+  (let* ((code '(("low" . 10) ("high" . 40)))
+         (dg (datagrid-column-add-code (datagrid-test-simple) "score" code))
+         (out (datagrid-mutate dg "score" #'number-to-string "score"))
+         (col (datagrid-test-col out 1)))
+    (should (equal (datagrid-pull out "score") ["10" "20" "30" "40"]))
+    (should (equal (datagrid-column-lom col) "ratio"))
+    (should (equal (datagrid-column-code col) code))
+    ;; DATAGRID itself is unchanged.
+    (should (equal (datagrid-pull dg "score") [10 20 30 40]))))
+
+(ert-deftest datagrid-test-mutate-rejects-non-string-heading ()
+  (let ((dg (datagrid-test-simple)))
+    (should-error (datagrid-mutate dg nil #'identity 1))
+    (should-error (datagrid-mutate dg 1 #'identity 1))))
+
+(ert-deftest datagrid-test-column-coerce-converts-and-keeps-metadata ()
+  (let* ((code '(("low" . 10)))
+         (dg (datagrid-column-add-code (datagrid-test-simple) "score" code))
+         (out (datagrid-column-coerce
+               dg '(("score" . number-to-string) (0 . upcase))))
+         (col (datagrid-test-col out 1)))
+    (should (equal (datagrid-pull out "name")
+                   ["ALICE" "BOB" "CAROL" "DAVE"]))
+    (should (equal (datagrid-pull out "score") ["10" "20" "30" "40"]))
+    (should (equal (datagrid-column-lom col) "ratio"))
+    (should (equal (datagrid-column-code col) code))
+    (should (equal (datagrid-pull dg "score") [10 20 30 40]))))
+
+(ert-deftest datagrid-test-column-coerce-list-of-cols ()
+  (let* ((dg (datagrid-from-alist '(("a" "1" "2") ("b" "3" "4") ("c" "x" "y"))
+                                  t))
+         (out (datagrid-column-coerce dg '((("a" "b") . string-to-number)))))
+    (should (equal (datagrid-pull out "a") [1 2]))
+    (should (equal (datagrid-pull out "b") [3 4]))
+    (should (equal (datagrid-pull out "c") ["x" "y"]))))
+
+(ert-deftest datagrid-test-column-coerce-without-headings ()
+  (let* ((dg (datagrid-from-alist '(("1" "2") ("x" "y"))))
+         (out (datagrid-column-coerce dg '((1 . upcase)))))
+    (should (equal (datagrid-pull out 0) ["1" "2"]))
+    (should (equal (datagrid-pull out 1) ["X" "Y"]))))
+
+(ert-deftest datagrid-test-column-coerce-respects-row-order ()
+  (let* ((dg (datagrid-sort (datagrid-test-simple) '(:col "score" :reverse t)))
+         (out (datagrid-column-coerce dg '(("score" . 1+)))))
+    (should (equal (datagrid-pull out "score") [41 31 21 11]))))
+
+(ert-deftest datagrid-test-column-coerce-errors ()
+  (let ((dg (datagrid-test-simple)))
+    (should-error (datagrid-column-coerce dg '(("nope" . identity))))
+    (should-error (datagrid-column-coerce dg '((9 . identity))))
+    (should-error (datagrid-column-coerce dg '(("score" . not-a-fn))))
+    (should-error (datagrid-column-coerce
+                   dg '(("score" . identity) (1 . identity))))))
+
 (ert-deftest datagrid-test-mutate-multiple-source-cols ()
   (let* ((dg (datagrid-test-simple))
          (out (datagrid-mutate dg "label" (lambda (n s) (format "%s:%d" n s))

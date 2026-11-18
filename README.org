@@ -73,6 +73,7 @@ A datagrid-column may hold textual data such as: Strongly disagree, Disagree, Ne
 
 - =datagrid-column-add-code (datagrid cols code)=: Set the coding for one or more datagrid columns and return a new datagrid. =Cols= can be a column index, a heading string, or a list of them. The alist CODE is put in the code slot of each of those columns. DATAGRID is not modified.
 - =datagrid-column-decode (datagrid col &optional default missing)=: Return a vector where each element in the vector has been changed to the appropriate value based on the mapping in the datagrid-column code slot. DEFAULT replaces non-nil values that are not in the alist, and MISSING replaces nil values. Both default to nil. If the code slot is nil, the data slot is returned unchanged.
+- =datagrid-column-coerce (datagrid converters)=: Return a datagrid with some columns converted value by value. CONVERTERS is an alist of =(COLS . FN)=, where COLS is a column index, a heading string, or a list of them, and FN is called on each value. Converted columns keep their =lom= and =code= slots, but the code alist is not updated. This is the usual way to turn CSV strings into numbers: =(datagrid-column-coerce (datagrid-from-csv-file "data.csv" t) '(("age" . string-to-number)))=.
 
 ** Level of measurement
 The Level Of Measurement (LOM) may be one of the following:
@@ -177,7 +178,7 @@ To add a column to an existing datagrid, use =datagrid-add-column=. It fits the 
 - =datagrid-remove-row (datagrid &rest indices)=: Remove the DATAGRID rows at INDICES.
 - =datagrid-select (datagrid &rest cols)=: Return a datagrid with only the columns in COLS, in the order given. The result shares column data with DATAGRID.
 - =datagrid-slice (datagrid &rest row-indices)=: Return a datagrid with only the rows at ROW-INDICES. The result shares column data with DATAGRID.
-- =datagrid-mutate (datagrid new-heading fn &rest source-cols)=: Return a datagrid with a column NEW-HEADING made by calling FN on each row's values from SOURCE-COLS. If a column already has NEW-HEADING, it is replaced.
+- =datagrid-mutate (datagrid new-heading fn &rest source-cols)=: Return a datagrid with a column NEW-HEADING made by calling FN on each row's values from SOURCE-COLS. If a column already has NEW-HEADING, it is replaced and keeps its =lom= and =code= slots, so FN can convert a column in place, for example =(datagrid-mutate dg "age" #'string-to-number "age")=. The code alist is not updated, so its keys may stop matching the converted data.
 - =datagrid-rename (datagrid col-or-renames &optional new-heading)=: Return a datagrid with renamed headings. Pass a column and NEW-HEADING to rename one column, or an alist =((OLD . NEW) ...)= to rename several.
 - =datagrid-set-headings (datagrid heading-list)=: Return a datagrid whose headings are the strings in HEADING-LIST, in column order.
 - =datagrid-set-elt (datagrid column-num row-num value &optional inplace)=: Return a datagrid with VALUE at a specific column and row. DATAGRID is not modified unless INPLACE is non-nil. An in-place change also shows in every datagrid that shares that column's data.
