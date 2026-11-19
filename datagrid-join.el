@@ -85,6 +85,20 @@ escalate with `_2', `_3', ... after SUFFIX."
   (cl-loop for i from 0 below (datagrid--ncols dg2)
            unless (= i on2) collect i))
 
+(defun datagrid--join-setup (dg1 dg2 on cols suffix)
+  "Resolve the ON, COLS and SUFFIX arguments of a projecting join.
+Return (SUFFIX COLS ROW-MAP ON1 KEYS1 KEYS2), with SUFFIX
+defaulted, COLS as logical DG2 indices, ROW-MAP from
+`datagrid--join-row-map', and the key column and keys of each grid."
+  (pcase-let* ((`(,on1 . ,on2) (datagrid--resolve-on on dg1 dg2))
+               (keys1 (datagrid-pull dg1 on1))
+               (keys2 (datagrid-pull dg2 on2)))
+    (list (or suffix "_2")
+          (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
+                   collect (datagrid--resolve-col dg2 c))
+          (datagrid--join-row-map keys1 (datagrid--join-build-index keys2))
+          on1 keys1 keys2)))
+
 (defun datagrid--join-project (dg-base dg2 cols row-map suffix)
   "Append projected DG2 COLS to DG-BASE, aligned via ROW-MAP.
 COLS is a list of logical DG2 column indices. ROW-MAP is a vector
@@ -146,14 +160,8 @@ COLS is a list of DG2 column indices or headings to project. It
 defaults to every DG2 column except the join key. SUFFIX
 disambiguates DG2 headings that collide with DG1 headings and
 defaults to \"_2\"."
-  (let* ((suffix (or suffix "_2"))
-         (on (datagrid--resolve-on on dg1 dg2))
-         (on1 (car on))
-         (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
-                        collect (datagrid--resolve-col dg2 c)))
-         (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
-         (row-map (datagrid--join-row-map (datagrid-pull dg1 on1) lookup)))
+  (pcase-let ((`(,suffix ,cols ,row-map . ,_)
+               (datagrid--join-setup dg1 dg2 on cols suffix)))
     (datagrid--join-project dg1 dg2 cols row-map suffix)))
 
 (cl-defun datagrid-inner-join (dg1 dg2 &key on cols suffix)
@@ -167,17 +175,11 @@ has duplicate keys, the first occurrence wins.
 COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
-  (let* ((suffix (or suffix "_2"))
-         (on (datagrid--resolve-on on dg1 dg2))
-         (on1 (car on))
-         (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
-                        collect (datagrid--resolve-col dg2 c)))
-         (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
-         (row-map (datagrid--join-row-map (datagrid-pull dg1 on1) lookup))
-         (mask (cl-map 'vector (lambda (i) (if i t nil)) row-map))
-         (dg1-f (datagrid-filter-by-mask dg1 mask))
-         (rm-f (vconcat (cl-loop for i across row-map when i collect i))))
+  (pcase-let* ((`(,suffix ,cols ,row-map . ,_)
+                (datagrid--join-setup dg1 dg2 on cols suffix))
+               (mask (cl-map 'vector (lambda (i) (if i t nil)) row-map))
+               (dg1-f (datagrid-filter-by-mask dg1 mask))
+               (rm-f (vconcat (cl-loop for i across row-map when i collect i))))
     (datagrid--join-project dg1-f dg2 cols rm-f suffix)))
 
 (cl-defun datagrid-full-join (dg1 dg2 &key on cols suffix)
@@ -198,23 +200,15 @@ has duplicate keys, the first occurrence wins.
 COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
-  (let* ((suffix (or suffix "_2"))
-         (on (datagrid--resolve-on on dg1 dg2))
-         (on1 (car on))
-         (on2 (cdr on))
-         (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
-                        collect (datagrid--resolve-col dg2 c)))
-         (keys2 (datagrid-pull dg2 on2))
-         (keys1 (datagrid-pull dg1 on1))
-         (lookup2 (datagrid--join-build-index keys2))
-         (lookup1 (datagrid--join-build-index keys1))
-         (row-map (datagrid--join-row-map keys1 lookup2))
-         (left (datagrid--join-project dg1 dg2 cols row-map suffix))
-         (extras (cl-loop for k across keys2 for i from 0
-                          unless (or (datagrid--join-empty-p k)
-                                     (gethash k lookup1))
-                          collect i))
-         (n-extra (length extras)))
+  (pcase-let* ((`(,suffix ,cols ,row-map ,on1 ,keys1 ,keys2)
+                (datagrid--join-setup dg1 dg2 on cols suffix))
+               (lookup1 (datagrid--join-build-index keys1))
+               (left (datagrid--join-project dg1 dg2 cols row-map suffix))
+               (extras (cl-loop for k across keys2 for i from 0
+                                unless (or (datagrid--join-empty-p k)
+                                           (gethash k lookup1))
+                                collect i))
+               (n-extra (length extras)))
     (if (zerop n-extra)
         left
       (let* ((extras-vec (vconcat extras))
