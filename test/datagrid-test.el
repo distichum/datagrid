@@ -67,6 +67,10 @@
   (should (equal (datagrid-safe-transpose (list [1 2] [3 4]))
                  '((1 3) (2 4)))))
 
+(ert-deftest datagrid-test-safe-transpose-empty ()
+  (should (null (datagrid-safe-transpose nil)))
+  (should (null (datagrid-safe-transpose []))))
+
 
 ;;;; datagrid-unknown-type-to-number
 
@@ -217,11 +221,172 @@
     (should (= (length (datagrid-column-data (datagrid-test-col dg 1))) 3))
     (should (null (aref (datagrid-column-data (datagrid-test-col dg 1)) 2)))))
 
-(ert-deftest datagrid-test-from-alist-truncate-uneven ()
-  (let* ((alist '(("a" . (1 2 3)) ("b" . (4 5))))
-         (dg (datagrid-from-alist alist t nil)))
-    (should (= (length (datagrid-column-data (datagrid-test-col dg 0))) 2))
-    (should (= (length (datagrid-column-data (datagrid-test-col dg 1))) 2))))
+(ert-deftest datagrid-test-from-alist-unequal-lengths-error ()
+  ;; Columns are never cut to the shortest. The error names the
+  ;; lengths, by heading when there are headings.
+  (let ((err (should-error (datagrid-from-alist '(("a" 1 2 3) ("b" 4 5)) t))))
+    (should (string-match-p "((\"a\" . 3) (\"b\" . 2))"
+                            (error-message-string err))))
+  (should-error (datagrid-from-alist '((1 2 3) (4 5))))
+  (should-error (datagrid-from-alist '((1 2 3) (4 5)) nil nil)))
+
+(ert-deftest datagrid-test-from-alist-extend-uneven-no-headings ()
+  (should (equal (datagrid-to-alist (datagrid-from-alist '((1 2 3) (4)) nil t))
+                 '((1 2 3) (4 nil nil)))))
+
+(ert-deftest datagrid-test-from-alist-keeps-column-order ()
+  (should (equal (datagrid-get-headings
+                  (datagrid-from-alist '(("x" 1) ("y" 2) ("z" 3)) t))
+                 ["x" "y" "z"])))
+
+(ert-deftest datagrid-test-from-alist-empty ()
+  (dolist (headings '(nil t))
+    (dolist (extend '(nil t))
+      (let ((dg (datagrid-from-alist nil headings extend)))
+        (should (datagridp dg))
+        (should (equal (datagrid-dimensions dg) '(0 . 0)))))))
+
+
+;;;; CSV readers
+
+;; These need csv-mode or pcsv and are skipped when it is missing.
+
+(declare-function csv-mode "csv-mode")
+
+(defmacro datagrid-test-with-csv-buffer (text &rest body)
+  "Run BODY in a temporary `csv-mode' buffer holding TEXT."
+  (declare (indent 1))
+  `(with-temp-buffer
+     (insert ,text)
+     (csv-mode)
+     ,@body))
+
+(defmacro datagrid-test-with-csv-file (var text &rest body)
+  "Run BODY with VAR bound to a temporary CSV file holding TEXT."
+  (declare (indent 2))
+  `(let ((,var (make-temp-file "datagrid-test" nil ".csv" ,text)))
+     (unwind-protect (progn ,@body)
+       (delete-file ,var))))
+
+(ert-deftest datagrid-test-from-csv-buffer-with-headings ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "a,b\n1,2\n3,4\n"
+    (let ((dg (datagrid-from-csv-buffer (current-buffer) t)))
+      (should (equal (datagrid-get-headings dg) ["a" "b"]))
+      (should (equal (datagrid-to-alist dg) '(("1" "3") ("2" "4")))))))
+
+(ert-deftest datagrid-test-from-csv-buffer-without-headings ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "a,b\n1,2\n"
+    (let ((dg (datagrid-from-csv-buffer (current-buffer))))
+      (should (equal (datagrid-get-headings dg) [nil nil]))
+      (should (equal (datagrid-to-alist dg) '(("a" "1") ("b" "2")))))))
+
+(ert-deftest datagrid-test-from-csv-buffer-pads-short-rows ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "a,b,c\n1,2,3\n4\n"
+    (let ((dg (datagrid-from-csv-buffer (current-buffer) t)))
+      (should (equal (datagrid-to-alist dg t)
+                     '(("a" "1" "4") ("b" "2" nil) ("c" "3" nil)))))))
+
+(ert-deftest datagrid-test-from-csv-buffer-quoted-fields ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "name,note\nx,\"a, b\"\n"
+    (should (equal (datagrid-pull (datagrid-from-csv-buffer (current-buffer) t)
+                                  "note")
+                   ["a, b"]))))
+
+(ert-deftest datagrid-test-from-csv-buffer-empty ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer ""
+    (let ((dg (datagrid-from-csv-buffer (current-buffer) t)))
+      (should (datagridp dg))
+      (should (equal (datagrid-dimensions dg) '(0 . 0))))))
+
+(ert-deftest datagrid-test-from-csv-file-csv-mode ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-file f "a,b\r\n1,2\r\n"
+    (let ((dg (datagrid-from-csv-file f t)))
+      (should (equal (datagrid-get-headings dg) ["a" "b"]))
+      (should (equal (datagrid-to-alist dg) '(("1") ("2")))))))
+
+(ert-deftest datagrid-test-from-csv-file-pcsv ()
+  (skip-unless (require 'pcsv nil t))
+  (datagrid-test-with-csv-file f "a,b\n1,2\n"
+    (let ((dg (datagrid-from-csv-file f t 'pcsv)))
+      (should (equal (datagrid-get-headings dg) ["a" "b"]))
+      (should (equal (datagrid-to-alist dg) '(("1") ("2")))))))
+
+(ert-deftest datagrid-test-from-csv-file-pcsv-without-headings ()
+  (skip-unless (require 'pcsv nil t))
+  (datagrid-test-with-csv-file f "a,b\n1,2\n"
+    (let ((dg (datagrid-from-csv-file f nil 'pcsv)))
+      (should (equal (datagrid-get-headings dg) [nil nil]))
+      (should (equal (datagrid-to-alist dg) '(("a" "1") ("b" "2")))))))
+
+(ert-deftest datagrid-test-from-csv-file-pcsv-pads-short-rows ()
+  (skip-unless (require 'pcsv nil t))
+  (datagrid-test-with-csv-file f "a,b,c\n1,2,3\n4\n"
+    (should (equal (datagrid-to-alist (datagrid-from-csv-file f t 'pcsv) t)
+                   '(("a" "1" "4") ("b" "2" nil) ("c" "3" nil))))))
+
+(ert-deftest datagrid-test-from-csv-file-pcsv-quoted-fields ()
+  ;; A quoted field may hold a comma, a doubled quote, or a newline.
+  (skip-unless (require 'pcsv nil t))
+  (datagrid-test-with-csv-file f
+      "name,note\nx,\"a, b\"\ny,\"say \"\"hi\"\"\"\nz,\"line 1\nline 2\"\n"
+    (let ((dg (datagrid-from-csv-file f t 'pcsv)))
+      (should (equal (datagrid-pull dg "name") ["x" "y" "z"]))
+      (should (equal (datagrid-pull dg "note")
+                     ["a, b" "say \"hi\"" "line 1\nline 2"])))))
+
+(ert-deftest datagrid-test-from-csv-buffer-long-row-errors ()
+  ;; The error names the first row that is too long.
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "a,b\n1,2\n3,4,5\n6,7,8,9\n"
+    (let ((err (should-error (datagrid-from-csv-buffer (current-buffer) t))))
+      (should (string-match-p "row 3 has 3 fields, but the first row has 2"
+                              (error-message-string err))))))
+
+(ert-deftest datagrid-test-from-csv-buffer-long-row-without-headings ()
+  (skip-unless (require 'csv-mode nil t))
+  (datagrid-test-with-csv-buffer "1\n2,3\n"
+    (should-error (datagrid-from-csv-buffer (current-buffer)))))
+
+(ert-deftest datagrid-test-from-csv-file-long-row-errors ()
+  (datagrid-test-with-csv-file f "a,b\n1,2,3\n"
+    (skip-unless (or (locate-library "csv-mode") (locate-library "pcsv")))
+    (when (require 'csv-mode nil t)
+      (should-error (datagrid-from-csv-file f t)))
+    (when (require 'pcsv nil t)
+      (should-error (datagrid-from-csv-file f t 'pcsv)))))
+
+(ert-deftest datagrid-test-from-csv-file-extend-uneven-obsolete ()
+  ;; The fourth argument is left out of the advertised calling
+  ;; convention, so the byte-compiler warns about it, and it is
+  ;; ignored.
+  (should (equal (get-advertised-calling-convention
+                  (symbol-function 'datagrid-from-csv-file))
+                 '(file-path &optional headings parser)))
+  (skip-unless (require 'pcsv nil t))
+  (datagrid-test-with-csv-file f "a,b\n1,2\n3\n"
+    (let ((expected '(("a" "1" "3") ("b" "2" nil))))
+      (with-no-warnings
+        (dolist (ext '(nil t))
+          (should (equal (datagrid-to-alist
+                          (datagrid-from-csv-file f t 'pcsv ext) t)
+                         expected)))))))
+
+(ert-deftest datagrid-test-from-csv-file-empty ()
+  ;; Both parsers agree on an empty file.
+  (skip-unless (or (locate-library "csv-mode") (locate-library "pcsv")))
+  (datagrid-test-with-csv-file f ""
+    (when (require 'csv-mode nil t)
+      (should (equal (datagrid-dimensions (datagrid-from-csv-file f t))
+                     '(0 . 0))))
+    (when (require 'pcsv nil t)
+      (should (equal (datagrid-dimensions (datagrid-from-csv-file f t 'pcsv))
+                     '(0 . 0))))))
 
 
 ;;;; datagrid-make-empty
@@ -263,6 +428,29 @@
 
 (ert-deftest datagrid-test-from-vectors-errors-on-list ()
   (should-error (datagrid-from-vectors '("heading" 1 2 3))))
+
+(ert-deftest datagrid-test-from-vectors-bad-arguments ()
+  (should-error (datagrid-from-vectors))
+  (should-error (datagrid-from-vectors []))
+  (should-error (datagrid-from-vectors :extend-uneven t))
+  (should-error (datagrid-from-vectors ["a" 1] :extend-uneven t)))
+
+(ert-deftest datagrid-test-from-vectors-unequal-lengths-error ()
+  (should-error (datagrid-from-vectors ["a" 1 2] ["b" 3]))
+  (should-error (datagrid-from-vectors :extend-uneven nil ["a" 1 2] ["b" 3])))
+
+(ert-deftest datagrid-test-from-vectors-extend-uneven ()
+  (let ((dg (datagrid-from-vectors :extend-uneven t ["a" 1 2] ["b" 3] ["c"])))
+    (should (equal (datagrid-to-alist dg t)
+                   '(("a" 1 2) ("b" 3 nil) ("c" nil nil))))))
+
+(ert-deftest datagrid-test-from-vectors-matches-from-alist ()
+  (should (equal (datagrid-to-alist
+                  (datagrid-from-vectors :extend-uneven t ["a" 1 2] ["b" 3])
+                  t)
+                 (datagrid-to-alist
+                  (datagrid-from-alist '(("a" 1 2) ("b" 3)) t t)
+                  t))))
 
 
 ;;;; datagrid-dimensions

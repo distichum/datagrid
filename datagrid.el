@@ -294,17 +294,19 @@ The columns slot is a vector of datagrid-column structs.")
 ;;;; Helper functions:
 (defun datagrid-safe-transpose (seq-of-seqs)
   "Transpose a sequence of sequences and pad short rows if needed.
-SEQ-OF-SEQS is a sequence of sequences. The result is a list of lists."
-  (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
-         (listed (seq-map (lambda (seq) (if (listp seq)
-                                            seq
-                                          (append seq nil)))
-                          seq-of-seqs))
-         (padded (cl-loop for row in listed
-                          collect (append row
-                                          (make-list (- max-cols (length row))
-                                                     nil)))))
-    (apply #'cl-mapcar #'list padded)))
+SEQ-OF-SEQS is a sequence of sequences. The result is a list of lists.
+Return nil when SEQ-OF-SEQS is empty."
+  (unless (seq-empty-p seq-of-seqs)
+    (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
+           (listed (seq-map (lambda (seq) (if (listp seq)
+                                              seq
+                                            (append seq nil)))
+                            seq-of-seqs))
+           (padded (cl-loop for row in listed
+                            collect (append row
+                                            (make-list (- max-cols (length row))
+                                                       nil)))))
+      (apply #'cl-mapcar #'list padded))))
 
 (defun datagrid-unknown-type-to-number (seq)
   "Convert a sequence of unknown types to numbers.
@@ -476,27 +478,30 @@ This is lossy because other DATAGRID-COLUMN slots are not copied."
 
 ;;;; Making and changing data grids
 (defun datagrid-from-alist (alist &optional headings extend-uneven)
-  "Create a datagrid from an ALIST using the datagrid-column struct.
-If HEADINGS is nil, the alist has no headings. If HEADINGS is non-nil,
-then it does. If EXTEND-UNEVEN is non-nil, then extend lists with nil so
-that they are all the same length. If EXTEND-UNEVEN is nil, then take
-only the data for a row up to the minimum row length."
-  (let* ((ralist (reverse alist))
-         (values (mapcar (if headings #'cdr #'identity) ralist))
-         (min-length (apply (if extend-uneven #'max #'min)
-                            (mapcar #'length values)))
-         result)
-    (dolist (item ralist)
-      (let* ((label (if headings (car item) nil))
-             (data (if headings (cdr item) item))
-             (extended (if extend-uneven
-                           (append data (make-list (max 0 (- min-length (length data))) nil))
-                         (seq-take data min-length))))
-        (push (datagrid-column-make
-               :heading label
-               :data (vconcat extended))
-              result)))
-    (datagrid-make :columns (vconcat result))))
+  "Create a datagrid from ALIST, a list with one list per column.
+If HEADINGS is non-nil, the first element of each list is the column
+heading and the rest is the data. If HEADINGS is nil, every element is
+data and the columns have no headings.
+
+Signal an error if the columns have different lengths, unless
+EXTEND-UNEVEN is non-nil. Then shorter columns are padded with nil to
+the length of the longest. An empty ALIST gives a datagrid with no
+columns."
+  (let* ((labels (mapcar (lambda (item) (and headings (car item))) alist))
+         (values (mapcar (if headings #'cdr #'identity) alist))
+         (lengths (mapcar #'length values))
+         (len (apply #'max 0 lengths)))
+    (unless (or extend-uneven (cl-every (lambda (n) (= n len)) lengths))
+      (error "Columns have unequal lengths %S. Pass EXTEND-UNEVEN to pad them with nil"
+             (if headings (cl-mapcar #'cons labels lengths) lengths)))
+    (datagrid-make
+     :columns
+     (vconcat (cl-mapcar (lambda (label data)
+                           (datagrid-column-make
+                            :heading label
+                            :data (vconcat data (make-list (- len (length data))
+                                                           nil))))
+                         labels values)))))
 
 (defun datagrid-make-empty (col-num row-num &optional init heading-list)
   "Create a new datagrid with specified dimensions.
@@ -516,21 +521,51 @@ slot vector in each datagrid-column struct."
 
 
 (defun datagrid-from-vectors (&rest vectors)
-  "Create a datagrid from VECTORS.
-The first element in each vector is the heading."
-  (unless (and vectors (cl-every #'vectorp vectors))
-    (error "All arguments must be vectors"))
-  (datagrid-make
-   :columns
-   (vconcat (cl-loop for v in vectors
-                     collect (datagrid-column-make
-                              :heading (elt v 0)
-                              :data (seq-drop v 1))))))
+  "Create a datagrid from VECTORS, one vector per column.
+The first element of each vector is the column heading and the rest
+is the data.
+
+Signal an error if the columns have different lengths. To pad shorter
+columns with nil instead, as EXTEND-UNEVEN does in
+`datagrid-from-alist', put :extend-uneven and a non-nil value before
+the vectors.
+
+Examples:
+
+  (datagrid-from-vectors [\"a\" 1 2] [\"b\" 3 4])
+  (datagrid-from-vectors :extend-uneven t [\"a\" 1 2] [\"b\" 3])"
+  (let ((extend-uneven nil))
+    (when (eq (car vectors) :extend-uneven)
+      (setq extend-uneven (cadr vectors)
+            vectors (cddr vectors)))
+    (unless (and vectors
+                 (cl-every (lambda (v) (and (vectorp v) (> (length v) 0)))
+                           vectors))
+      (error "Each argument must be a vector that starts with a heading"))
+    (datagrid-from-alist (mapcar (lambda (v) (append v nil)) vectors)
+                         t extend-uneven)))
+
+(defun datagrid--from-csv-rows (rows headings)
+  "Return a datagrid from ROWS, a list of parsed CSV rows.
+HEADINGS is as in `datagrid-from-csv-file'. The first row sets the
+number of fields. A row with fewer fields is padded with nil. Signal
+an error for a row with more fields, naming the row."
+  (let ((width (length (car rows))))
+    (cl-loop for row in rows
+             for n from 1
+             when (> (length row) width)
+             do (error "CSV row %d has %d fields, but the first row has %d"
+                       n (length row) width))
+    (datagrid-from-alist (datagrid-safe-transpose rows) headings)))
 
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
   "Return a datagrid from an open csv buffer.
 BUFFER-OR-NAME is the buffer name. If HEADINGS is nil, then there
 is not a headings row. If t, then there is. The default is nil.
+
+The first row sets the number of fields. A row with fewer fields is
+padded with nil. A row with more fields signals an error that names
+the row.
 
 This requires the csv-mode package."
   (require 'csv-mode)
@@ -541,17 +576,10 @@ This requires the csv-mode package."
         (while (not (eobp))
           (push (csv-parse-current-row) rows)
           (forward-line))
-        ;; Transpose the list of rows to make it a column store.
-        (datagrid-make
-         :columns
-         (vconcat (cl-loop for item in (datagrid-safe-transpose (nreverse rows))
-                           collect (datagrid-column-make
-                                    :heading (when headings (elt item 0))
-                                    :data (vconcat (if headings
-                                                       (seq-drop item 1)
-                                                     item))))))))))
+        (datagrid--from-csv-rows (nreverse rows) headings)))))
 
-(defun datagrid-from-csv-file (file-path &optional headings parser extend-uneven)
+(defun datagrid-from-csv-file (file-path &optional headings parser
+                                         _extend-uneven)
   "Return a datagrid from a CSV file at FILE-PATH.
 If HEADINGS is nil, then there is not a headings row. If t, then
 there is. The default is nil.
@@ -563,8 +591,15 @@ PARSER selects the CSV backend:
                                 very large files without regex-stack
                                 overflow. Requires the pcsv package.
 
-EXTEND-UNEVEN is passed through to `datagrid-from-alist' (only used by
-the pcsv backend)."
+The first row sets the number of fields. A row with fewer fields is
+padded with nil. A row with more fields signals an error that names
+the row.
+
+The fourth argument, EXTEND-UNEVEN, is obsolete since 1.1 and is
+ignored. It never had an effect, because short rows were always
+padded."
+  (declare (advertised-calling-convention
+            (file-path &optional headings parser) "1.1"))
   (pcase (or parser 'csv-mode)
     ('csv-mode
      (require 'csv-mode)
@@ -579,13 +614,10 @@ the pcsv backend)."
      (require 'pcsv)
      (let ((reader (pcsv-file-parser file-path)))
        (unwind-protect
-           (datagrid-from-alist
-            (datagrid-safe-transpose
-             (cl-loop for row = (funcall reader)
-                      while row
-                      collect row))
-            headings
-            extend-uneven)
+           (datagrid--from-csv-rows (cl-loop for row = (funcall reader)
+                                             while row
+                                             collect row)
+                                    headings)
          (funcall reader t))))
     (_ (error "Unknown CSV parser: %S" parser))))
 

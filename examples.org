@@ -110,9 +110,9 @@ non-obvious from their name alone.
 keys of the alist become column headings when you pass =t= as the
 second argument, and the values become column data. The third
 argument, =extend-uneven=, decides what to do when the value lists
-have different lengths: passing =nil= truncates every column to the
-shortest list, while passing =t= pads the shorter columns with =nil=
-out to the longest length.
+have different lengths. Passing =nil=, the default, signals an error.
+Passing =t= pads the shorter columns with =nil= out to the longest
+length.
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table
@@ -132,8 +132,8 @@ out to the longest length.
 | Cleo  |       | C     |
 
 The =score= column was only two values long, so the third row gets a
-=nil= in that column. If you had passed =nil= for =extend-uneven=, the
-result would have been a two-row datagrid instead.
+=nil= in that column. If you had passed =nil= for =extend-uneven=, you
+would have gotten an error that gives the length of each column.
 
 ** datagrid-column-decode
 
