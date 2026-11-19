@@ -339,6 +339,26 @@ Empty values (per `datagrid--empty-p') and later duplicates are skipped."
       (setq i (1+ i)))
     ht))
 
+(defun datagrid--resolve-on (on dg1 dg2)
+  "Resolve the :on argument ON into a cons (IDX1 . IDX2).
+ON is an integer index or a heading string that names a column in
+both DG1 and DG2, or a cons (A . B) where A names a column in DG1 and
+B a column in DG2. IDX1 and IDX2 are logical column indices. Signal
+an error if ON is nil or malformed, and signal `wrong-type-argument'
+unless DG1 and DG2 are datagrids. The joins and `datagrid-rows-patch'
+share this, so it lives here rather than in either file."
+  (unless on (error ":on is required"))
+  (datagrid--check dg1)
+  (datagrid--check dg2)
+  (pcase on
+    ((or (pred integerp) (pred stringp))
+     (cons (datagrid--resolve-col dg1 on)
+           (datagrid--resolve-col dg2 on)))
+    (`(,a . ,b)
+     (cons (datagrid--resolve-col dg1 a)
+           (datagrid--resolve-col dg2 b)))
+    (_ (error "Bad :on value: %S" on))))
+
 (defun datagrid-unknown-type-sort (a b)
   "Predicate sort function when type is unknown.
 A and B must be the same type but the type may not be known ahead of

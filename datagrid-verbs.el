@@ -405,10 +405,7 @@ FILL values are left as is; DG1 is not modified.
 Keys are compared `equal'-strictly: \"123\" and 123 are not
 equal. Normalize types before calling if your key columns came
 from different sources."
-  (unless on (error ":on is required"))
   (unless cols (error ":cols is required"))
-  (datagrid--check dg1)
-  (datagrid--check dg2)
   (cl-labels ((build-lookup (keys vals)
                 (let ((ht (make-hash-table :test #'equal)))
                   (cl-loop for k across keys
@@ -416,14 +413,7 @@ from different sources."
                            unless (or (datagrid--empty-p k) (datagrid--empty-p v) (gethash k ht))
                            do (puthash k v ht))
                   ht)))
-    (let* ((on-pair (pcase on
-                      ((or (pred integerp) (pred stringp))
-                       (cons (datagrid--resolve-col dg1 on)
-                             (datagrid--resolve-col dg2 on)))
-                      (`(,a . ,b)
-                       (cons (datagrid--resolve-col dg1 a)
-                             (datagrid--resolve-col dg2 b)))
-                      (_ (error "Bad :on value: %S" on))))
+    (let* ((on-pair (datagrid--resolve-on on dg1 dg2))
            (on1 (car on-pair))
            (on2 (cdr on-pair))
            (result-cols (datagrid--materialize-columns dg1))

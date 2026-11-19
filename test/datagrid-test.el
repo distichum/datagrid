@@ -2243,6 +2243,37 @@
                                    :cols '((1 . 1)))))
     (should (equal (datagrid-pull out 1) [10 20 9]))))
 
+(ert-deftest datagrid-test-rows-patch-on-errors ()
+  (let ((a (datagrid-test-simple))
+        (cols '(("name" . "name"))))
+    (should-error (datagrid-rows-patch a a :cols cols))
+    (should-error (datagrid-rows-patch a a :on 5.0 :cols cols))
+    (should-error (datagrid-rows-patch a a :on "nope" :cols cols))
+    (should-error (datagrid-rows-patch a [1 2] :on "name" :cols cols)
+                  :type 'wrong-type-argument)))
+
+(ert-deftest datagrid-test-resolve-on-shared-ref ()
+  ;; One ref names the column in both grids, which may sit at
+  ;; different indices.
+  (let ((a (datagrid-test-simple))
+        (b (datagrid-select (datagrid-test-simple) "score" "name")))
+    (should (equal (datagrid--resolve-on "name" a b) '(0 . 1)))
+    (should (equal (datagrid--resolve-on 1 a b) '(1 . 1)))))
+
+(ert-deftest datagrid-test-resolve-on-cons ()
+  (let ((a (datagrid-test-simple)))
+    (should (equal (datagrid--resolve-on '("score" . 0) a a) '(1 . 0)))))
+
+(ert-deftest datagrid-test-resolve-on-errors ()
+  (let ((a (datagrid-test-simple)))
+    (should-error (datagrid--resolve-on nil a a))
+    (should-error (datagrid--resolve-on :id a a))
+    (should-error (datagrid--resolve-on "nope" a a))
+    (should-error (datagrid--resolve-on "name" a nil)
+                  :type 'wrong-type-argument)
+    (should-error (datagrid--resolve-on "name" 'x a)
+                  :type 'wrong-type-argument)))
+
 
 (ert-deftest datagrid-test-coalesce-merges-and-drops ()
   (let* ((dg (datagrid-test-mk

@@ -57,21 +57,6 @@
 
 (defalias 'datagrid--join-empty-p 'datagrid--empty-p)
 
-(defun datagrid--join-normalize-on (on dg1 dg2)
-  "Resolve the :on argument ON into a cons (IDX1 . IDX2).
-Also validates that DG1 and DG2 are well-formed datagrids."
-  (unless on (error ":on is required"))
-  (unless (datagridp dg1) (error "DG1 must be a datagrid"))
-  (unless (datagridp dg2) (error "DG2 must be a datagrid"))
-  (pcase on
-    ((or (pred integerp) (pred stringp))
-     (cons (datagrid--resolve-col dg1 on)
-           (datagrid--resolve-col dg2 on)))
-    (`(,a . ,b)
-     (cons (datagrid--resolve-col dg1 a)
-           (datagrid--resolve-col dg2 b)))
-    (_ (error "Bad :on value: %S" on))))
-
 (defalias 'datagrid--join-build-index 'datagrid--build-index)
 
 (defun datagrid--join-row-map (keys1 lookup)
@@ -131,7 +116,7 @@ preserved; headings uniquified using SUFFIX)."
   "Filter DG1 rows by whether their key matches in DG2.
 ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
 \(semi-join), nil keeps unmatched rows (anti-join)."
-  (let* ((on (datagrid--join-normalize-on on dg1 dg2))
+  (let* ((on (datagrid--resolve-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
          (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
@@ -162,7 +147,7 @@ defaults to every DG2 column except the join key. SUFFIX
 disambiguates DG2 headings that collide with DG1 headings and
 defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid--join-normalize-on on dg1 dg2))
+         (on (datagrid--resolve-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
          (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
@@ -183,7 +168,7 @@ COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid--join-normalize-on on dg1 dg2))
+         (on (datagrid--resolve-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
          (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
@@ -214,7 +199,7 @@ COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (let* ((suffix (or suffix "_2"))
-         (on (datagrid--join-normalize-on on dg1 dg2))
+         (on (datagrid--resolve-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
          (cols (cl-loop for c in (or cols (datagrid--join-default-cols dg2 on2))
