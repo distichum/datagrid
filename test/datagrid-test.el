@@ -1071,6 +1071,20 @@
     (should (equal (datagrid-column-lom (datagrid-test-col result 0)) "ordinal"))))
 
 
+;;;; datagrid-filter-vector-by-mask
+
+(ert-deftest datagrid-test-filter-vector-by-mask-is-obsolete ()
+  (should (get 'datagrid-filter-vector-by-mask 'byte-obsolete-info)))
+
+(ert-deftest datagrid-test-filter-vector-by-mask-still-works ()
+  ;; Obsolete functions keep working until they are removed.
+  (let* ((col (datagrid-column-make :heading "n" :data [3 1 2]))
+         (result (with-no-warnings
+                   (datagrid-filter-vector-by-mask col [t nil t]))))
+    (should (equal (datagrid-column-data result) [3 2]))
+    (should (equal (datagrid-column-heading result) "n"))))
+
+
 ;;;; datagrid-filter
 
 (ert-deftest datagrid-test-filter-one-column ()
@@ -1344,6 +1358,12 @@
 
 
 ;;;; datagrid-prep-for-calc
+
+;; Obsolete since 1.1. These tests stay until the function is
+;; removed, which is no earlier than 2027-05-19.
+
+(ert-deftest datagrid-test-prep-for-calc-is-obsolete ()
+  (should (get 'datagrid-prep-for-calc 'byte-obsolete-info)))
 
 (ert-deftest datagrid-test-prep-for-calc-integer ()
   (should (= (datagrid-prep-for-calc 42) 42)))

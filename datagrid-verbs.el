@@ -620,13 +620,20 @@ Other common predicate function examples using lambdas:
     mask))
 
 (defun datagrid-filter-vector-by-mask (column-struct mask)
-  "Filter a datagrid-column struct by a boolean MASK.
-COLUMN-STRUCT is a datagrid-column structure. MASK must be a vector
-with the same length as datagrid columns and the values must only be t
-or nil. It is typically created by `datagrid-create-mask'. This is a
-helper function for `datagrid-filter-by-mask'. It returns a
-datagrid-column structure that copies the original but with the data
-slot filtered."
+  "Return a copy of COLUMN-STRUCT keeping the values where MASK is non-nil.
+COLUMN-STRUCT is a datagrid-column structure. MASK is a vector with
+one element per value in the column's data slot, in stored order.
+
+A mask from `datagrid-create-mask' is in logical row order, so it
+only lines up with the stored data when the datagrid has no row
+order. After `datagrid-sort', `datagrid-filter', or a join, it
+selects the wrong values.
+
+This function is obsolete. Use `datagrid-filter-by-mask' or
+`datagrid-filter', which work on the whole datagrid in logical
+order."
+  (declare (obsolete "use `datagrid-filter-by-mask' or `datagrid-filter'."
+                     "1.1"))
   (let ((vec (datagrid-column-data column-struct))
         (new (datagrid-column-copy column-struct)))
     (setf (datagrid-column-data new)

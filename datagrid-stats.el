@@ -126,7 +126,15 @@ understand. Calc floating points must look like (float 25 -2).
 
 Use this to prepare a sequence of items.
 
-Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)"
+Example: (seq-keep #\\='datagrid-prep-for-calc your-seq)
+
+This function is obsolete since 1.1 and will be removed no earlier
+than 2027-05-19. `datagrid-calc-function-wrapper' accepts plain Lisp
+numbers, so floats no longer need converting. To turn strings into
+numbers, use `datagrid-unknown-type-to-number'."
+  (declare (obsolete "`datagrid-calc-function-wrapper' accepts Lisp numbers. \
+Use `datagrid-unknown-type-to-number' to convert strings."
+                     "1.1"))
   (let ((it (cond ((stringp item) (if (equal item "")
                                       nil
                                     (string-to-number item)))
@@ -161,7 +169,8 @@ Examples:
   (datagrid-calc-function-wrapper \"vmedian\" \\='(1 2 3 4 5 5000))
 
 LST must hold only numbers, without nil. They may be Lisp numbers
-or Calc numbers such as those from `datagrid-prep-for-calc'.
+or Calc numbers. Lisp floats are passed to Calc exactly, so they
+need no conversion first.
 
 The calculation runs through `calc-eval' with Calc's default modes,
 apart from `calc-internal-prec', so display settings such as digit

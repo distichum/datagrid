@@ -296,16 +296,18 @@ These functions see a column's stored order, not a datagrid's row-order. Use =da
 * Deprecated functions
 These functions still work but are obsolete since version 1.1. Byte-compiling code that calls them shows a warning.
 
-| Deprecated                      | Use instead                      |
-|---------------------------------+----------------------------------|
-| =datagrid-get-col-data=         | =datagrid-pull=                  |
-| =datagrid-col-data-by-header=   | =datagrid-pull=                  |
-| =datagrid-col-index-by-header=  | =datagrid-col-index-by-heading=  |
-| =datagrid-column-frequencies=   | =datagrid-count=                 |
-| =datagrid-column-unique=        | =datagrid-distinct=              |
-| =datagrid-join=                 | =datagrid-left-join=             |
-| =datagrid-write-csv=            | =datagrid-to-csv-file=           |
-| =datagrid-to-csvbuf=            | =datagrid-to-csv-buffer=         |
+| Deprecated                       | Use instead                                            |
+|----------------------------------+--------------------------------------------------------|
+| =datagrid-get-col-data=          | =datagrid-pull=                                        |
+| =datagrid-col-data-by-header=    | =datagrid-pull=                                        |
+| =datagrid-col-index-by-header=   | =datagrid-col-index-by-heading=                        |
+| =datagrid-column-frequencies=    | =datagrid-count=                                       |
+| =datagrid-column-unique=         | =datagrid-distinct=                                    |
+| =datagrid-join=                  | =datagrid-left-join=                                   |
+| =datagrid-write-csv=             | =datagrid-to-csv-file=                                 |
+| =datagrid-to-csvbuf=             | =datagrid-to-csv-buffer=                               |
+| =datagrid-filter-vector-by-mask= | =datagrid-filter-by-mask= or =datagrid-filter=         |
+| =datagrid-prep-for-calc=         | =datagrid-unknown-type-to-number=, or nothing for Calc |
 
 * Changes
 ** 1.1
@@ -327,6 +329,8 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
 - New: =datagrid-filter= keeps the rows for which a predicate returns non-nil. It is called like =datagrid-mutate=, with the predicate getting one value per named column. Unlike =datagrid-create-mask= and =datagrid-filter-by-mask=, it names the datagrid once, so it works in a =thread-first= chain.
 - New: =datagrid-to-org-table= takes =:format=, a format string, a function, or an alist of =(COLS . FMT)=. It writes every number, integers included, so =:format "%.2f"= prints 100.5 as =100.50= and 0 as =0.00=. =:digits= only rounds floats, and giving both keywords is an error.
 - New: =datagrid-to-org-table= takes =:footer=, which adds a totals row below a horizontal rule. =:footer "Total"= sums every all-number column and labels the row. A plist =(:label LABEL :fn FN :cols COLS)= picks the function and the columns. The row exists only in the table output. It is never added to the datagrid, because every row of a datagrid is an observation.
+- Obsolete: =datagrid-filter-vector-by-mask=. It applies the mask to a column's stored data, but =datagrid-create-mask= builds the mask in logical row order. After =datagrid-sort=, =datagrid-filter=, or a join, the two orders differ and the function selects the wrong values. Use =datagrid-filter-by-mask= or =datagrid-filter= instead.
+- Obsolete: =datagrid-prep-for-calc=. It converted floats to Calc's internal form, but =datagrid-calc-function-wrapper= now passes plain Lisp numbers to Calc exactly, so no conversion is needed. To turn strings into numbers, use =datagrid-unknown-type-to-number=. It still works and will be removed no earlier than 2027-05-19.
 
 The version before 1.1 was 0.1. Changes between 0.1 and 1.1 are recorded only in the git history.
 
