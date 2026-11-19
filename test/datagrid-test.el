@@ -410,6 +410,211 @@
   (let ((dg (datagrid-test-mk (datagrid-column-make :heading "a" :data []))))
     (should (equal (datagrid-to-org-table dg) '(("a") hline)))))
 
+(defun datagrid-test-money-grid ()
+  "Return a datagrid with a string, a count, and two money columns."
+  (datagrid-from-vectors ["code" "01" "22" nil]
+                         ["n" 3 1 2]
+                         ["cost" 100.5 0 -3]
+                         ["price" 1.005 nil 2.25]))
+
+(ert-deftest datagrid-test-to-org-table-format-string-pads-all-numbers ()
+  ;; Integers are formatted too; strings, nil, and headings are not.
+  (should (equal (datagrid-to-org-table (datagrid-test-money-grid)
+                                        :format "%.2f")
+                 '(("code" "n" "cost" "price") hline
+                   ("01" "3.00" "100.50" "1.00")
+                   ("22" "1.00" "0.00" "")
+                   ("" "2.00" "-3.00" "2.25")))))
+
+(ert-deftest datagrid-test-to-org-table-format-function-sees-numbers-only ()
+  (let ((seen nil))
+    (datagrid-to-org-table (datagrid-test-money-grid)
+                           :format (lambda (x) (push x seen) x))
+    (should (cl-every #'numberp seen))
+    (should (= (length seen) 8))))
+
+(ert-deftest datagrid-test-to-org-table-format-function-symbol ()
+  (should (equal (datagrid-to-org-table (datagrid-test-org-grid)
+                                        :format #'number-to-string
+                                        :headings nil)
+                 '(("x" "1.2345") ("y" "2")))))
+
+(ert-deftest datagrid-test-to-org-table-format-alist-per-column ()
+  ;; Columns not named are left as they are.
+  (should (equal (datagrid-to-org-table
+                  (datagrid-test-money-grid)
+                  :headings nil
+                  :format '(("n" . "%d") (("cost" 3) . "%.2f")))
+                 '(("01" "3" "100.50" "1.00")
+                   ("22" "1" "0.00" "")
+                   ("" "2" "-3.00" "2.25"))))
+  (should (equal (datagrid-to-org-table (datagrid-test-money-grid)
+                                        :headings nil
+                                        :format '(("cost" . "%.1f")))
+                 '(("01" 3 "100.5" 1.005)
+                   ("22" 1 "0.0" "")
+                   ("" 2 "-3.0" 2.25)))))
+
+(ert-deftest datagrid-test-to-org-table-format-alist-function ()
+  (should (equal (cadr (datagrid-to-org-table
+                        (datagrid-test-org-grid)
+                        :headings nil
+                        :format `(("b" . ,(lambda (x) (* 10 x))))))
+                 '("y" 20))))
+
+(ert-deftest datagrid-test-to-org-table-format-alist-follows-col-order ()
+  (let ((dg (datagrid-select (datagrid-test-money-grid) "cost" "n")))
+    (should (equal (car (datagrid-to-org-table dg :headings nil
+                                               :format '((1 . "%03d"))))
+                   '(100.5 "003")))))
+
+(ert-deftest datagrid-test-to-org-table-format-escapes-vertical-bar ()
+  (should (equal (cadr (datagrid-to-org-table
+                        (datagrid-test-org-grid)
+                        :headings nil
+                        :format (lambda (x) (format "%s|" x))))
+                 '("y" "2\\vert{}"))))
+
+(ert-deftest datagrid-test-to-org-table-format-with-digits-errors ()
+  (should-error (datagrid-to-org-table (datagrid-test-org-grid)
+                                       :digits 2 :format "%.2f")))
+
+(ert-deftest datagrid-test-to-org-table-format-bad-values-error ()
+  (let ((dg (datagrid-test-money-grid)))
+    ;; Not a string, function, or alist.
+    (should-error (datagrid-to-org-table dg :format 5))
+    ;; An entry that is not a cons, or whose FMT is not usable.
+    (should-error (datagrid-to-org-table dg :format '("n")))
+    (should-error (datagrid-to-org-table dg :format '(("n" . 5))))
+    ;; A column that is not there.
+    (should-error (datagrid-to-org-table dg :format '(("nope" . "%d"))))
+    (should-error (datagrid-to-org-table dg :format '((9 . "%d"))))
+    ;; The same column twice, even under two refs.
+    (should-error (datagrid-to-org-table
+                   dg :format '(("n" . "%d") (1 . "%.2f"))))))
+
+(ert-deftest datagrid-test-to-org-table-format-no-rows ()
+  (let ((dg (datagrid-test-mk (datagrid-column-make :heading "a" :data []))))
+    (should (equal (datagrid-to-org-table dg :format "%.2f")
+                   '(("a") hline)))))
+
+(ert-deftest datagrid-test-to-org-table-footer-label-and-defaults ()
+  ;; Every all-number column is summed, nils skipped. The label goes
+  ;; in the first column that is not summed.
+  (should (equal (datagrid-to-org-table (datagrid-test-money-grid)
+                                        :footer "Total")
+                 '(("code" "n" "cost" "price") hline
+                   ("01" 3 100.5 1.005)
+                   ("22" 1 0 "")
+                   ("" 2 -3 2.25)
+                   hline
+                   ("Total" 6 97.5 3.255)))))
+
+(ert-deftest datagrid-test-to-org-table-footer-does-not-change-datagrid ()
+  (let ((dg (datagrid-test-money-grid)))
+    (datagrid-to-org-table dg :footer "Total")
+    (should (equal (datagrid-dimensions dg) '(4 . 3)))))
+
+(ert-deftest datagrid-test-to-org-table-footer-uses-format ()
+  (should (equal (last (datagrid-to-org-table
+                        (datagrid-test-money-grid)
+                        :footer "Total"
+                        :format '(("n" . "%d") (("cost" "price") . "%.2f")))
+                       2)
+                 '(hline ("Total" "6" "97.50" "3.25")))))
+
+(ert-deftest datagrid-test-to-org-table-footer-uses-digits ()
+  (should (equal (car (last (datagrid-to-org-table (datagrid-test-money-grid)
+                                                   :footer "T" :digits 1)))
+                 '("T" 6 97.5 3.3))))
+
+(ert-deftest datagrid-test-to-org-table-footer-plist ()
+  (should (equal (car (last (datagrid-to-org-table
+                             (datagrid-test-money-grid)
+                             :footer '(:label "Top" :fn max
+                                              :cols ("cost" 1)))))
+                 '("Top" 3 100.5 ""))))
+
+(ert-deftest datagrid-test-to-org-table-footer-plist-without-label ()
+  (should (equal (car (last (datagrid-to-org-table
+                             (datagrid-test-money-grid)
+                             :footer '(:fn min))))
+                 '("" 1 -3 1.005))))
+
+(ert-deftest datagrid-test-to-org-table-footer-explicit-cols-only ()
+  ;; With :cols, other number columns are left empty.
+  (should (equal (car (last (datagrid-to-org-table
+                             (datagrid-test-money-grid)
+                             :footer '(:label "Total" :cols ("n")))))
+                 '("Total" 6 "" ""))))
+
+(ert-deftest datagrid-test-to-org-table-footer-label-skips-summed-cols ()
+  ;; The first column is summed, so the label goes in the second.
+  (let ((dg (datagrid-select (datagrid-test-money-grid) "n" "code" "cost")))
+    (should (equal (car (last (datagrid-to-org-table dg :footer "Total")))
+                   '(6 "Total" 97.5)))))
+
+(ert-deftest datagrid-test-to-org-table-footer-follows-row-and-col-order ()
+  (let ((dg (thread-first (datagrid-test-money-grid)
+                          (datagrid-filter (lambda (n) (> n 1)) "n")
+                          (datagrid-select "cost" "code"))))
+    (should (equal (car (last (datagrid-to-org-table dg :footer "Total")))
+                   '(97.5 "Total")))))
+
+(ert-deftest datagrid-test-to-org-table-footer-without-headings ()
+  (should (equal (datagrid-to-org-table (datagrid-test-org-grid)
+                                        :headings nil :footer "Total")
+                 `(("x" 1.2345) ("y" 2) hline ("Total" ,(+ 1.2345 2))))))
+
+(ert-deftest datagrid-test-to-org-table-footer-hline-nil ()
+  ;; HLINE controls only the rule under the headings.
+  (should (equal (datagrid-to-org-table (datagrid-test-org-grid)
+                                        :hline nil :footer "Total")
+                 `(("a" "b") ("x" 1.2345) ("y" 2) hline
+                   ("Total" ,(+ 1.2345 2))))))
+
+(ert-deftest datagrid-test-to-org-table-footer-no-rows ()
+  ;; No doubled rule under the headings. An empty sum is 0, but a
+  ;; column with no numbers is not summed by default.
+  (let ((dg (datagrid-from-vectors ["a"] ["b"])))
+    (should (equal (datagrid-to-org-table dg :footer "Total")
+                   '(("a" "b") hline ("Total" ""))))
+    (should (equal (datagrid-to-org-table
+                    dg :footer '(:label "Total" :cols ("b")))
+                   '(("a" "b") hline ("Total" 0))))
+    (should (equal (datagrid-to-org-table
+                    dg :headings nil :footer '(:label "Total" :cols ("b")))
+                   '(("Total" 0))))))
+
+(ert-deftest datagrid-test-to-org-table-footer-all-nil-column ()
+  ;; A column of nils only is not a number column. Asked for, its
+  ;; sum is 0, and max gives an empty cell.
+  (let ((dg (datagrid-from-vectors ["a" "x" "y"] ["b" nil nil])))
+    (should (equal (car (last (datagrid-to-org-table dg :footer "T")))
+                   '("T" "")))
+    (should (equal (car (last (datagrid-to-org-table
+                               dg :footer '(:label "T" :cols ("b")))))
+                   '("T" 0)))
+    (should (equal (car (last (datagrid-to-org-table
+                               dg :footer '(:label "T" :fn max
+                                                   :cols ("b")))))
+                   '("T" "")))))
+
+(ert-deftest datagrid-test-to-org-table-footer-errors ()
+  (let ((dg (datagrid-test-money-grid)))
+    ;; Not a string or a plist.
+    (should-error (datagrid-to-org-table dg :footer 5))
+    (should-error (datagrid-to-org-table dg :footer '("Total")))
+    ;; Unknown keyword, or FN not a function.
+    (should-error (datagrid-to-org-table dg :footer '(:lable "Total")))
+    (should-error (datagrid-to-org-table dg :footer '(:fn 5)))
+    ;; A column that is not there.
+    (should-error (datagrid-to-org-table dg :footer '(:cols ("nope"))))
+    (should-error (datagrid-to-org-table dg :footer '(:cols (9))))
+    ;; No column left for the label.
+    (should-error (datagrid-to-org-table
+                   (datagrid-select dg "n" "cost") :footer "Total"))))
+
 
 ;;;; datagrid-col-index-by-heading
 

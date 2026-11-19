@@ -259,14 +259,21 @@ The following functions return an opinionated list of statistical measures for e
 - =datagrid-report-all-lom (datagrid)=: Loop through each datagrid column and create a report based on the level of measurement. Return a list of =(heading . report)= conses. It decodes and converts columns as needed, so it takes no keywords.
 
 * Export a datagrid
-- =datagrid-to-org-table (datagrid &key headings hline digits)=: Return a list of rows that becomes an Org table when returned from an Org Mode code block. It takes these keyword options:
+- =datagrid-to-org-table (datagrid &key headings hline digits format footer)=: Return a list of rows that becomes an Org table when returned from an Org Mode code block. It takes these keyword options:
   - =:headings=: non-nil (the default) puts the column headings in the first row.
   - =:hline=: non-nil (the default) adds a horizontal rule after the headings. It has no effect without headings.
-  - =:digits=: rounds floats to that many decimal places. The default nil leaves them as they are.
+  - =:digits=: rounds floats to that many decimal places. Integers are not changed, and trailing zeros are not added. The default nil leaves floats as they are.
+  - =:format=: writes every number, integers included, with a format string such as ="%.2f"= or a function of one argument. Strings and nil are not changed. To format only some columns, give an alist =((COLS . FMT) ...)=, where COLS is a column or a list of columns, as in =datagrid-column-coerce=. Giving both =:digits= and =:format= is an error.
+  - =:footer=: adds a totals row below a horizontal rule. The row is computed for the table only, and the datagrid is not changed. A string such as ="Total"= sums every column that holds only numbers, skipping nil, and puts the string in the first column that is not summed. A plist =(:label LABEL :fn FN :cols COLS)= picks the function and the columns. =:format= and =:digits= apply to the footer as they do to the data.
 
   Nil values become empty cells, and a =|= inside a string becomes the Org entity =\vert{}= so it cannot split a cell.
   #+begin_src emacs-lisp
     (datagrid-to-org-table datagrid-example :hline nil :digits 2)
+    (datagrid-to-org-table datagrid-example
+                           :format '(("precipitation" . "%.2f")))
+    (datagrid-to-org-table (datagrid-select datagrid-example
+                                            "date" "precipitation")
+                           :footer "Total")
   #+end_src
 - =datagrid-to-alist (datagrid &optional headings)=: Return a list with one list per column. If HEADINGS is non-nil, each list starts with its heading.
 - =datagrid-to-vec-of-vec (datagrid)=: Return a vector of column data vectors in the datagrid's column and row order.
@@ -318,6 +325,8 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
 - When =datagrid-mutate= replaces an existing column, the column keeps its =lom= and =code= slots. Before, they were dropped. Code alists are not updated, so their keys may stop matching converted data.
 - =datagrid-mutate= signals an error unless NEW-HEADING is a string. Before, a nil heading on a grid without headings replaced the first column.
 - New: =datagrid-filter= keeps the rows for which a predicate returns non-nil. It is called like =datagrid-mutate=, with the predicate getting one value per named column. Unlike =datagrid-create-mask= and =datagrid-filter-by-mask=, it names the datagrid once, so it works in a =thread-first= chain.
+- New: =datagrid-to-org-table= takes =:format=, a format string, a function, or an alist of =(COLS . FMT)=. It writes every number, integers included, so =:format "%.2f"= prints 100.5 as =100.50= and 0 as =0.00=. =:digits= only rounds floats, and giving both keywords is an error.
+- New: =datagrid-to-org-table= takes =:footer=, which adds a totals row below a horizontal rule. =:footer "Total"= sums every all-number column and labels the row. A plist =(:label LABEL :fn FN :cols COLS)= picks the function and the columns. The row exists only in the table output. It is never added to the datagrid, because every row of a datagrid is an observation.
 
 The version before 1.1 was 0.1. Changes between 0.1 and 1.1 are recorded only in the git history.
 

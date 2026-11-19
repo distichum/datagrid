@@ -683,8 +683,94 @@ values are returned unchanged."
         ((stringp value) (string-replace "|" "\\vert{}" value))
         (t value)))
 
+(defun datagrid--org-format-number (value fmt)
+  "Return VALUE written with FMT when VALUE is a number.
+FMT is a format string, a function of one argument, or nil. VALUE is
+returned unchanged when it is not a number or FMT is nil."
+  (cond ((not (and fmt (numberp value))) value)
+        ((stringp fmt) (format fmt value))
+        (t (funcall fmt value))))
+
+(defun datagrid--org-formats (datagrid fmt)
+  "Return a list with the number format for each column of DATAGRID.
+FMT is the FORMAT argument of `datagrid-to-org-table'. The list has
+one element per logical column, in logical order. An element is nil
+for a column whose numbers are left as they are. Signal an error for
+a malformed FMT, a column listed more than once, or a column that is
+not in DATAGRID."
+  (let ((ncols (datagrid--ncols datagrid)))
+    (cond
+     ((null fmt) (make-list ncols nil))
+     ((or (stringp fmt) (functionp fmt)) (make-list ncols fmt))
+     ((consp fmt)
+      (let ((fmts (make-vector ncols nil)))
+        (cl-loop
+         for entry in fmt
+         for cols = (car-safe entry)
+         for f = (cdr-safe entry)
+         do (unless (and (consp entry) (or (stringp f) (functionp f)))
+              (error "Bad :format entry: %S" entry))
+         do (cl-loop for c in (ensure-list cols)
+                     for j = (datagrid--resolve-col datagrid c)
+                     do (unless (and (>= j 0) (< j ncols))
+                          (error "Column index out of range: %S" c))
+                     do (when (aref fmts j)
+                          (error "Column listed more than once: %S" c))
+                     do (aset fmts j f)))
+        (append fmts nil)))
+     (t (error "Bad :format value: %S" fmt)))))
+
+(defun datagrid--reduce-non-nil (fn vec)
+  "Return FN reduced over the non-nil values of VEC.
+With no non-nil values, return (funcall FN) when FN accepts zero
+arguments, and nil otherwise, as `datagrid-reduce-vec' does."
+  (let ((vals (cl-loop for v across vec when v collect v)))
+    (cond (vals (cl-reduce fn vals))
+          ((zerop (car (func-arity fn))) (funcall fn))
+          (t nil))))
+
+(defun datagrid--org-footer (datagrid footer)
+  "Return the footer row of DATAGRID for FOOTER as a list of cells.
+FOOTER is the FOOTER argument of `datagrid-to-org-table'. The list has
+one value per logical column, in logical order, before formatting.
+Signal an error for a malformed FOOTER."
+  (let* ((spec (cond ((stringp footer) (list :label footer))
+                     ((keywordp (car-safe footer)) footer)
+                     (t (error "Bad :footer value: %S" footer))))
+         (fn (or (plist-get spec :fn) #'+))
+         (label (plist-get spec :label))
+         (ncols (datagrid--ncols datagrid))
+         (vecs (cl-loop for j from 0 below ncols
+                        collect (datagrid-pull datagrid j)))
+         (cols (if (plist-member spec :cols)
+                   (cl-loop for c in (plist-get spec :cols)
+                            for j = (datagrid--resolve-col datagrid c)
+                            do (unless (and (>= j 0) (< j ncols))
+                                 (error "Column index out of range: %S" c))
+                            collect j)
+                 (cl-loop for v in vecs
+                          for j from 0
+                          when (and (cl-some #'numberp v)
+                                    (cl-every (lambda (x)
+                                                (or (null x) (numberp x)))
+                                              v))
+                          collect j)))
+         (label-col (and label
+                         (or (cl-loop for j from 0 below ncols
+                                      unless (memql j cols) return j)
+                             (error "No column left for the footer label")))))
+    (cl-loop for key in spec by #'cddr
+             unless (memq key '(:label :fn :cols))
+             do (error "Unknown :footer keyword %S" key))
+    (unless (functionp fn)
+      (error "Not a function: %S" fn))
+    (cl-loop for v in vecs
+             for j from 0
+             collect (cond ((memql j cols) (datagrid--reduce-non-nil fn v))
+                           ((eql j label-col) label)))))
+
 (cl-defun datagrid-to-org-table (datagrid &key (headings t) (hline t)
-                                          digits)
+                                          digits format footer)
   "Return DATAGRID as a list of rows for an Org table.
 The result of an Org Mode code block that returns this list is
 inserted as a table.
@@ -695,22 +781,73 @@ headings row. The default is t. HLINE has no effect when HEADINGS is
 nil. If DIGITS is non-nil, floats are rounded to DIGITS decimal
 places. Integers are never changed.
 
+FORMAT controls how numbers are written. It is a format string such
+as \"%.2f\", or a function of one argument that returns the cell. It
+applies to every number, integers included, and never to strings or
+nil. FORMAT can also be an alist ((COLS . FMT) ...) that formats only
+some columns. COLS is a column ref or a list of them, as in
+`datagrid-column-coerce'. Signal an error if both DIGITS and FORMAT
+are given.
+
+FOOTER adds one row after the data rows, set off by a horizontal
+rule. The row is computed here and is not added to DATAGRID. FOOTER
+is a label string, or a plist (:label LABEL :fn FN :cols COLS). A
+string is the same as (:label STRING).
+
+For each column in COLS, the footer cell is FN reduced over that
+column's values, as in `datagrid-reduce-vec'. Nil values are skipped.
+FN defaults to `+'. COLS is a list of column refs. It defaults to
+every column that holds at least one number and nothing but numbers
+and nil. LABEL goes in the first column that is not in COLS. Other
+footer cells are empty. Signal an error if LABEL is given and every
+column is in COLS. FORMAT and DIGITS apply to footer cells as they do
+to the data cells in the same column. HLINE does not affect the rule
+above the footer.
+
 Nil values become empty cells. Vertical bars in strings become the Org
-entity \\vert{} so they do not split a cell.
+entity \\vert{} so they do not split a cell. This includes strings
+returned by a FORMAT function.
 
 Examples:
 
   (datagrid-to-org-table dg)
   (datagrid-to-org-table dg :hline nil)
-  (datagrid-to-org-table dg :headings nil :digits 2)"
-  (let ((rows (cl-loop
-               for row in (datagrid-safe-transpose
-                           (datagrid-to-alist datagrid headings))
-               collect (cl-loop for v in row
-                                collect (datagrid--org-cell v digits)))))
-    (if (and headings hline rows)
-        (cons (car rows) (cons 'hline (cdr rows)))
-      rows)))
+  (datagrid-to-org-table dg :headings nil :digits 2)
+  (datagrid-to-org-table dg :format \"%.2f\")
+  (datagrid-to-org-table dg :format \\='((\"n\" . \"%d\")
+                                       ((\"cost\" \"price\") . \"%.2f\")))
+  (datagrid-to-org-table dg :format \"%.2f\" :footer \"Total\")
+  (datagrid-to-org-table dg :footer \\='(:label \"Top\" :fn max
+                                       :cols (\"score\")))"
+  (when (and digits format)
+    (error "Give :digits or :format, not both"))
+  (let* ((fmts (datagrid--org-formats datagrid format))
+         (cell (lambda (v f)
+                 (datagrid--org-cell (datagrid--org-format-number v f)
+                                     digits)))
+         (rows (cl-loop
+                for row in (datagrid-safe-transpose
+                            (datagrid-to-alist datagrid headings))
+                for i from 0
+                for heading-row = (and headings (= i 0))
+                collect (cl-loop
+                         for v in row
+                         for f in fmts
+                         collect (if heading-row
+                                     (datagrid--org-cell v nil)
+                                   (funcall cell v f)))))
+         (rows (if (and headings hline rows)
+                   (cons (car rows) (cons 'hline (cdr rows)))
+                 rows)))
+    (if (not footer)
+        rows
+      (append rows
+              ;; Set the footer off, without doubling the headings rule.
+              (and rows (not (eq (car (last rows)) 'hline))
+                   (list 'hline))
+              (list (cl-loop for v in (datagrid--org-footer datagrid footer)
+                             for f in fmts
+                             collect (funcall cell v f)))))))
 
 (defun datagrid-column-add-code (datagrid cols code)
   "Add coding data to one or more `datagrid-columns'.
