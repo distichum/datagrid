@@ -644,17 +644,20 @@ order."
 
 (defun datagrid-filter-by-mask (datagrid mask)
   "Use a boolean MASK to filter a DATAGRID.
-MASK must be a sequence with the same length as datagrid columns
+MASK is a sequence with one element per row, in logical row order,
 and the values must only be t or nil. The function returns a
 DATAGRID. You can use `datagrid-create-mask' to create a mask.
 
 The following code shows an example workflow when using masks.
 
-  (let* ((mygrid (datagrid-from-csv-buffer \"name-of-file.csv\" t))
-         (index (datagrid-col-index-by-heading mygrid \"heading-name\"))
+  (let* ((mygrid (datagrid-from-csv-file \"name-of-file.csv\" t))
          (func (lambda (x) (string-equal x \"filter-string\")))
-         (mask (datagrid-create-mask mygrid func index)))
-    (datagrid-filter-by-mask mygrid mask))"
+         (mask (datagrid-create-mask mygrid func \"heading-name\")))
+    (datagrid-filter-by-mask mygrid mask))
+
+`datagrid-filter' gives the same result in one call:
+
+  (datagrid-filter mygrid func \"heading-name\")"
   (datagrid--check datagrid)
   (let* ((mask-vec (vconcat mask))
          (kept (cl-loop for i from 0

@@ -627,6 +627,17 @@
 (ert-deftest datagrid-test-col-index-by-heading-not-found ()
   (should (null (datagrid-col-index-by-heading (datagrid-test-simple) "missing"))))
 
+(ert-deftest datagrid-test-col-index-by-heading-logical-order ()
+  ;; The index is the logical position, not the stored one.
+  (let ((dg (datagrid-select (datagrid-test-simple) "score" "name")))
+    (should (= (datagrid-col-index-by-heading dg "name") 1))
+    (should (= (datagrid-col-index-by-heading dg "score") 0))
+    (should (null (datagrid-col-index-by-heading dg "group")))))
+
+(ert-deftest datagrid-test-col-index-by-heading-first-duplicate ()
+  (let ((dg (datagrid-from-vectors ["a" 1] ["b" 2] ["a" 3])))
+    (should (= (datagrid-col-index-by-heading dg "a") 0))))
+
 
 ;;;; datagrid-col-data-by-header
 

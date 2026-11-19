@@ -1003,7 +1003,7 @@ target column is known not to be shared."
 SPEC is an integer index or a heading string."
   (cond ((integerp spec) spec)
         ((stringp spec)
-         (or (cl-position spec (datagrid-get-headings datagrid) :test #'equal)
+         (or (datagrid-col-index-by-heading datagrid spec)
              (error "No column with heading %S in datagrid" spec)))
         (t (error "Bad column spec: %S" spec))))
 
@@ -1143,14 +1143,9 @@ With no other output in play it prints to the echo area."
 
 (defun datagrid-col-index-by-heading (datagrid heading)
   "Return the logical column index in DATAGRID with HEADING.
-Return nil if the heading is not found."
-  (let ((cols (datagrid-columns datagrid))
-        (ncols (datagrid--ncols datagrid)))
-    (cl-loop for j from 0 below ncols
-             for phys = (datagrid--col-at datagrid j)
-             when (equal (datagrid-column-heading (aref cols phys))
-                         heading)
-             return j)))
+Headings are compared with `equal'. When several columns share
+HEADING, return the first. Return nil if the heading is not found."
+  (cl-position heading (datagrid-get-headings datagrid) :test #'equal))
 
 (define-obsolete-function-alias 'datagrid-col-index-by-header
   #'datagrid-col-index-by-heading "1.1")

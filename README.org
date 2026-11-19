@@ -167,7 +167,7 @@ To add a column to an existing datagrid, use =datagrid-add-column=. It fits the 
 - =datagrid-pull (datagrid col)=: Return the data vector of column COL in the datagrid's row order. COL can be an index or a heading string. This replaces the obsolete =datagrid-get-col-data=.
 - =datagrid-get-row-data (datagrid row-num)=: Return all data from a specific row as a vector. A row is the Nth element of each datagrid-column's data in the datagrid.
 - =datagrid-get-headings (datagrid)=: Return a vector of all column headings.
-- =datagrid-col-index-by-heading (datagrid heading)=: Return the index number of the datagrid-column structure that has a heading of =heading=, or nil if there is none. Most functions also accept a heading string directly.
+- =datagrid-col-index-by-heading (datagrid heading)=: Return the logical index of the first column whose heading is =heading=, or nil if there is none. The logical index is the column's position as the datagrid shows it, after any =datagrid-select= or reordering. Most functions also accept a heading string directly.
 - =datagrid-describe (datagrid)=: Print a summary of DATAGRID and its first rows, then return DATAGRID.
 * Manipulate datagrids
 - =datagrid-head (datagrid &optional column-num row-num)=: Return the first ROW-NUM rows and COLUMN-NUM columns of DATAGRID.
