@@ -26,8 +26,8 @@
 ;; Datagrid transformation verbs that take a datagrid and return a
 ;; datagrid: head, mutate, rename, add-column, add-row, add-data,
 ;; set-headings, select, slice, remove-column, remove-row, sort,
-;; rows-patch, coalesce, pivot-wider, plus the mask-based filter
-;; helpers (create-mask, filter-by-mask).
+;; rows-patch, coalesce, pivot-wider, filter, plus the mask-based
+;; filter helpers (create-mask, filter-by-mask).
 
 ;; Verbs that are tightly coupled to reductions (summarize, group-by,
 ;; distinct) live in datagrid-stats.el instead.
@@ -663,6 +663,32 @@ The following code shows an example workflow when using masks.
          (kept (cl-loop for i from 0
                         for m across mask-vec
                         when m collect i)))
+    (datagrid--slice-rows datagrid kept)))
+
+(defun datagrid-filter (datagrid pred &rest cols)
+  "Return the rows of DATAGRID for which PRED returns non-nil.
+PRED is called once per row with one value from each column in COLS,
+in order, as with `datagrid-mutate'. Each element of COLS is a
+zero-based logical column index or a heading string. Signal an error
+when COLS is empty.
+
+The result shares column data with DATAGRID and records a row-order
+permutation, as with `datagrid-filter-by-mask'. Rows keep their
+logical order.
+
+Examples:
+
+  (datagrid-filter dg (lambda (a) (/= a 0)) \"YTDActual\")
+  (datagrid-filter dg (lambda (lo hi) (< lo hi)) \"low\" \"high\")"
+  (datagrid--check datagrid)
+  (unless cols
+    (error "No columns given"))
+  (let* ((vecs (cl-loop for c in cols
+                        collect (datagrid-pull datagrid c)))
+         (kept (cl-loop for r from 0 below (datagrid--nrows datagrid)
+                        when (apply pred (cl-loop for v in vecs
+                                                  collect (aref v r)))
+                        collect r)))
     (datagrid--slice-rows datagrid kept)))
 
 (provide 'datagrid-verbs)

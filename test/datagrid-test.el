@@ -866,6 +866,84 @@
     (should (equal (datagrid-column-lom (datagrid-test-col result 0)) "ordinal"))))
 
 
+;;;; datagrid-filter
+
+(ert-deftest datagrid-test-filter-one-column ()
+  (let ((result (datagrid-filter (datagrid-test-simple)
+                                 (lambda (s) (> s 15)) "score")))
+    (should (equal (datagrid-pull result "name") ["Bob" "Carol" "Dave"]))
+    (should (equal (datagrid-pull result "score") [20 30 40]))))
+
+(ert-deftest datagrid-test-filter-several-columns-in-order ()
+  ;; PRED gets one value per column, in the order of COLS.
+  (let ((result (datagrid-filter (datagrid-test-simple)
+                                 (lambda (g s) (and (equal g "y") (< s 30)))
+                                 "group" "score")))
+    (should (equal (datagrid-pull result "name") ["Bob"]))))
+
+(ert-deftest datagrid-test-filter-integer-refs ()
+  (let ((result (datagrid-filter (datagrid-test-simple)
+                                 (lambda (g) (equal g "x")) 2)))
+    (should (equal (datagrid-pull result 0) ["Alice" "Carol"]))))
+
+(ert-deftest datagrid-test-filter-any-non-nil-keeps-row ()
+  (let ((result (datagrid-filter (datagrid-test-simple)
+                                 (lambda (n) (string-search "a" n))
+                                 "name")))
+    (should (equal (datagrid-pull result "name") ["Carol" "Dave"]))))
+
+(ert-deftest datagrid-test-filter-no-rows-match ()
+  (let ((result (datagrid-filter (datagrid-test-simple) #'ignore "score")))
+    (should (datagridp result))
+    (should (equal (datagrid-dimensions result) '(3 . 0)))))
+
+(ert-deftest datagrid-test-filter-shares-columns ()
+  (let* ((dg (datagrid-test-simple))
+         (result (datagrid-filter dg (lambda (s) (> s 15)) "score")))
+    (should (eq (datagrid-columns dg) (datagrid-columns result)))
+    (should (equal (datagrid-pull dg "score") [10 20 30 40]))))
+
+(ert-deftest datagrid-test-filter-follows-row-and-col-order ()
+  ;; Values come from the logical view, and the result keeps it.
+  (let* ((dg (thread-first (datagrid-test-simple)
+                           (datagrid-sort '(:col "score" :reverse t))
+                           (datagrid-select "score" "name")))
+         (result (datagrid-filter dg (lambda (s) (< s 40)) "score")))
+    (should (equal (datagrid-get-headings result) ["score" "name"]))
+    (should (equal (datagrid-pull result "name") ["Carol" "Bob" "Alice"]))))
+
+(ert-deftest datagrid-test-filter-preserves-metadata ()
+  (let ((result (datagrid-filter (datagrid-test-coded)
+                                 (lambda (r) (equal r "Agree")) "rating")))
+    (should (equal (datagrid-pull result 0) ["Agree" "Agree"]))
+    (should (equal (datagrid-column-lom (datagrid-test-col result 0))
+                   "ordinal"))
+    (should (datagrid-column-code (datagrid-test-col result 0)))))
+
+(ert-deftest datagrid-test-filter-matches-filter-by-mask ()
+  (let* ((dg (datagrid-test-simple))
+         (pred (lambda (s) (/= s 20))))
+    (should (equal (datagrid-to-alist (datagrid-filter dg pred "score") t)
+                   (datagrid-to-alist
+                    (datagrid-filter-by-mask
+                     dg (datagrid-create-mask dg pred "score"))
+                    t)))))
+
+(ert-deftest datagrid-test-filter-requires-columns ()
+  (should-error (datagrid-filter (datagrid-test-simple) #'identity)))
+
+(ert-deftest datagrid-test-filter-bad-heading-errors ()
+  (should-error (datagrid-filter (datagrid-test-simple) #'identity "nope")))
+
+(ert-deftest datagrid-test-filter-chains-with-thread-first ()
+  (let ((result (thread-first (datagrid-test-simple)
+                              (datagrid-filter (lambda (g) (equal g "y"))
+                                               "group")
+                              (datagrid-filter (lambda (s) (> s 20))
+                                               "score"))))
+    (should (equal (datagrid-pull result "name") ["Dave"]))))
+
+
 ;;;; datagrid-group-by
 
 (ert-deftest datagrid-test-group-by-two-groups ()
