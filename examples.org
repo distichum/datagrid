@@ -55,7 +55,7 @@ later example.
                ("B" . 3)
                ("A" . 4)))
       (datagrid-column-make
-       :heading "study-hours"
+       :heading "credit-hours"
        :lom "ratio"
        :data [12 8 5 15 9 3 18 11 0 7
               14 10 9 6 16 4 11 13 7 10])
@@ -95,7 +95,7 @@ dimensions and the first few rows.
 #+end_src
 
 #+RESULTS:
-: ((7 . 20) ((student-id course-code grade study-hours attendance satisfaction enrolled-date) hline (S01 Math A 12 0.95 Very satisfied 2025-01-15) (S02 English B 8 0.8 Satisfied 2025-01-15) (S03 Math C 5 0.7 Neutral 2025-01-16)))
+: ((7 . 20) ((student-id course-code grade credit-hours attendance satisfaction enrolled-date) hline (S01 Math A 12 0.95 Very satisfied 2025-01-15) (S02 English B 8 0.8 Satisfied 2025-01-15) (S03 Math C 5 0.7 Neutral 2025-01-16)))
 
 * Functions from datagrid.el
 
@@ -223,7 +223,7 @@ share a single Likert scale.
 #+end_src
 
 #+RESULTS:
-: #s(datagrid [#s(datagrid-column "student-id" ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10" "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5))) #s(datagrid-column "course-code" ["Math" "English" "Math" "Science" "History" "English" "Art" "Math" "Science" "English" "History" "Art" "Math" "English" "Science" "History" "Math" "Art" "English" "Science"] "nominal" (("Math" . 1) ("English" . 2) ("Science" . 3) ("History" . 4) ("Art" . 5))) #s(datagrid-column "grade" ["A" "B" "C" "A" "B" "D" "A" "B" "F" "C" "A" "B" "B" "C" "A" "D" "B" "A" "C" "B"] "ordinal" (("F" . 0) ("D" . 1) ("C" . 2) ("B" . 3) ("A" . 4))) #s(datagrid-column "study-hours" [12 8 5 15 9 3 18 11 0 7 14 10 9 6 16 4 11 13 7 10] "ratio" nil) #s(datagrid-column "attendance" [0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86] "ratio" nil) #s(datagrid-column "satisfaction" ["Very satisfied" "Satisfied" "Neutral" "Very satisfied" "Satisfied" "Dissatisfied" "Very satisfied" "Satisfied" "Very dissatisfied" "Neutral" "Very satisfied" "Satisfied" "Satisfied" "Neutral" "Very satisfied" "Dissatisfied" "Satisfied" "Very satisfied" "Neutral" "Satisfied"] "ordinal" (("Very dissatisfied" . 1) ("Dissatisfied" . 2) ("Neutral" . 3) ("Satisfied" . 4) ("Very satisfied" . 5))) #s(datagrid-column "enrolled-date" ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17" "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19" "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22" "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5)))] nil nil)
+: #s(datagrid [#s(datagrid-column "student-id" ["S01" "S02" "S03" "S04" "S05" "S06" "S07" "S08" "S09" "S10" "S11" "S12" "S13" "S14" "S15" "S16" "S17" "S18" "S19" "S20"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5))) #s(datagrid-column "course-code" ["Math" "English" "Math" "Science" "History" "English" "Art" "Math" "Science" "English" "History" "Art" "Math" "English" "Science" "History" "Math" "Art" "English" "Science"] "nominal" (("Math" . 1) ("English" . 2) ("Science" . 3) ("History" . 4) ("Art" . 5))) #s(datagrid-column "grade" ["A" "B" "C" "A" "B" "D" "A" "B" "F" "C" "A" "B" "B" "C" "A" "D" "B" "A" "C" "B"] "ordinal" (("F" . 0) ("D" . 1) ("C" . 2) ("B" . 3) ("A" . 4))) #s(datagrid-column "credit-hours" [12 8 5 15 9 3 18 11 0 7 14 10 9 6 16 4 11 13 7 10] "ratio" nil) #s(datagrid-column "attendance" [0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86] "ratio" nil) #s(datagrid-column "satisfaction" ["Very satisfied" "Satisfied" "Neutral" "Very satisfied" "Satisfied" "Dissatisfied" "Very satisfied" "Satisfied" "Very dissatisfied" "Neutral" "Very satisfied" "Satisfied" "Satisfied" "Neutral" "Very satisfied" "Dissatisfied" "Satisfied" "Very satisfied" "Neutral" "Satisfied"] "ordinal" (("Very dissatisfied" . 1) ("Dissatisfied" . 2) ("Neutral" . 3) ("Satisfied" . 4) ("Very satisfied" . 5))) #s(datagrid-column "enrolled-date" ["2025-01-15" "2025-01-15" "2025-01-16" "2025-01-16" "2025-01-17" "2025-01-17" "2025-01-18" "2025-01-18" "2025-01-19" "2025-01-19" "2025-01-20" "2025-01-20" "2025-01-21" "2025-01-21" "2025-01-22" "2025-01-22" "2025-01-23" "2025-01-23" "2025-01-24" "2025-01-24"] "nominal" (("Strongly disagree" . 1) ("Disagree" . 2) ("Neutral" . 3) ("Agree" . 4) ("Strongly agree" . 5)))] nil nil)
 
 The example above is deliberately silly: =student-id= and
 =enrolled-date= have nothing to do with a Likert scale, but the call
@@ -250,29 +250,29 @@ row with one argument per source column. If the new heading already
 exists in the datagrid, the existing column is replaced instead of
 appended.
 
-This example adds a column that flags students who studied at least
-ten hours and attended at least 90 percent of class.
+This example adds a column that flags students who carry at least ten
+credit hours and attended at least 90 percent of class.
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table
    (datagrid-head
     (datagrid-mutate dg
-                     "engaged"
-                     (lambda (hours attend)
-                       (if (and (>= hours 10) (>= attend 0.90)) "yes" "no"))
-                     "study-hours" "attendance")
+                     "on-track"
+                     (lambda (credits attend)
+                       (if (and (>= credits 10) (>= attend 0.90)) "yes" "no"))
+                     "credit-hours" "attendance")
     8 6))
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date | engaged |
-|------------+-------------+-------+-------------+------------+----------------+---------------+---------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 | yes     |
-| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 | no      |
-| S03        | Math        | C     |           5 |        0.7 | Neutral        |    2025-01-16 | no      |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 | yes     |
-| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 | no      |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 | no      |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date | on-track |
+|------------+-------------+-------+--------------+------------+----------------+---------------+----------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 | yes      |
+| S02        | English     | B     |            8 |        0.8 | Satisfied      |    2025-01-15 | no       |
+| S03        | Math        | C     |            5 |        0.7 | Neutral        |    2025-01-16 | no       |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied |    2025-01-16 | yes      |
+| S05        | History     | B     |            9 |       0.85 | Satisfied      |    2025-01-17 | no       |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied   |    2025-01-17 | no       |
 
 The next example shows the replace behavior, and it also shows how to
 do an inline decode by reaching into the column's =:code= slot. We
@@ -292,14 +292,14 @@ numeric code in parentheses, like ="A (4)"=. Because the heading
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S01        | Math        | A (4) |          12 |       0.95 | Very satisfied |    2025-01-15 |
-| S02        | English     | B (3) |           8 |        0.8 | Satisfied      |    2025-01-15 |
-| S03        | Math        | C (2) |           5 |        0.7 | Neutral        |    2025-01-16 |
-| S04        | Science     | A (4) |          15 |       0.98 | Very satisfied |    2025-01-16 |
-| S05        | History     | B (3) |           9 |       0.85 | Satisfied      |    2025-01-17 |
-| S06        | English     | D (1) |           3 |        0.6 | Dissatisfied   |    2025-01-17 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S01        | Math        | A (4) |           12 |       0.95 | Very satisfied |    2025-01-15 |
+| S02        | English     | B (3) |            8 |        0.8 | Satisfied      |    2025-01-15 |
+| S03        | Math        | C (2) |            5 |        0.7 | Neutral        |    2025-01-16 |
+| S04        | Science     | A (4) |           15 |       0.98 | Very satisfied |    2025-01-16 |
+| S05        | History     | B (3) |            9 |       0.85 | Satisfied      |    2025-01-17 |
+| S06        | English     | D (1) |            3 |        0.6 | Dissatisfied   |    2025-01-17 |
 
 ** datagrid-rename
 
@@ -319,7 +319,7 @@ the input is not modified.
 #+end_src
 
 #+RESULTS:
-: ["id" "course-code" "grade" "study-hours" "attendance" "satisfaction" "start"]
+: ["id" "course-code" "grade" "credit-hours" "attendance" "satisfaction" "start"]
 
 ** datagrid-sort
 
@@ -335,14 +335,14 @@ operations like =datagrid-head=.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied |    2025-01-16 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied |    2025-01-18 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied |    2025-01-20 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied |    2025-01-22 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied |    2025-01-23 |
 
 Sorting on the letter grades alphabetically puts =A= first, which is
 the opposite of the underlying "smaller code means worse grade"
@@ -360,14 +360,14 @@ the column into a new mutated column and sort by that.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | grade-num |
-|------------+-------------+-------+-------------+------------+-------------------+---------------+-----------|
-| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |         0 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |         1 |
-| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |         1 |
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |         2 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |         2 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |         2 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date | grade-num |
+|------------+-------------+-------+--------------+------------+-------------------+---------------+-----------|
+| S09        | Science     | F     |            0 |        0.4 | Very dissatisfied |    2025-01-19 |         0 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |         1 |
+| S16        | History     | D     |            4 |       0.55 | Dissatisfied      |    2025-01-22 |         1 |
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 |         2 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 |         2 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |         2 |
 
 *** Sort specs: reverse, key, and multiple columns
 
@@ -378,22 +378,22 @@ also accepts a /sort spec/ plist for each key, borrowing the
 usual column index or heading.
 
 A non-nil =:reverse= sorts that column in descending order. Here are
-the six students with the most study hours.
+the six students with the most credit hours.
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table
-   (datagrid-head (datagrid-sort dg '(:col "study-hours" :reverse t)) 7 6))
+   (datagrid-head (datagrid-sort dg '(:col "credit-hours" :reverse t)) 7 6))
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied |    2025-01-18 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied |    2025-01-22 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied |    2025-01-16 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied |    2025-01-20 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied |    2025-01-23 |
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 |
 
 =:key= is a one-argument function applied to each cell before
 comparison, so you can sort by a derived value without first adding a
@@ -410,42 +410,42 @@ each grade to its numeric severity inside the spec.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
-|------------+-------------+-------+-------------+------------+-------------------+---------------|
-| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
-| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+--------------+------------+-------------------+---------------|
+| S09        | Science     | F     |            0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S16        | History     | D     |            4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |
 
 Pass several keys to sort by more than one column. The first key is
 primary; later keys break ties. Because the sort is stable, this
 example groups rows by =course-code= alphabetically, then orders each
-group by descending study hours. Note the two English students with
-seven hours (=S10=, =S19=): equal on both keys, they keep their
+group by descending credit hours. Note the two English students with
+seven credit hours (=S10=, =S19=): equal on both keys, they keep their
 original relative order.
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table
    (datagrid-head
-    (datagrid-sort dg "course-code" '(:col "study-hours" :reverse t))
+    (datagrid-sort dg "course-code" '(:col "credit-hours" :reverse t))
     7 10))
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
-| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 |
-| S10        | English     | C     |           7 |       0.75 | Neutral        |    2025-01-19 |
-| S19        | English     | C     |           7 |       0.78 | Neutral        |    2025-01-24 |
-| S14        | English     | C     |           6 |       0.72 | Neutral        |    2025-01-21 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied |    2025-01-18 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied |    2025-01-23 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied      |    2025-01-20 |
+| S02        | English     | B     |            8 |        0.8 | Satisfied      |    2025-01-15 |
+| S10        | English     | C     |            7 |       0.75 | Neutral        |    2025-01-19 |
+| S19        | English     | C     |            7 |       0.78 | Neutral        |    2025-01-24 |
+| S14        | English     | C     |            6 |       0.72 | Neutral        |    2025-01-21 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied   |    2025-01-17 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied |    2025-01-20 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied      |    2025-01-17 |
 
 ** datagrid-create-mask and datagrid-filter-by-mask
 
@@ -467,14 +467,14 @@ percent.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied |    2025-01-20 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied |    2025-01-22 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied |    2025-01-16 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied |    2025-01-18 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied |    2025-01-20 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied |    2025-01-22 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied |    2025-01-23 |
 
 If you want "attended a lot AND in a Math class," build two masks and
 combine them yourself. The =course-code= column's =:data= holds the
@@ -490,9 +490,9 @@ label strings, so the second mask compares strings.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 |
 
 ** datagrid-select and datagrid-slice
 
@@ -505,18 +505,18 @@ readability.
 #+begin_src emacs-lisp
   (datagrid-to-org-table
    (thread-first dg
-                 (datagrid-select "student-id" "grade" "study-hours")
+                 (datagrid-select "student-id" "grade" "credit-hours")
                  (datagrid-slice 0 4 9 14 19)))
 #+end_src
 
 #+RESULTS:
-| student-id | grade | study-hours |
-|------------+-------+-------------|
-| S01        | A     |          12 |
-| S05        | B     |           9 |
-| S10        | C     |           7 |
-| S15        | A     |          16 |
-| S20        | B     |          10 |
+| student-id | grade | credit-hours |
+|------------+-------+--------------|
+| S01        | A     |           12 |
+| S05        | B     |            9 |
+| S10        | C     |            7 |
+| S15        | A     |           16 |
+| S20        | B     |           10 |
 
 ** datagrid-add-row
 
@@ -536,30 +536,30 @@ datagrid that means the label strings, not the numeric codes.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
-|------------+-------------+-------+-------------+------------+-------------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
-| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
-| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
-| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
-| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
-| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
-| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
-| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
-| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
-| S21        | Math        | A     |          12 |       0.93 | Very satisfied    |    2025-01-25 |
-| S22        | Art         | C     |           6 |        0.7 | Neutral           |    2025-01-25 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+--------------+------------+-------------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |            8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |           11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | F     |            0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |            9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | D     |            4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |           11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |            7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |           10 |       0.86 | Satisfied         |    2025-01-24 |
+| S21        | Math        | A     |           12 |       0.93 | Very satisfied    |    2025-01-25 |
+| S22        | Art         | C     |            6 |        0.7 | Neutral           |    2025-01-25 |
 
 ** datagrid-rows-patch
 
@@ -596,28 +596,28 @@ provides fresher attendance figures.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
-|------------+-------------+-------+-------------+------------+-------------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
-| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
-| S03        | Math        | C     |           5 |       0.99 | Neutral           |    2025-01-16 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
-| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
-| S09        | Science     | F     |           0 |       0.99 | Very dissatisfied |    2025-01-19 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
-| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
-| S16        | History     | D     |           4 |       0.99 | Dissatisfied      |    2025-01-22 |
-| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
-| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
-| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+--------------+------------+-------------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |            8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |            5 |       0.99 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |           11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | F     |            0 |       0.99 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |            9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | D     |            4 |       0.99 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |           11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |            7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |           10 |       0.86 | Satisfied         |    2025-01-24 |
 
 The =:on= argument names the join key column. The =:cols= argument is
 an alist that maps each column in the primary table to the column in
@@ -653,28 +653,28 @@ the two rows where the backup has a value, and then coalesce the pair.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
-|------------+-------------+-------+-------------+------------+-------------------+---------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 |
-| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 |
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 |
-| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 |
-| S09        | Science     | C     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
-| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 |
-| S16        | History     | C     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
-| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
-| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 |
-| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+--------------+------------+-------------------+---------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied    |    2025-01-15 |
+| S02        | English     | B     |            8 |        0.8 | Satisfied         |    2025-01-15 |
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied    |    2025-01-16 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied         |    2025-01-17 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied    |    2025-01-18 |
+| S08        | Math        | B     |           11 |       0.88 | Satisfied         |    2025-01-18 |
+| S09        | Science     | C     |            0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied    |    2025-01-20 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied         |    2025-01-20 |
+| S13        | Math        | B     |            9 |        0.9 | Satisfied         |    2025-01-21 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied    |    2025-01-22 |
+| S16        | History     | C     |            4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S17        | Math        | B     |           11 |       0.83 | Satisfied         |    2025-01-23 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied    |    2025-01-23 |
+| S19        | English     | C     |            7 |       0.78 | Neutral           |    2025-01-24 |
+| S20        | Science     | B     |           10 |       0.86 | Satisfied         |    2025-01-24 |
 
 After the call, =grade-backup= is gone from the result and the two
 rows that had been blanked out are filled from the backup column.
@@ -695,7 +695,7 @@ grade in that course.
 #+begin_src emacs-lisp
   (datagrid-to-org-table
    (datagrid-sort
-    (datagrid-pivot-wider dg "course-code" "study-hours"
+    (datagrid-pivot-wider dg "course-code" "credit-hours"
                           :id-cols '("grade")
                           :values-fn #'length
                           :values-fill 0)
@@ -794,10 +794,10 @@ Emacs Lisp function. Without =:by=, the result has one row.
   (datagrid-to-org-table
    (datagrid-summarize
     dg
-    '((:name "total-hours" :fn + :col "study-hours")
-      (:name "max-hours" :fn max :col "study-hours")
+    '((:name "total-hours" :fn + :col "credit-hours")
+      (:name "max-hours" :fn max :col "credit-hours")
       ;; Calc statistics: pass :calc t and a Calc abbreviation string.
-      (:name "median-hours" :fn "vmedian" :col "study-hours" :calc t)
+      (:name "median-hours" :fn "vmedian" :col "credit-hours" :calc t)
       ;; Floats need no conversion. :convert t is for numbers stored
       ;; as strings.
       (:name "median-att" :fn "vmedian" :col "attendance" :calc t)
@@ -831,7 +831,7 @@ with the other verbs in =thread-first=.
     (datagrid-summarize
      '((:name "students" :fn (lambda (n _x) (1+ n)) :col "student-id"
               :initial-value 0)
-       (:name "mean-hours" :fn "vmean" :col "study-hours" :calc t)
+       (:name "mean-hours" :fn "vmean" :col "credit-hours" :calc t)
        (:name "mean-grade-code" :fn "vmean" :col "grade"
               :calc t :code t))
      :by "course-code")
@@ -869,7 +869,7 @@ columns follow.
 #+end_src
 
 #+RESULTS:
-| course-code | student-id | grade |        study-hours |         attendance | satisfaction | enrolled-date |
+| course-code | student-id | grade |       credit-hours |         attendance | satisfaction | enrolled-date |
 |-------------+------------+-------+--------------------+--------------------+--------------+---------------|
 | Math        |          5 |     5 |                9.6 |              0.852 |            5 |             5 |
 | English     |          5 |     5 |                6.2 | 0.7300000000000001 |            5 |             5 |
@@ -891,35 +891,35 @@ Where =datagrid-summarize-across= always returns one row per group,
 sub-datagrid, and then row-binds them together. The schema (column
 count and headings) of the returned sub-datagrid must match across
 groups. This is the right tool for per-group operations like "keep two
-rows by study-hours within each course."
+rows by credit hours within each course."
 
 #+begin_src emacs-lisp
   (datagrid-to-org-table
    (datagrid-group-modify
     dg
     (lambda (sub)
-      (datagrid-head (datagrid-sort sub "study-hours")
+      (datagrid-head (datagrid-sort sub "credit-hours")
                      (datagrid--ncols sub)
                      2))
     "course-code"))
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date |
-|------------+-------------+-------+-------------+------------+-------------------+---------------|
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 |
-| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 |
-| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 |
-| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 |
-| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date |
+|------------+-------------+-------+--------------+------------+-------------------+---------------|
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 |
+| S13        | Math        | B     |            9 |        0.9 | Satisfied         |    2025-01-21 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 |
+| S09        | Science     | F     |            0 |        0.4 | Very dissatisfied |    2025-01-19 |
+| S20        | Science     | B     |           10 |       0.86 | Satisfied         |    2025-01-24 |
+| S16        | History     | D     |            4 |       0.55 | Dissatisfied      |    2025-01-22 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied         |    2025-01-17 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied         |    2025-01-20 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied    |    2025-01-23 |
 
 Because =datagrid-sort= sorts ascending, the snippet above keeps the
-two students with the fewest hours per course. Reverse the per-group
+two students with the fewest credit hours per course. Reverse the per-group
 behavior to your taste.
 
 ** datagrid-count
@@ -967,9 +967,9 @@ values get coerced. When Calc cannot produce a real number, such as
 the standard deviation of a single value, the result is =nil=.
 
 #+begin_src emacs-lisp
-  (list :mean-hrs   (datagrid-reduce-vec-calc dg "vmean"   "study-hours")
-        :median-hrs (datagrid-reduce-vec-calc dg "vmedian" "study-hours")
-        :sdev-hrs   (datagrid-reduce-vec-calc dg "vsdev"   "study-hours")
+  (list :mean-hrs   (datagrid-reduce-vec-calc dg "vmean"   "credit-hours")
+        :median-hrs (datagrid-reduce-vec-calc dg "vmedian" "credit-hours")
+        :sdev-hrs   (datagrid-reduce-vec-calc dg "vsdev"   "credit-hours")
         ;; The attendance column holds floats, which Calc accepts
         ;; as they are.
         :mean-att   (datagrid-reduce-vec-calc dg "vmean" "attendance")
@@ -998,7 +998,7 @@ numbers are converted automatically. The result is a list of
 | student-id    | student-id    | (cardinality . 20) | (mode S01 S02 S03 S04 S05 S06 S07 S08 S09 S10 S11 S12 S13 S14 S15 S16 S17 S18 S19 S20)                               | (frequency - five or fewer (S01 . 1) (S02 . 1) (S03 . 1) (S04 . 1) (S05 . 1))                                    |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
 | course-code   | course-code   | (cardinality . 5)  | (mode Math English)                                                                                                  | (frequency - five or fewer (Math . 5) (English . 5) (Science . 4) (History . 3) (Art . 3))                       |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
 | grade         | grade         | (vcount . 20)      | (vmin . 0)                                                                                                           | (vmax . 4)                                                                                                       | (vmedian . 3)    | (mode 3)         | (quartiles (1Q . 2) (2Q . 3) (3Q . 4) (IQR . 2)) | (median absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
-| study-hours   | study-hours   | (vcount . 20)      | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)         | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 6.25) (2Q . 9.5) (3Q . 12.75) (IQR . 6.5))                     |
+| credit-hours  | credit-hours  | (vcount . 20)      | (vmin . 0)                                                                                                           | (vmax . 18)                                                                                                      | (vmedian . 9.5)  | (vmean . 9.4)    | (vgmean . 0)                                     | (vsdev . 4.58142703578)         | (rms . 10.4067285926)  | (mode 9 11 7 10)                                                                                      | (quartiles (1Q . 6.25) (2Q . 9.5) (3Q . 12.75) (IQR . 6.5))                     |
 | attendance    | attendance    | (vcount . 20)      | (vmin . 0.4)                                                                                                         | (vmax . 0.99)                                                                                                    | (vmedian . 0.84) | (vmean . 0.8115) | (vgmean . 0.793920518136)                        | (vsdev . 0.15695373103)         | (rms . 0.825793557737) | (mode 0.95 0.8 0.7 0.98 0.85 0.6 0.99 0.88 0.4 0.75 0.96 0.82 0.9 0.72 0.97 0.55 0.83 0.94 0.78 0.86) | (quartiles (1Q . 0.7275) (2Q . 0.84) (3Q . 0.9475) (IQR . 0.21999999999999997)) |
 | satisfaction  | satisfaction  | (vcount . 20)      | (vmin . 1)                                                                                                           | (vmax . 5)                                                                                                       | (vmedian . 4)    | (mode 4)         | (quartiles (1Q . 3) (2Q . 4) (3Q . 5) (IQR . 2)) | (median absolute deviation . 1) |                        |                                                                                                       |                                                                                 |
 | enrolled-date | enrolled-date | (cardinality . 10) | (mode 2025-01-15 2025-01-16 2025-01-17 2025-01-18 2025-01-19 2025-01-20 2025-01-21 2025-01-22 2025-01-23 2025-01-24) | (frequency - five or fewer (2025-01-15 . 2) (2025-01-16 . 2) (2025-01-17 . 2) (2025-01-18 . 2) (2025-01-19 . 2)) |                  |                  |                                                  |                                 |                        |                                                                                                       |                                                                                 |
@@ -1048,7 +1048,7 @@ For the join examples we need a small second datagrid. The
               :heading "department"
               :data ["STEM" "Humanities" "STEM" "Humanities" "Arts" "Business"])
              (datagrid-column-make
-              :heading "credit-hours"
+              :heading "course-credits"
               :data [3 3 4 3 2 3]))))
 #+end_src
 
@@ -1070,14 +1070,14 @@ subset with =:cols=.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date | department |
-|------------+-------------+-------+-------------+------------+----------------+---------------+------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied |    2025-01-15 | STEM       |
-| S02        | English     | B     |           8 |        0.8 | Satisfied      |    2025-01-15 | Humanities |
-| S03        | Math        | C     |           5 |        0.7 | Neutral        |    2025-01-16 | STEM       |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied |    2025-01-16 | STEM       |
-| S05        | History     | B     |           9 |       0.85 | Satisfied      |    2025-01-17 | Humanities |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied   |    2025-01-17 | Humanities |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date | department |
+|------------+-------------+-------+--------------+------------+----------------+---------------+------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied |    2025-01-15 | STEM       |
+| S02        | English     | B     |            8 |        0.8 | Satisfied      |    2025-01-15 | Humanities |
+| S03        | Math        | C     |            5 |        0.7 | Neutral        |    2025-01-16 | STEM       |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied |    2025-01-16 | STEM       |
+| S05        | History     | B     |            9 |       0.85 | Satisfied      |    2025-01-17 | Humanities |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied   |    2025-01-17 | Humanities |
 
 ="Business"= is in =dg-courses= but is never used by any student, so
 it does not appear in the left join's result. That is the defining
@@ -1095,39 +1095,39 @@ right grid's projected columns get their actual values.
   (datagrid-to-org-table
    (datagrid-full-join dg dg-courses
                        :on "course-code"
-                       :cols '("department" "credit-hours")))
+                       :cols '("department" "course-credits")))
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction      | enrolled-date | department | credit-hours |
-|------------+-------------+-------+-------------+------------+-------------------+---------------+------------+--------------|
-| S01        | Math        | A     |          12 |       0.95 | Very satisfied    |    2025-01-15 | STEM       |            3 |
-| S02        | English     | B     |           8 |        0.8 | Satisfied         |    2025-01-15 | Humanities |            3 |
-| S03        | Math        | C     |           5 |        0.7 | Neutral           |    2025-01-16 | STEM       |            3 |
-| S04        | Science     | A     |          15 |       0.98 | Very satisfied    |    2025-01-16 | STEM       |            4 |
-| S05        | History     | B     |           9 |       0.85 | Satisfied         |    2025-01-17 | Humanities |            3 |
-| S06        | English     | D     |           3 |        0.6 | Dissatisfied      |    2025-01-17 | Humanities |            3 |
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied    |    2025-01-18 | Arts       |            2 |
-| S08        | Math        | B     |          11 |       0.88 | Satisfied         |    2025-01-18 | STEM       |            3 |
-| S09        | Science     | F     |           0 |        0.4 | Very dissatisfied |    2025-01-19 | STEM       |            4 |
-| S10        | English     | C     |           7 |       0.75 | Neutral           |    2025-01-19 | Humanities |            3 |
-| S11        | History     | A     |          14 |       0.96 | Very satisfied    |    2025-01-20 | Humanities |            3 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied         |    2025-01-20 | Arts       |            2 |
-| S13        | Math        | B     |           9 |        0.9 | Satisfied         |    2025-01-21 | STEM       |            3 |
-| S14        | English     | C     |           6 |       0.72 | Neutral           |    2025-01-21 | Humanities |            3 |
-| S15        | Science     | A     |          16 |       0.97 | Very satisfied    |    2025-01-22 | STEM       |            4 |
-| S16        | History     | D     |           4 |       0.55 | Dissatisfied      |    2025-01-22 | Humanities |            3 |
-| S17        | Math        | B     |          11 |       0.83 | Satisfied         |    2025-01-23 | STEM       |            3 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied    |    2025-01-23 | Arts       |            2 |
-| S19        | English     | C     |           7 |       0.78 | Neutral           |    2025-01-24 | Humanities |            3 |
-| S20        | Science     | B     |          10 |       0.86 | Satisfied         |    2025-01-24 | STEM       |            4 |
-|            | Business    |       |             |            |                   |               | Business   |            3 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction      | enrolled-date | department | course-credits |
+|------------+-------------+-------+--------------+------------+-------------------+---------------+------------+----------------|
+| S01        | Math        | A     |           12 |       0.95 | Very satisfied    |    2025-01-15 | STEM       |              3 |
+| S02        | English     | B     |            8 |        0.8 | Satisfied         |    2025-01-15 | Humanities |              3 |
+| S03        | Math        | C     |            5 |        0.7 | Neutral           |    2025-01-16 | STEM       |              3 |
+| S04        | Science     | A     |           15 |       0.98 | Very satisfied    |    2025-01-16 | STEM       |              4 |
+| S05        | History     | B     |            9 |       0.85 | Satisfied         |    2025-01-17 | Humanities |              3 |
+| S06        | English     | D     |            3 |        0.6 | Dissatisfied      |    2025-01-17 | Humanities |              3 |
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied    |    2025-01-18 | Arts       |              2 |
+| S08        | Math        | B     |           11 |       0.88 | Satisfied         |    2025-01-18 | STEM       |              3 |
+| S09        | Science     | F     |            0 |        0.4 | Very dissatisfied |    2025-01-19 | STEM       |              4 |
+| S10        | English     | C     |            7 |       0.75 | Neutral           |    2025-01-19 | Humanities |              3 |
+| S11        | History     | A     |           14 |       0.96 | Very satisfied    |    2025-01-20 | Humanities |              3 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied         |    2025-01-20 | Arts       |              2 |
+| S13        | Math        | B     |            9 |        0.9 | Satisfied         |    2025-01-21 | STEM       |              3 |
+| S14        | English     | C     |            6 |       0.72 | Neutral           |    2025-01-21 | Humanities |              3 |
+| S15        | Science     | A     |           16 |       0.97 | Very satisfied    |    2025-01-22 | STEM       |              4 |
+| S16        | History     | D     |            4 |       0.55 | Dissatisfied      |    2025-01-22 | Humanities |              3 |
+| S17        | Math        | B     |           11 |       0.83 | Satisfied         |    2025-01-23 | STEM       |              3 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied    |    2025-01-23 | Arts       |              2 |
+| S19        | English     | C     |            7 |       0.78 | Neutral           |    2025-01-24 | Humanities |              3 |
+| S20        | Science     | B     |           10 |       0.86 | Satisfied         |    2025-01-24 | STEM       |              4 |
+|            | Business    |       |              |            |                   |               | Business   |              3 |
 
 The extra row at the bottom corresponds to ="Business"=, which
 appears in =dg-courses= but never in =dg=. On that final row,
-=student-id=, =grade=, =study-hours=, =attendance=, =satisfaction=,
+=student-id=, =grade=, =credit-hours=, =attendance=, =satisfaction=,
 and =enrolled-date= are all =nil=, while =department= and
-=credit-hours= show the values from =dg-courses=.
+=course-credits= show the values from =dg-courses=.
 
 ** datagrid-anti-join and datagrid-semi-join
 
@@ -1154,16 +1154,47 @@ only want to filter.
 #+end_src
 
 #+RESULTS:
-| student-id | course-code | grade | study-hours | attendance | satisfaction   | enrolled-date |
-|------------+-------------+-------+-------------+------------+----------------+---------------|
-| S07        | Art         | A     |          18 |       0.99 | Very satisfied |    2025-01-18 |
-| S12        | Art         | B     |          10 |       0.82 | Satisfied      |    2025-01-20 |
-| S18        | Art         | A     |          13 |       0.94 | Very satisfied |    2025-01-23 |
+| student-id | course-code | grade | credit-hours | attendance | satisfaction   | enrolled-date |
+|------------+-------------+-------+--------------+------------+----------------+---------------|
+| S07        | Art         | A     |           18 |       0.99 | Very satisfied |    2025-01-18 |
+| S12        | Art         | B     |           10 |       0.82 | Satisfied      |    2025-01-20 |
+| S18        | Art         | A     |           13 |       0.94 | Very satisfied |    2025-01-23 |
 
 In the anti-join example, we sliced =dg-courses= down to its first
 four rows, leaving out ="Art"= and ="Business"=. The anti-join then
 returns the students who took Art, since that is the only course in
 =dg= whose key is no longer present in the right side.
+
+* Threading functions
+
+Almost every verb in the package takes a datagrid first and returns a
+new datagrid. That makes them a natural fit for =thread-first=, which
+passes the result of each line in as the first argument of the next.
+The code then reads top to bottom as a list of steps.
+
+This block finds the five B students who carry the most credit hours.
+
+#+begin_src emacs-lisp
+  (thread-first dg
+    (datagrid-filter (lambda (grade) (equal grade "B")) "grade")
+    (datagrid-select "student-id" "course-code" "grade" "credit-hours")
+    (datagrid-sort '(:col "credit-hours" :reverse t))
+    (datagrid-head 4 5)
+    (datagrid-to-org-table))
+#+end_src
+
+#+RESULTS:
+| student-id | course-code | grade | credit-hours |
+|------------+-------------+-------+--------------|
+| S08        | Math        | B     |           11 |
+| S17        | Math        | B     |           11 |
+| S12        | Art         | B     |           10 |
+| S20        | Science     | B     |           10 |
+| S05        | History     | B     |            9 |
+
+Read it as: start with =dg=, keep the rows with a B grade, keep four
+columns, sort by credit hours from most to least, take the first five
+rows, and print an Org table.
 
 * What to try next
 
