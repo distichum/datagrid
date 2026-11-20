@@ -545,8 +545,8 @@ Examples:
     (datagrid-from-alist (mapcar (lambda (v) (append v nil)) vectors)
                          t extend-uneven)))
 
-(defun datagrid--from-csv-rows (rows headings)
-  "Return a datagrid from ROWS, a list of parsed CSV rows.
+(defun datagrid--from-rows (rows headings)
+  "Return a datagrid from ROWS, a list with one list per row.
 HEADINGS is as in `datagrid-from-csv-file'. The first row sets the
 number of fields. A row with fewer fields is padded with nil. Signal
 an error for a row with more fields, naming the row."
@@ -554,7 +554,7 @@ an error for a row with more fields, naming the row."
     (cl-loop for row in rows
              for n from 1
              when (> (length row) width)
-             do (error "CSV row %d has %d fields, but the first row has %d"
+             do (error "Row %d has %d fields, but the first row has %d"
                        n (length row) width))
     (datagrid-from-alist (datagrid-safe-transpose rows) headings)))
 
@@ -576,7 +576,7 @@ This requires the csv-mode package."
         (while (not (eobp))
           (push (csv-parse-current-row) rows)
           (forward-line))
-        (datagrid--from-csv-rows (nreverse rows) headings)))))
+        (datagrid--from-rows (nreverse rows) headings)))))
 
 (defun datagrid-from-csv-file (file-path &optional headings parser
                                          _extend-uneven)
@@ -614,12 +614,41 @@ padded."
      (require 'pcsv)
      (let ((reader (pcsv-file-parser file-path)))
        (unwind-protect
-           (datagrid--from-csv-rows (cl-loop for row = (funcall reader)
-                                             while row
-                                             collect row)
-                                    headings)
+           (datagrid--from-rows (cl-loop for row = (funcall reader)
+                                         while row
+                                         collect row)
+                                headings)
          (funcall reader t))))
     (_ (error "Unknown CSV parser: %S" parser))))
+
+(defun datagrid-from-org-table (table &optional headings)
+  "Return a datagrid from TABLE, an Org table as a list of rows.
+TABLE is the value Org Babel gives a table passed with :var, or the
+value of `org-table-to-lisp'. Horizontal rules, which appear in TABLE
+as the symbol `hline', are dropped. If HEADINGS is nil, then there is
+not a headings row. If t, then there is. The default is nil.
+
+By default, Org Babel removes the headings row before passing a table.
+Add :colnames no to the block's header arguments to keep it, and pass
+HEADINGS t.
+
+Org reads a cell that looks like a number as a number. A numeric
+heading is turned into a string, so a column headed 40 has the heading
+\"40\" and is not mistaken for column index 40. Other cells are kept
+as they are, so an empty cell stays an empty string, as in
+`datagrid-from-csv-file'.
+
+The first row sets the number of fields. A row with fewer fields is
+padded with nil. A row with more fields signals an error that names
+the row. Rows are counted without the horizontal rules."
+  (let ((rows (remq 'hline table)))
+    (when (and headings rows)
+      (setq rows (cons (cl-loop for h in (car rows)
+                                collect (if (numberp h)
+                                            (number-to-string h)
+                                          h))
+                       (cdr rows))))
+    (datagrid--from-rows rows headings)))
 
 (defun datagrid--csv-quote-field (field)
   "Return FIELD as a CSV-safe string.

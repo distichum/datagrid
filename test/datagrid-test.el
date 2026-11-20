@@ -389,6 +389,70 @@
                      '(0 . 0))))))
 
 
+;;;; datagrid-from-org-table
+
+(ert-deftest datagrid-test-from-org-table-with-headings ()
+  ;; The rule is dropped, and the numeric heading becomes a string that
+  ;; heading lookup finds. Numeric data stays numeric.
+  (let ((dg (datagrid-from-org-table
+             '(("id" "status" 40) hline (1 "Available" "x") (2 "Paged" ""))
+             t)))
+    (should (equal (datagrid-get-headings dg) ["id" "status" "40"]))
+    (should (equal (datagrid-pull dg "id") [1 2]))
+    (should (equal (datagrid-pull dg "40") ["x" ""]))
+    (should (equal (datagrid-col-index-by-heading dg "40") 2))))
+
+(ert-deftest datagrid-test-from-org-table-without-headings ()
+  ;; Without headings, numbers in the first row are data and stay
+  ;; numbers.
+  (let ((dg (datagrid-from-org-table '((1 "a") hline (2 "b")))))
+    (should (equal (datagrid-get-headings dg) [nil nil]))
+    (should (equal (datagrid-to-alist dg) '((1 2) ("a" "b"))))))
+
+(ert-deftest datagrid-test-from-org-table-rows-and-rules ()
+  ;; Short rows are padded. A long row is an error, counted without
+  ;; the rules.
+  (should (equal (datagrid-to-alist
+                  (datagrid-from-org-table '(("a" "b") hline (1)) t) t)
+                 '(("a" 1) ("b" nil))))
+  (let ((err (should-error (datagrid-from-org-table
+                            '(("a") hline (1) (2 3)) t))))
+    (should (string-match-p "Row 3 has 2 fields, but the first row has 1"
+                            (error-message-string err)))))
+
+(ert-deftest datagrid-test-from-org-table-empty ()
+  (dolist (table '(nil (hline)))
+    (dolist (headings '(nil t))
+      (should (equal (datagrid-dimensions
+                      (datagrid-from-org-table table headings))
+                     '(0 . 0))))))
+
+(defvar datagrid-test--babel-result nil
+  "The datagrid built inside the Org Babel block of a test.")
+
+(ert-deftest datagrid-test-from-org-table-babel ()
+  ;; What Org Babel passes with :colnames no reads as expected. Babel
+  ;; prints a block's value, so the block stores the datagrid instead.
+  (skip-unless (require 'ob-emacs-lisp nil t))
+  (setq datagrid-test--babel-result nil)
+  (with-temp-buffer
+    (insert "#+name: tbl\n"
+            "| id | 40 |\n|----+----|\n|  1 | x  |\n|  2 |    |\n\n"
+            "#+begin_src emacs-lisp :var tbl=tbl :colnames no\n"
+            "  (setq datagrid-test--babel-result\n"
+            "        (datagrid-from-org-table tbl t))\n"
+            "  nil\n"
+            "#+end_src\n")
+    (org-mode)
+    (goto-char (point-min))
+    (search-forward "#+begin_src")
+    (let ((org-confirm-babel-evaluate nil))
+      (org-babel-execute-src-block)))
+  (let ((dg datagrid-test--babel-result))
+    (should (equal (datagrid-get-headings dg) ["id" "40"]))
+    (should (equal (datagrid-to-alist dg) '((1 2) ("x" ""))))))
+
+
 ;;;; datagrid-make-empty
 
 (ert-deftest datagrid-test-make-dimensions ()

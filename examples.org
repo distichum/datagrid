@@ -135,6 +135,40 @@ The =score= column was only two values long, so the third row gets a
 =nil= in that column. If you had passed =nil= for =extend-uneven=, you
 would have gotten an error that gives the length of each column.
 
+** datagrid-from-org-table
+
+=datagrid-from-org-table= reads an Org table that a code block gets
+through =:var=. Org Babel removes the headings row by default, so add
+=:colnames no= to the block and pass =t= as the second argument. The
+horizontal rule is dropped.
+
+Org reads =40= in the headings row as a number. Column lookup would
+take a number for a column index, so the function turns numeric
+headings into strings, and the block finds the column with ="40"=.
+
+#+name: shelf-statuses
+| id | status       | 40 | 40a |
+|----+--------------+----+-----|
+|  1 | Aged to lost |    |     |
+|  2 | Available    | x  | x   |
+|  3 | Paged        | x  |     |
+
+#+begin_src emacs-lisp :var tbl=shelf-statuses :colnames no
+  (thread-first (datagrid-from-org-table tbl t)
+                (datagrid-filter (lambda (x) (equal x "x")) "40")
+                (datagrid-select "status" "40a")
+                (datagrid-to-org-table))
+#+end_src
+
+#+RESULTS:
+| status    | 40a |
+|-----------+-----|
+| Available | x   |
+| Paged     |     |
+
+Empty cells arrive as empty strings, as they do from a CSV file, so
+the filter compares with ="x"= and the empty =40a= cell stays empty.
+
 ** datagrid-column-decode
 
 A coded column stores compact values in =:data= and a translation

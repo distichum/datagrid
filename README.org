@@ -135,6 +135,28 @@ A fourth argument, =extend-uneven=, is still accepted but is obsolete and ignore
   (datagrid-from-csv-buffer "data.csv" t)
 #+end_src
 
+** From an Org table
+=datagrid-from-org-table (table &optional headings)=: Create a datagrid from an Org table, given as a list of rows. This is the value Org Babel gives a table passed with =:var=, or the value of =org-table-to-lisp=. If headings is non-nil, then the first row will be considered headings. Horizontal rules are dropped. Short rows are padded with nil and long rows signal an error, as in =datagrid-from-csv-file=.
+
+By default, Org Babel removes the headings row before passing a table to an Emacs Lisp block. Add =:colnames no= to keep it.
+
+Org reads a cell that looks like a number as a number, so a column headed =40= arrives with the heading 40. Column lookup would take the number for a column index, so =datagrid-from-org-table= turns numeric headings into strings. Look the column up with ="40"=. Other cells are kept as Org passes them. An empty cell is an empty string, as in a CSV file. Functions that skip missing values, such as the joins, treat it like nil.
+
+#+begin_src org
+  ,#+name: statuses
+  | id | status       | 40a |
+  |----+--------------+-----|
+  |  1 | Aged to lost |     |
+  |  2 | Available    | x   |
+
+  ,#+begin_src emacs-lisp :var tbl=statuses :colnames no
+    (thread-first (datagrid-from-org-table tbl t)
+                  (datagrid-filter (lambda (x) (equal x "x")) "40a")
+                  (datagrid-select "status")
+                  (datagrid-to-org-table))
+  ,#+end_src
+#+end_src
+
 ** With empty cells
 =datagrid-make-empty (col-num row-num &optional init heading-list)=: Create a datagrid with COL-NUM columns and ROW-NUM rows. Every element is INIT, which defaults to nil. HEADING-LIST, if given, must have one heading per column.
 
@@ -335,6 +357,7 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
 - Obsolete: =datagrid-prep-for-calc=. It converted floats to Calc's internal form, but =datagrid-calc-function-wrapper= now passes plain Lisp numbers to Calc exactly, so no conversion is needed. To turn strings into numbers, use =datagrid-unknown-type-to-number=. It still works and will be removed no earlier than 2027-05-19.
 - Reading an empty CSV buffer or file returns a datagrid with no columns, with either parser. Before, it signaled =wrong-number-of-arguments=. =datagrid-from-alist= returns the same for an empty alist, and =datagrid-safe-transpose= returns nil for empty input.
 - Breaking: =datagrid-from-alist= signals an error when the columns have different lengths. Before, with =extend-uneven= nil, the default, it cut every column to the shortest one and dropped data without a warning. Pass =extend-uneven= non-nil to pad shorter columns with nil. This matches pandas, polars, and tibble, which all reject columns of unequal length.
+- New: =datagrid-from-org-table= creates a datagrid from an Org table passed to a code block. It drops horizontal rules and turns numeric headings into strings, so a column headed =40= is found with ="40"=.
 - New: =datagrid-from-vectors= takes =:extend-uneven t= before the vectors, which pads shorter columns as in =datagrid-from-alist=. Without it, columns of different lengths signal an error, as before.
 - Breaking: reading CSV signals an error for a row with more fields than the first row, and the message names the row. Before, the other rows were padded to fit, and with headings the extra column had no heading. Short rows are still padded with nil. This matches pandas, polars, and readr.
 - Obsolete: the =extend-uneven= argument of =datagrid-from-csv-file=. It never had an effect, because short rows were always padded before it was used. It is still accepted and ignored, and byte-compiling a call that passes it shows a warning.
