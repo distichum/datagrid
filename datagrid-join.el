@@ -25,20 +25,24 @@
 
 ;; A dplyr-style join family for datagrid:
 ;;
-;;   `datagrid-left-join'  - keep all rows of DG1; attach matching DG2 columns
-;;   `datagrid-inner-join' - keep only rows of DG1 that match in DG2
-;;   `datagrid-full-join'  - keep all rows from both grids
-;;   `datagrid-anti-join'  - keep rows of DG1 with no match in DG2
-;;   `datagrid-semi-join'  - keep rows of DG1 with a match in DG2 (no projection)
+;;   `datagrid-left-join':  keep all rows of DG1, attach matching DG2
+;;                          columns
+;;  `datagrid-inner-join': keep only rows of DG1 that match in DG2
+;;   `datagrid-full-join':  keep all rows from both grids
+;;   `datagrid-anti-join':  keep rows of DG1 with no match in DG2
+;;   `datagrid-semi-join':  keep rows of DG1 with a match in DG2, with
+;;                          no DG2 columns
 ;;
-;; All functions share the signature
+;; The left, inner, and full joins share the signature
 ;;
 ;;   (datagrid-X-join DG1 DG2 &key ON COLS SUFFIX)
 ;;
 ;; where ON identifies the join key, COLS selects which DG2 columns to
 ;; project (default: all DG2 columns except the key), and SUFFIX
-;; disambiguates heading collisions. Anti and semi joins ignore COLS
-;; and SUFFIX since they project no DG2 columns.
+;; disambiguates heading collisions. The anti and semi joins project
+;; no DG2 columns, so they take only ON:
+;;
+;;   (datagrid-anti-join DG1 DG2 &key ON)
 ;;
 ;; ON accepts:
 ;;   - an integer: same column index in both grids
@@ -104,8 +108,8 @@ defaulted, COLS as logical DG2 indices, ROW-MAP from
 COLS is a list of logical DG2 column indices. ROW-MAP is a vector
 whose length is the number of logical rows in DG-BASE, each
 element a logical dg2 row index or nil. Return a new datagrid
-with DG2's selected columns appended (heading, lom, code
-preserved; headings uniquified using SUFFIX)."
+with DG2's selected columns appended. The columns keep their
+heading, lom, and code, and headings are uniquified using SUFFIX."
   (let* ((used (cl-loop for h across (datagrid-get-headings dg-base)
                         when h collect h))
          (result dg-base))
@@ -128,8 +132,8 @@ preserved; headings uniquified using SUFFIX)."
 
 (defun datagrid--join-filter-rows (dg1 dg2 on keep-matched)
   "Filter DG1 rows by whether their key matches in DG2.
-ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
-\(semi-join), nil keeps unmatched rows (anti-join)."
+ON is the :on argument. KEEP-MATCHED non-nil keeps matched rows
+\(semi-join), and nil keeps unmatched rows (anti-join)."
   (let* ((on (datagrid--resolve-on on dg1 dg2))
          (on1 (car on))
          (on2 (cdr on))
@@ -153,7 +157,7 @@ match.
 ON identifies the join key. It accepts an integer (same column
 index in both grids), a string (heading present in both grids),
 or a cons (X . Y) for per-grid index or heading. Keys are
-compared with `equal'; empty keys (nil or empty string) never
+compared with `equal', and empty keys (nil or empty string) never
 match. When DG2 has duplicate keys, the first occurrence wins.
 
 COLS is a list of DG2 column indices or headings to project. It
@@ -169,8 +173,8 @@ defaults to \"_2\"."
 ON identifies the join key: an integer (same column index in
 both grids), a string (heading present in both), or a cons
 \(X . Y) for per-grid index or heading. Keys are compared with
-`equal'; empty keys (nil or empty string) never match. When DG2
-has duplicate keys, the first occurrence wins.
+`equal', and empty keys (nil or empty string) never match. When
+DG2 has duplicate keys, the first occurrence wins.
 
 COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
@@ -184,9 +188,9 @@ disambiguates colliding headings and defaults to \"_2\"."
 
 (cl-defun datagrid-full-join (dg1 dg2 &key on cols suffix)
   "Return the union of DG1 and DG2 by key.
-All rows of DG1 are kept (with matching DG2 columns appended,
-nil for unmatched rows); then rows of DG2 whose key is absent
-from DG1 are appended at the bottom. For these extra rows,
+All rows of DG1 are kept, with matching DG2 columns appended and
+nil for unmatched rows. Then rows of DG2 whose key is absent from
+DG1 are appended at the bottom. For these extra rows,
 DG1's join column receives the DG2 key, DG1's other columns
 receive nil, and the projected DG2 columns receive their actual
 DG2 values.
@@ -194,8 +198,8 @@ DG2 values.
 ON identifies the join key: an integer (same column index in
 both grids), a string (heading present in both), or a cons
 \(X . Y) for per-grid index or heading. Keys are compared with
-`equal'; empty keys (nil or empty string) never match. When DG2
-has duplicate keys, the first occurrence wins.
+`equal', and empty keys (nil or empty string) never match. When
+DG2 has duplicate keys, the first occurrence wins.
 
 COLS is a list of DG2 column indices or headings to project,
 defaulting to every DG2 column except the join key. SUFFIX
@@ -255,7 +259,7 @@ No DG2 columns are projected.
 ON identifies the join key: an integer (same column index in
 both grids), a string (heading present in both), or a cons
 \(X . Y) for per-grid index or heading. Keys are compared with
-`equal'; empty keys (nil or empty string) never match."
+`equal', and empty keys (nil or empty string) never match."
   (datagrid--join-filter-rows dg1 dg2 on t))
 
 ;;;; Deprecated

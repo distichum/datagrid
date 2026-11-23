@@ -734,7 +734,7 @@
                          ["price" 1.005 nil 2.25]))
 
 (ert-deftest datagrid-test-to-org-table-format-string-pads-all-numbers ()
-  ;; Integers are formatted too; strings, nil, and headings are not.
+  ;; Integers are formatted too. Strings, nil, and headings are not.
   (should (equal (datagrid-to-org-table (datagrid-test-money-grid)
                                         :format "%.2f")
                  '(("code" "n" "cost" "price") hline
@@ -1646,7 +1646,7 @@
     (should (= (datagrid-reduce-vec dg #'* 0 :convert t) -90))))
 
 (ert-deftest datagrid-test-reduce-vec-respects-row-order ()
-  ;; Sorting, slicing, and filtering set a row-order; the reduction
+  ;; Sorting, slicing, and filtering set a row-order. The reduction
   ;; must see the logical rows only, in logical order.
   (let* ((dg (datagrid-test-mk
               (datagrid-column-make :heading "k" :data [3 1 2 4])
@@ -2821,7 +2821,7 @@
   "A projection prints only its selected column, not the shared spine."
   (let* ((dg (datagrid-test-simple))
          (out (cl-prin1-to-string (datagrid-select dg "score"))))
-    ;; The physical struct still holds name/group; they must not appear.
+    ;; The physical struct still holds name/group. They must not appear.
     (should-not (string-match-p "Alice" out))
     (should-not (string-match-p "name" out))
     (should (string-match-p "score" out))))

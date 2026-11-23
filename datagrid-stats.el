@@ -25,7 +25,8 @@
 
 ;; Reductions, descriptive statistics, and summary reports for
 ;; datagrid. Also hosts the dplyr verbs that are tightly coupled to
-;; reduction machinery: distinct, group-by, and summarize.
+;; reduction machinery: distinct, group-by, summarize,
+;; summarize-across, group-modify, and count.
 
 ;;; Code:
 (require 'cl-lib)
@@ -41,10 +42,7 @@
 With no COLS, rows are deduped considering all columns. With one or
 more COLS (integer indices or heading strings), rows are deduped
 considering only those columns, and only those columns appear in the
-result.
-
-Note: row-level dedup walks all rows and hashes the cross-column key
-for each one, so it can be slow on large datagrids."
+result. Kept rows appear in first-seen order."
   (datagrid--check datagrid)
   (let* ((indices (if cols
                       (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
@@ -152,7 +150,7 @@ Use `datagrid-unknown-type-to-number' to convert strings."
   "Return VEC as a nil-free list for `datagrid-calc-function-wrapper'.
 When CONVERT is non-nil, strings are converted to numbers with
 `datagrid-unknown-type-to-number' first, and empty strings are
-dropped; otherwise values pass through unchanged."
+dropped. Otherwise values pass through unchanged."
   (seq-keep #'identity
             (if convert (datagrid-unknown-type-to-number vec) vec)))
 
@@ -351,7 +349,7 @@ was an alist. Calls in that form signal an error.
 
 (defun datagrid-summarize-across (datagrid fn &rest cols)
   "Collapse DATAGRID to one row per unique combination of values in COLS.
-COLS are column refs (zero-based integers or heading strings); they
+COLS are column refs (zero-based integers or heading strings) that
 identify the grouping key. For every other column, FN is called once per
 group on the list of that column's values within the group, producing
 one cell. Return a new datagrid with the COLS columns first (one row
@@ -398,13 +396,14 @@ their original order."
 (defun datagrid-group-modify (datagrid fn &rest key-cols)
   "Group DATAGRID rows by KEY-COLS, apply FN to each group, rbind results.
 KEY-COLS are column refs (zero-based integers or heading strings). Rows
-sharing the same combination of KEY-COLS values form a group; groups
-appear in first-seen order. FN is called once per group with a
+sharing the same combination of KEY-COLS values form a group, and
+groups appear in first-seen order. FN is called once per group with a
 sub-datagrid containing all of DATAGRID's columns and only that group's
-rows. FN must return a datagrid; its column count and headings must
-match across all groups. The per-group results are rbound and returned
-as a single datagrid. Unlike `datagrid-summarize-across', no columns are
-auto-prepended -- FN is responsible for whatever schema it returns.
+rows. FN must return a datagrid, and its column count and headings
+must match across all groups. The per-group results are rbound and
+returned as a single datagrid. Unlike `datagrid-summarize-across', no
+columns are auto-prepended. FN is responsible for whatever schema it
+returns.
 Return an empty datagrid when DATAGRID has no rows."
   (datagrid--check datagrid)
   (let* ((key-indices (cl-loop for c in key-cols

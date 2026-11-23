@@ -62,10 +62,9 @@
 ;; All datagrid-columns in a single datagrid must have an equal
 ;; number of elements in their data slot.
 ;;
-;; datagrid.el is not meant to display data in a buffer or manipulate
-;; data that is already in a table. That said, the
-;; datagrid-to-org-table function, executed in an Org Mode code block,
-;; will produce a typical Org Mode table.
+;; datagrid.el does not display data in a buffer though it does
+;; include datagrid-to-org-table which produces a typical Org Mode
+;; table from datagrid data.
 
 ;; As of 2026-05-07, this package tries to align its grammar with
 ;; dplyr (https://dplyr.tidyverse.org/) while also honoring and
@@ -88,7 +87,7 @@
 
 ;; Sample data for people trying datagrid by hand, in IELM, *scratch*,
 ;; or an Org code block. The package code and the test suite do not
-;; use these variables on purpose. They are not dead code; keep them.
+;; use these variables on purpose. They are not dead code, so keep them.
 ;; See also `datagrid-column-example' and `datagrid-example' below.
 
 (defvar datagrid-test-alist '(("date" . ("2025-03-31" "2025-04-01" "2025-04-02" "2025-04-03"))
@@ -242,7 +241,7 @@ vectors, or nil for natural order."
   (unless (datagrid-column-p dg-c)
     (signal 'wrong-type-argument (list 'datagrid-column-p dg-c))))
 
-;; Sample data for interactive use; see the comment above
+;; Sample data for interactive use. See the comment above
 ;; `datagrid-test-alist'.
 (defvar datagrid-column-example
   (datagrid-column-make :heading "I like Emacs."
@@ -376,8 +375,8 @@ time."
 ;;;; datagrid-column functions
 (defun datagrid-column-p (dg-c)
   "Return non-nil if DG-C is a datagrid-column, nil otherwise.
-Headings must be strings. Data must be a vector. LOM must be a string.
-Code must be an alist."
+The heading must be a string, the data a vector, the LOM a string,
+and the code an alist. Each slot may also be nil."
   (and (datagrid--column-type-p dg-c)
        (or (null (datagrid-column-heading dg-c))
            (stringp (datagrid-column-heading dg-c)))
@@ -1001,7 +1000,7 @@ Examples:
                              collect (funcall cell v f)))))))
 
 (defun datagrid-column-add-code (datagrid cols code)
-  "Add coding data to one or more `datagrid-columns'.
+  "Return a copy of DATAGRID with CODE added to one or more columns.
 DATAGRID is a datagrid struct. COLS is a column ref (zero-based
 integer or heading string) or a list of such refs. CODE is installed
 in the CODE slot of each named column.
@@ -1067,7 +1066,7 @@ numbers:
                    (if fn (cl-map 'vector fn data) data)))))))
 
 
-;;;; Datagrid utilities; results are not datagrids
+;;;; Datagrid utilities whose results are not datagrids
 (defun datagrid-dimensions (datagrid)
   "Return the logical dimensions of DATAGRID as (columns . rows)."
   (cons (datagrid--ncols datagrid) (datagrid--nrows datagrid)))
@@ -1075,7 +1074,7 @@ numbers:
 (defun datagrid-get-elt (datagrid column-num row-num)
   "Get a value at a specific column and row.
 COLUMN-NUM is a zero-based logical column index or a heading
-string; ROW-NUM is a zero-based logical row index of DATAGRID.
+string. ROW-NUM is a zero-based logical row index of DATAGRID.
 This is the getter counterpart to `datagrid-set-elt'."
   (let* ((cols (datagrid-columns datagrid))
          (j (datagrid--col-at datagrid
@@ -1086,15 +1085,15 @@ This is the getter counterpart to `datagrid-set-elt'."
 
 (defun datagrid-set-elt (datagrid column-num row-num value &optional inplace)
   "Return a datagrid with VALUE stored at COLUMN-NUM, ROW-NUM.
-COLUMN-NUM is a zero-based logical column index or a heading string;
+COLUMN-NUM is a zero-based logical column index or a heading string.
 ROW-NUM is a zero-based logical row index. This is the setter
 counterpart to `datagrid-get-elt'.
 
 Cost and copying (functional default, INPLACE nil): only the single
 targeted column is copied. The returned datagrid gets a fresh
-`columns' vector -- a shallow O(ncols) pointer copy of the spine --
-in which the target column struct is replaced by a copy whose data
-vector is a fresh O(nrows) copy with the one slot overwritten. Every
+`columns' vector, which is a shallow O(ncols) pointer copy of the
+spine. In it, the target column struct is replaced by a copy whose
+data vector is a fresh O(nrows) copy with the one slot overwritten. Every
 other column, including its data vector, is shared by reference with
 DATAGRID rather than copied, and the `row-order'/`col-order'
 permutations are shared as well. Total work is therefore
@@ -1103,7 +1102,7 @@ itself is never modified.
 
 When INPLACE is non-nil the targeted slot is overwritten directly in
 DATAGRID's existing column data vector, and DATAGRID is returned
-unchanged in identity -- no copying occurs (O(1)). This escapes the
+unchanged in identity. No copying occurs (O(1)). This escapes the
 functional model: datagrid shares column data vectors across grids
 derived by `datagrid-sort', `datagrid-filter-by-mask',
 `datagrid-slice', `datagrid-select', and friends (see `datagrid' for
@@ -1139,11 +1138,10 @@ SPEC is an integer index or a heading string."
         (t (error "Bad column spec: %S" spec))))
 
 (defun datagrid-pull (datagrid col)
-  "Return the data vector in logical column order.
-COL is a zero-based logical index or a heading string. If
-DATAGRID has a row-order, returns a freshly built vector in
-logical order; otherwise returns the underlying data
-vector."
+  "Return the data vector of column COL of DATAGRID in logical row order.
+COL is a zero-based logical index or a heading string. If DATAGRID
+has a row-order, return a freshly built vector in logical order.
+Otherwise return the underlying data vector."
   (let* ((cols (datagrid-columns datagrid))
          (j (datagrid--col-at datagrid (datagrid--resolve-col datagrid col)))
          (data (datagrid-column-data (aref cols j)))
@@ -1198,7 +1196,7 @@ Deprecated. Use `datagrid-pull' instead."
 (defvar datagrid-print-head-rows 5
   "Number of leading logical rows shown when a datagrid is printed.
 Used by `cl-print-object' and `datagrid-describe'. The summary line is
-always printed; up to this many rows of data follow, with a count of
+always printed. Up to this many rows of data follow, with a count of
 any remaining rows.")
 
 (defun datagrid--format-summary (datagrid)
@@ -1307,7 +1305,7 @@ DEFAULT is the value substituted for non-nil input values that
 are not found in the coding alist (unmapped values). MISSING is
 the value substituted for nil input values. Both default to nil.
 
-Strings and symbols are matched with `string-equal'; other values,
+Strings and symbols are matched with `string-equal'. Other values,
 such as numbers, are matched with `equal'.
 
 A Likert scale column may have the following code alist.
@@ -1358,8 +1356,8 @@ is a zero-based logical index or a heading string."
 (defun datagrid--slice-rows (datagrid rows)
   "Return a datagrid restricted to logical ROWS of DATAGRID.
 ROWS is a list of zero-based logical row indices. Column data is
-shared with DATAGRID; only the row-order is set. Composes with any
-existing row-order."
+shared with DATAGRID, and only the row-order is set. Composes with
+any existing row-order."
   (let* ((n (length rows))
          (new-order (make-vector n 0)))
     (cl-loop for i from 0

@@ -29,8 +29,9 @@
 ;; rows-patch, coalesce, pivot-wider, filter, plus the mask-based
 ;; filter helpers (create-mask, filter-by-mask).
 
-;; Verbs that are tightly coupled to reductions (summarize, group-by,
-;; distinct) live in datagrid-stats.el instead.
+;; Verbs that are tightly coupled to reductions (summarize,
+;; summarize-across, group-by, group-modify, count, distinct) live in
+;; datagrid-stats.el instead.
 
 ;;; Code:
 (require 'cl-lib)
@@ -55,8 +56,8 @@ the slice and has nil row-order and col-order."
 (defun datagrid-mutate (datagrid new-heading fn &rest source-cols)
   "Add or replace a column produced by applying FN row-wise.
 DATAGRID is a datagrid. NEW-HEADING is the heading for the produced
-column; if a column with that heading already exists it is replaced,
-otherwise a new column is appended. FN receives one value per
+column. If a column with that heading already exists, it is replaced.
+Otherwise a new column is appended. FN receives one value per
 SOURCE-COL, in order. SOURCE-COLS are logical column references
 \(integer index or heading string).
 
@@ -276,7 +277,9 @@ col-order permutation. Composes with any existing col-order."
 
 (defun datagrid-slice (datagrid &rest row-indices)
   "Return a new DATAGRID containing only the rows at ROW-INDICES.
-ROW-INDICES are zero-based row numbers."
+ROW-INDICES are zero-based logical row numbers, and the rows appear in
+the order given. The result shares column data with DATAGRID and
+records a row-order permutation."
   (datagrid--check datagrid)
   (datagrid--slice-rows datagrid row-indices))
 
@@ -298,7 +301,7 @@ heading string."
 (defun datagrid-remove-row (datagrid &rest indices)
   "Return DATAGRID without the rows at logical INDICES.
 Each index is a zero-based logical row number. Column data is
-shared with DATAGRID; the result records a row-order permutation,
+shared with DATAGRID, and the result records a row-order permutation,
 as with `datagrid-slice' and `datagrid-filter-by-mask'."
   (datagrid--check datagrid)
   (datagrid--slice-rows datagrid
@@ -325,8 +328,9 @@ each value before comparison. PRED is the less-than predicate
 \(default `datagrid-unknown-type-sort'). A non-nil REVERSE inverts
 the order while preserving the stable handling of ties.
 
-Column data is shared with DATAGRID; the result records a row-order
-permutation that composes with any existing row-order on DATAGRID."
+Column data is shared with DATAGRID, and the result records a
+row-order permutation that composes with any existing row-order on
+DATAGRID."
   (let* ((spec (datagrid--sort-spec spec))
          (col (plist-get spec :col))
          (keyfn (plist-get spec :key))
@@ -366,8 +370,8 @@ descending order.
 
 The sort is stable, so keys compose by folding stable single-column
 sorts from the last key to the first. Column data is shared with
-DATAGRID; the result records a row-order permutation that composes
-with any existing row-order on DATAGRID. With no KEYS, DATAGRID is
+DATAGRID, and the result records a row-order permutation that
+composes with any existing row-order on DATAGRID. With no KEYS, DATAGRID is
 returned unchanged.
 
 Examples:
@@ -389,8 +393,8 @@ that never overwrites existing non-empty values.
 ON identifies the join key. It accepts an integer (same column
 index in both grids), a string (heading present in both), or a
 cons (X . Y) for per-grid index or heading. Keys are compared
-with `equal'; empty keys (nil or empty string) never match. When
-DG2 has duplicate keys, the first occurrence wins.
+with `equal', and empty keys (nil or empty string) never match.
+When DG2 has duplicate keys, the first occurrence wins.
 
 COLS is an alist ((FILL . SOURCE) ...). FILL is a column ref in
 DG1 to fill and SOURCE is a column ref in DG2 to draw values
@@ -400,7 +404,7 @@ For each pair, every row of DG1 whose FILL value is nil or the
 empty string is looked up by its key in DG2. When a match is
 found and DG2's SOURCE value for that row is non-empty, the
 value is copied into the returned datagrid. Existing non-empty
-FILL values are left as is; DG1 is not modified.
+FILL values are left as is, and DG1 is not modified.
 
 Keys are compared `equal'-strictly: \"123\" and 123 are not
 equal. Normalize types before calling if your key columns came

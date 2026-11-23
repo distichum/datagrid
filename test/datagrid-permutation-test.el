@@ -135,7 +135,7 @@
     (should (equal (datagrid-pull selected "group") ["x" "y" "x" "y"]))))
 
 (ert-deftest datagrid-perm-test-select-then-sort ()
-  ;; Select reorders columns; sort still works on the logical index.
+  ;; Select reorders columns, and sort still works on the logical index.
   (let* ((dg (datagrid-perm-test-fixture))
          (selected (datagrid-select dg "score" "name"))
          ;; Logical column 0 is now "score".

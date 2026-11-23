@@ -4,7 +4,7 @@
 * Overview
 This GNU Emacs package is an Elisp library for two dimensional data. The first dimension is a vector. The second dimension uses a custom data type to hold column data. Datagrids have some similarities to database tables, spreadsheets, and dataframes.
 
-This package is very young and may change often. *It does not provide a buffer user interface* but datagrid-to-org-table makes this possible from Org Mode code blocks.
+*It does not provide a buffer user interface*, but datagrid-to-org-table makes this possible from Org Mode code blocks.
 
 Datagrid follows the grammar of the R package [[https://dplyr.tidyverse.org/][dplyr]] while fitting Emacs Lisp conventions. Verbs take the datagrid as their first argument and return a new datagrid, so they can be chained with =thread-first=. Most functions accept a column as either a zero-based index or a heading string.
 
@@ -26,7 +26,7 @@ A datagrid is a table of data in which every column has the same number of eleme
 - =row-order=: a vector of row indices that sets the order of rows, or nil for the stored order.
 - =col-order=: a vector of column indices that sets the order of columns, or nil for the stored order.
 
-The two order slots let verbs such as =datagrid-sort=, =datagrid-select=, =datagrid-slice=, and =datagrid-filter-by-mask= return a new datagrid that shares its column data with the original. Only the order vectors are new, so these operations stay fast on large tables.
+The two order slots let verbs such as =datagrid-sort=, =datagrid-select=, =datagrid-slice=, =datagrid-filter=, =datagrid-filter-by-mask=, and =datagrid-remove-row= return a new datagrid that shares its column data with the original. Only the order vectors are new, so these operations stay fast on large tables.
 
 Each datagrid-column holds a heading, a data vector, a level of measurement, and coding information. Create a datagrid with =datagrid-make=:
 
@@ -71,7 +71,7 @@ A datagrid-column may hold textual data such as: Strongly disagree, Disagree, Ne
     ("Strongly agree"    . 5))
 #+end_src
 
-- =datagrid-column-add-code (datagrid cols code)=: Set the coding for one or more datagrid columns and return a new datagrid. =Cols= can be a column index, a heading string, or a list of them. The alist CODE is put in the code slot of each of those columns. DATAGRID is not modified.
+- =datagrid-column-add-code (datagrid cols code)=: Set the coding for one or more datagrid columns and return a new datagrid. COLS can be a column index, a heading string, or a list of them. The alist CODE is put in the code slot of each of those columns. DATAGRID is not modified.
 - =datagrid-column-decode (datagrid col &optional default missing)=: Return a vector where each element in the vector has been changed to the appropriate value based on the mapping in the datagrid-column code slot. DEFAULT replaces non-nil values that are not in the alist, and MISSING replaces nil values. Both default to nil. If the code slot is nil, the data slot is returned unchanged.
 - =datagrid-column-coerce (datagrid converters)=: Return a datagrid with some columns converted value by value. CONVERTERS is an alist of =(COLS . FN)=, where COLS is a column index, a heading string, or a list of them, and FN is called on each value. Converted columns keep their =lom= and =code= slots, but the code alist is not updated. This is the usual way to turn CSV strings into numbers: =(datagrid-column-coerce (datagrid-from-csv-file "data.csv" t) '(("age" . string-to-number)))=.
 
@@ -222,13 +222,12 @@ To add a column to an existing datagrid, use =datagrid-add-column=. It fits the 
 - =datagrid-bind-rows (&rest datagrids)=: Stack DATAGRIDS into one datagrid. Columns are matched by heading, and a column missing from one datagrid gets nil for that datagrid's rows.
 - =datagrid-coalesce (datagrid &rest col-groups)=: For each list of columns in COL-GROUPS, fill the first column with the first non-empty value across the list, then drop the other columns in the list.
 - =datagrid-rows-patch (dg1 dg2 &key on cols)=: Return DG1 with empty cells filled from the rows of DG2 that have the same key, like dplyr's =rows_patch=. ON is the key column and COLS is an alist =((FILL . SOURCE) ...)=. Both are required. Values that are already present are never overwritten.
-- =datagrid-sort (datagrid &rest keys)=: Sort a datagrid by one or more KEYS. Each key is a column reference or a sort spec plist =(:col REF :key FN :lessp PRED :reverse BOOL)=, borrowing the vocabulary of Emacs's own =sort=. The first key is primary; later keys break ties. The sort is stable. See the worked examples in =examples.org=.
+- =datagrid-sort (datagrid &rest keys)=: Sort a datagrid by one or more KEYS. Each key is a column reference or a sort spec plist =(:col REF :key FN :lessp PRED :reverse BOOL)=, borrowing the vocabulary of Emacs's own =sort=. The first key is primary, and later keys break ties. The sort is stable. See the worked examples in =examples.org=.
 - =datagrid-pivot-wider (datagrid headings-from values-from &key id-cols values-fn values-fill)=: Reshape long data to wide, like tidyr's =pivot_wider=. Each distinct value of HEADINGS-FROM becomes a column filled from VALUES-FROM. ID-COLS identify a row and default to every other column. VALUES-FN combines several values that land in one cell. Without it, such a cell holds a list and a warning is shown. VALUES-FILL fills empty cells (default nil).
 * Filters and masks
 - =datagrid-filter (datagrid pred &rest cols)=: Return the rows of DATAGRID for which PRED returns non-nil. PRED gets one value from each of COLS, in order, as with =datagrid-mutate=. The result shares column data with DATAGRID, so a filter can sit in a =thread-first= chain: =(datagrid-filter dg (lambda (x) (> x 20)) "high-temp")=.
 - =datagrid-create-mask (datagrid pred col)=: Create a mask for the DATAGRID column COL, which can be an index or a heading string. It applies the predicate function to data from a datagrid column to create the mask. The mask is a vector where every element is either t or nil.
 - =datagrid-filter-by-mask (datagrid mask)=: Use a boolean MASK to filter DATAGRID. The result shares column data with DATAGRID.
-- =datagrid-group-by (datagrid col)=: Group data in DATAGRID according to COL. Return a vector with one group per unique value of COL, in first-seen order. Each group is a list =(VALUE COLUMNS)=, where COLUMNS is a vector of that group's column data vectors. This function will be slow for medium to large datasets that have many groupings. Filter the datagrid by what is needed first and then group.
 * Joins
 The join functions follow dplyr. Each takes two datagrids and a key:
 - =:on= is required. It can be an index or heading string present in both datagrids, or a cons =(X . Y)= that names the key in each one.
@@ -273,9 +272,10 @@ Keys are compared with =equal=, so ="1"= and =1= do not match. Empty keys never 
                                  :calc t))
                         :by "location")
   #+end_src
+- =datagrid-group-by (datagrid col)=: Group data in DATAGRID according to COL. Return a vector with one group per unique value of COL, in first-seen order. Each group is a list =(VALUE COLUMNS)=, where COLUMNS is a vector of that group's column data vectors. Use it when you want full control over each group. For reductions, =datagrid-summarize= with =:by= is shorter.
 - =datagrid-summarize-across (datagrid fn &rest cols)=: Return a datagrid with one row per unique combination of values in COLS. Every other column is reduced by calling FN on the list of its values in each group.
 - =datagrid-group-modify (datagrid fn &rest key-cols)=: Group the rows of DATAGRID by KEY-COLS, call FN on each group as a datagrid, and stack the datagrids FN returns.
-- =datagrid-count (datagrid col &key sort name code)=: Return a two-column datagrid with each unique value of COL and how often it occurs. SORT orders rows by descending count, and NAME is the heading of the count column (default "n").
+- =datagrid-count (datagrid col &key sort name code)=: Return a two-column datagrid with each unique value of COL and how often it occurs. SORT orders rows by descending count. Without it, rows are ordered by value. NAME is the heading of the count column (default "n"). A non-nil CODE decodes the column before counting.
 - =datagrid-distinct (datagrid &rest cols)=: Return DATAGRID without duplicate rows. With COLS, only those columns are compared and kept.
 * Statistical functions
 Some statistical measures of survey data are not included in Emacs. Therefore, datagrid.el includes the following. In each, COL can be an index or a heading string, and a non-nil CODE decodes the column first.
@@ -379,7 +379,7 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
 The version before 1.1 was 0.1. Changes between 0.1 and 1.1 are recorded only in the git history.
 
 * Examples
-datagrid.el includes an example datagrid named =datagrid-example=. The file =examples.org= has worked examples of every function, with their results.
+datagrid.el includes an example datagrid named =datagrid-example=. The file =examples.org= has worked examples of the more involved functions, with their results.
 
 #+begin_src emacs-lisp
   (datagrid-head datagrid-example)
