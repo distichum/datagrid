@@ -650,6 +650,76 @@ the row. Rows are counted without the horizontal rules."
                        (cdr rows))))
     (datagrid--from-rows rows headings)))
 
+(defun datagrid--check-fixed-width-spec (spec)
+  "Signal an error unless SPEC is a valid fixed-width spec.
+SPEC is as in `datagrid-from-fixed-width-file'. The error names the
+first bad entry."
+  (unless (and spec (proper-list-p spec))
+    (error "SPEC must be a non-empty list of (HEADING START END)"))
+  (cl-loop for entry in spec
+           unless (pcase entry
+                    (`(,(pred stringp)
+                       ,(and (pred integerp) start)
+                       ,(and (pred integerp) end))
+                     (<= 1 start end)))
+           do (error (concat "Bad SPEC entry %S. Use (HEADING START END),"
+                             " with 1 <= START <= END")
+                     entry)))
+
+(defun datagrid-from-fixed-width-file (file-path spec)
+  "Return a datagrid from a fixed-width file at FILE-PATH.
+Each line of the file is one row, and each field sits at the same
+character positions in every line. The file has no headings row.
+
+SPEC lists the columns to read, in the order they appear in the
+datagrid. Each entry is (HEADING START END), where HEADING is a
+string. START and END are the first and last positions of the field,
+counted from 1, as in a codebook that gives a field as columns 17-18.
+Characters that no entry covers are skipped, and entries may overlap.
+
+Every value is a string with leading and trailing spaces and tabs
+removed, so a blank field is an empty string, as in
+`datagrid-from-csv-file'. A line too short to reach a field gives nil
+for that field, and a line that ends partway through a field gives the
+part it has. Use `datagrid-column-coerce' to turn strings into
+numbers.
+
+Lines may end in LF or CRLF. Positions count characters after Emacs
+decodes the file, which is the same as counting bytes in an ASCII file.
+An empty file gives a datagrid with the columns of SPEC and no rows."
+  (datagrid--check-fixed-width-spec spec)
+  (with-temp-buffer
+    (insert-file-contents file-path)
+    (let* ((nrows (count-lines (point-min) (point-max)))
+           (vecs (cl-loop repeat (length spec)
+                          collect (make-vector nrows nil))))
+      (goto-char (point-min))
+      (cl-loop
+       for row below nrows
+       for bol = (point)
+       for eol = (let ((e (line-end-position)))
+                   (if (eq (char-before e) ?\r) (1- e) e))
+       do (cl-loop for (_heading start end) in spec
+                   for vec in vecs
+                   for beg = (+ bol start -1)
+                   for fin = (min (+ bol end) eol)
+                   when (< beg eol)
+                   do (goto-char beg)
+                   (skip-chars-forward " \t" fin)
+                   (let ((s (point)))
+                     (goto-char fin)
+                     (skip-chars-backward " \t" s)
+                     (aset vec row
+                           (buffer-substring-no-properties s (point)))))
+       (goto-char eol)
+       (forward-line 1))
+      (datagrid-make
+       :columns (vconcat
+                 (cl-loop for (heading) in spec
+                          for vec in vecs
+                          collect (datagrid-column-make :heading heading
+                                                        :data vec)))))))
+
 (defun datagrid--csv-quote-field (field)
   "Return FIELD as a CSV-safe string.
 Quote and escape if FIELD contains a comma, double quote, or newline.

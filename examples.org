@@ -169,6 +169,40 @@ headings into strings, and the block finds the column with ="40"=.
 Empty cells arrive as empty strings, as they do from a CSV file, so
 the filter compares with ="x"= and the empty =40a= cell stays empty.
 
+** datagrid-from-fixed-width-file
+
+=datagrid-from-fixed-width-file= reads a file where each field sits at
+the same positions in every line. The file has no headings, so the
+spec gives each column a heading, a start position, and an end
+position, counted from 1. Columns 3 and 4 hold nothing the spec asks
+for, so they are skipped. The block writes a small file first, so it
+runs anywhere.
+
+#+begin_src emacs-lisp
+  (let ((file (make-temp-file "survey" nil ".txt"
+                              (concat "20  0102  1\n"
+                                      "29  0103 12\n"
+                                      "39  12    3\n"))))
+    (unwind-protect
+        (thread-first
+          (datagrid-from-fixed-width-file
+           file '(("state" 1 2) ("month" 5 6) ("day" 7 8) ("n" 9 11)))
+          (datagrid-column-coerce '(("n" . string-to-number)))
+          (datagrid-to-org-table))
+      (delete-file file)))
+#+end_src
+
+#+RESULTS:
+| state | month | day |  n |
+|-------+-------+-----+----|
+| 20    | 01    | 02  |  1 |
+| 29    | 01    | 03  | 12 |
+| 39    | 12    |     |  3 |
+
+Every value comes back as a string with its padding removed, so the
+leading zeros in =month= stay, and the blank =day= is an empty
+string. Only =n= is turned into a number.
+
 ** datagrid-column-decode
 
 A coded column stores compact values in =:data= and a translation

@@ -389,6 +389,70 @@
                      '(0 . 0))))))
 
 
+;;;; datagrid-from-fixed-width-file
+
+(defmacro datagrid-test-with-fwf-file (var text &rest body)
+  "Bind VAR to a temporary file holding TEXT, run BODY, then delete it."
+  (declare (indent 2))
+  `(let ((,var (make-temp-file "datagrid-test" nil ".txt" ,text)))
+     (unwind-protect (progn ,@body)
+       (delete-file ,var))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-fields ()
+  ;; Columns 3-4 and 9 are not in the spec and are skipped. Values are
+  ;; trimmed, and a blank field is an empty string.
+  (datagrid-test-with-fwf-file f "20  0112 x\n 5     8 Ry\n"
+    (let ((dg (datagrid-from-fixed-width-file
+               f '(("state" 1 2) ("month" 5 6) ("n" 7 8) ("tag" 10 11)))))
+      (should (equal (datagrid-get-headings dg)
+                     ["state" "month" "n" "tag"]))
+      (should (equal (datagrid-to-alist dg)
+                     '(("20" "5") ("01" "") ("12" "8") ("x" "Ry")))))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-spec-order ()
+  ;; Columns follow SPEC, not the file, and fields may overlap.
+  (datagrid-test-with-fwf-file f "20250131\n"
+    (should (equal (datagrid-to-alist
+                    (datagrid-from-fixed-width-file
+                     f '(("day" 7 8) ("year" 1 4) ("date" 1 8))))
+                   '(("31") ("2025") ("20250131"))))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-short-lines ()
+  ;; A line that ends inside a field gives what it has, and a line
+  ;; that ends before a field gives nil. CRLF endings are not data.
+  (datagrid-test-with-fwf-file f "abcdef\r\nabcd\r\nab\r\n\r\n"
+    (should (equal (datagrid-to-alist
+                    (datagrid-from-fixed-width-file
+                     f '(("x" 1 2) ("y" 3 4) ("z" 5 6))))
+                   '(("ab" "ab" "ab" nil)
+                     ("cd" "cd" nil nil)
+                     ("ef" nil nil nil))))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-last-line ()
+  ;; A last line without a newline is still a row.
+  (datagrid-test-with-fwf-file f "1\n2"
+    (should (equal (datagrid-pull
+                    (datagrid-from-fixed-width-file f '(("a" 1 1)))
+                    "a")
+                   ["1" "2"]))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-empty ()
+  ;; An empty file keeps the columns of SPEC.
+  (datagrid-test-with-fwf-file f ""
+    (let ((dg (datagrid-from-fixed-width-file f '(("a" 1 1) ("b" 2 3)))))
+      (should (equal (datagrid-dimensions dg) '(2 . 0)))
+      (should (equal (datagrid-get-headings dg) ["a" "b"])))))
+
+(ert-deftest datagrid-test-from-fixed-width-file-bad-spec ()
+  (datagrid-test-with-fwf-file f "abc\n"
+    (should-error (datagrid-from-fixed-width-file f nil))
+    (dolist (entry '(("a" 0 1) ("a" 3 2) ("a" 1) (a 1 2) ("a" 1.0 2)))
+      (let ((err (should-error (datagrid-from-fixed-width-file
+                                f (list '("ok" 1 1) entry)))))
+        (should (string-match-p (regexp-quote (format "%S" entry))
+                                (error-message-string err)))))))
+
+
 ;;;; datagrid-from-org-table
 
 (ert-deftest datagrid-test-from-org-table-with-headings ()

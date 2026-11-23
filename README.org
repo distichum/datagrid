@@ -157,6 +157,19 @@ Org reads a cell that looks like a number as a number, so a column headed =40= a
   ,#+end_src
 #+end_src
 
+** From a fixed-width file
+=datagrid-from-fixed-width-file (file-path spec)=: Create a datagrid from a fixed-width file, where each field sits at the same character positions in every line. The file has no headings row, so SPEC names the columns and says where they are. Each entry of SPEC is =(HEADING START END)=. START and END are the first and last positions of the field, counted from 1, as in a codebook that gives a field as columns 17-18. This matches SAS, SPSS, Stata, and readr's =fwf_positions=.
+
+Only the fields in SPEC are read, in the order SPEC gives them. Characters that no entry covers are skipped, so list only the variables you need. Every value is a string with surrounding spaces removed, and a blank field is an empty string, as in a CSV file. A line too short to reach a field gives nil for it. Lines may end in LF or CRLF. Use =datagrid-column-coerce= to turn strings into numbers.
+
+#+begin_src emacs-lisp
+  (thread-first
+    (datagrid-from-fixed-width-file
+     "LLCP2025.ASC"
+     '(("_STATE" 1 2) ("FMONTH" 17 18) ("IYEAR" 23 26)))
+    (datagrid-column-coerce '(("_STATE" . string-to-number))))
+#+end_src
+
 ** With empty cells
 =datagrid-make-empty (col-num row-num &optional init heading-list)=: Create a datagrid with COL-NUM columns and ROW-NUM rows. Every element is INIT, which defaults to nil. HEADING-LIST, if given, must have one heading per column.
 
@@ -356,7 +369,8 @@ These functions still work but are obsolete since version 1.1. Byte-compiling co
 - Obsolete: =datagrid-filter-vector-by-mask=. It applies the mask to a column's stored data, but =datagrid-create-mask= builds the mask in logical row order. After =datagrid-sort=, =datagrid-filter=, or a join, the two orders differ and the function selects the wrong values. Use =datagrid-filter-by-mask= or =datagrid-filter= instead.
 - Obsolete: =datagrid-prep-for-calc=. It converted floats to Calc's internal form, but =datagrid-calc-function-wrapper= now passes plain Lisp numbers to Calc exactly, so no conversion is needed. To turn strings into numbers, use =datagrid-unknown-type-to-number=. It still works and will be removed no earlier than 2027-05-19.
 - Reading an empty CSV buffer or file returns a datagrid with no columns, with either parser. Before, it signaled =wrong-number-of-arguments=. =datagrid-from-alist= returns the same for an empty alist, and =datagrid-safe-transpose= returns nil for empty input.
-- Breaking: =datagrid-from-alist= signals an error when the columns have different lengths. Before, with =extend-uneven= nil, the default, it cut every column to the shortest one and dropped data without a warning. Pass =extend-uneven= non-nil to pad shorter columns with nil. This matches pandas, polars, and tibble, which all reject columns of unequal length.
+- Breaking: =datagrid-from-alist= signals an error when the columns have different lengths. Before, with =extend-uneven= nil, the default, it cut every column to the shortest one and dropped data without a warning. Pass =extend-uneven= non-nil to pad shorter columns with nil.
+- New: =datagrid-from-fixed-width-file= reads a fixed-width data file. A spec of =(HEADING START END)= entries, with positions counted from 1, names the fields to read and where they are.
 - New: =datagrid-from-org-table= creates a datagrid from an Org table passed to a code block. It drops horizontal rules and turns numeric headings into strings, so a column headed =40= is found with ="40"=.
 - New: =datagrid-from-vectors= takes =:extend-uneven t= before the vectors, which pads shorter columns as in =datagrid-from-alist=. Without it, columns of different lengths signal an error, as before.
 - Breaking: reading CSV signals an error for a row with more fields than the first row, and the message names the row. Before, the other rows were padded to fit, and with headings the extra column had no heading. Short rows are still padded with nil. This matches pandas, polars, and readr.
