@@ -297,16 +297,12 @@ The columns slot is a vector of datagrid-column structs.")
 SEQ-OF-SEQS is a sequence of sequences. The result is a list of lists.
 Return nil when SEQ-OF-SEQS is empty."
   (unless (seq-empty-p seq-of-seqs)
-    (let* ((max-cols (apply #'max (mapcar #'length seq-of-seqs)))
-           (listed (seq-map (lambda (seq) (if (listp seq)
-                                              seq
-                                            (append seq nil)))
-                            seq-of-seqs))
-           (padded (cl-loop for row in listed
-                            collect (append row
-                                            (make-list (- max-cols (length row))
-                                                       nil)))))
-      (apply #'cl-mapcar #'list padded))))
+    (let ((max-cols (apply #'max (mapcar #'length seq-of-seqs))))
+      (apply #'cl-mapcar #'list
+             (cl-loop for row being the elements of seq-of-seqs
+                      ;; `append' turns a vector ROW into list elements.
+                      collect (append row (make-list (- max-cols (length row))
+                                                     nil)))))))
 
 (defun datagrid-unknown-type-to-number (seq)
   "Convert a sequence of unknown types to numbers.
@@ -487,7 +483,8 @@ Signal an error if the columns have different lengths, unless
 EXTEND-UNEVEN is non-nil. Then shorter columns are padded with nil to
 the length of the longest. An empty ALIST gives a datagrid with no
 columns."
-  (let* ((labels (mapcar (lambda (item) (and headings (car item))) alist))
+  (let* ((labels (cl-loop for item in alist
+                          collect (and headings (car item))))
          (values (mapcar (if headings #'cdr #'identity) alist))
          (lengths (mapcar #'length values))
          (len (apply #'max 0 lengths)))
@@ -496,12 +493,12 @@ columns."
              (if headings (cl-mapcar #'cons labels lengths) lengths)))
     (datagrid-make
      :columns
-     (vconcat (cl-mapcar (lambda (label data)
-                           (datagrid-column-make
-                            :heading label
-                            :data (vconcat data (make-list (- len (length data))
-                                                           nil))))
-                         labels values)))))
+     (vconcat (cl-loop for label in labels
+                       for data in values
+                       for pad = (make-list (- len (length data)) nil)
+                       collect (datagrid-column-make
+                                :heading label
+                                :data (vconcat data pad)))))))
 
 (defun datagrid-make-empty (col-num row-num &optional init heading-list)
   "Create a new datagrid with specified dimensions.
@@ -509,15 +506,12 @@ COL-NUM is the number of columns. ROW-NUM is the number of rows in
 each column. HEADING-LIST is a list whose length must equal the
 number of columns. INIT is the value of each element in each :data
 slot vector in each datagrid-column struct."
-  (let ((headings (or heading-list (make-list col-num nil))))
-    (datagrid-make
-     :columns
-     (cl-loop for elt from 1 to col-num
-              for init-vec = (make-vector row-num init)
-              for dg-col = (datagrid-column-make :data init-vec)
-              do (setf (datagrid-column-heading dg-col) (elt headings (1- elt)))
-              collect dg-col into parent
-              finally return (vconcat parent)))))
+  (datagrid-make
+   :columns
+   (vconcat (cl-loop for j below col-num
+                     collect (datagrid-column-make
+                              :heading (nth j heading-list)
+                              :data (make-vector row-num init))))))
 
 
 (defun datagrid-from-vectors (&rest vectors)
@@ -542,7 +536,8 @@ Examples:
                  (cl-every (lambda (v) (and (vectorp v) (> (length v) 0)))
                            vectors))
       (error "Each argument must be a vector that starts with a heading"))
-    (datagrid-from-alist (mapcar (lambda (v) (append v nil)) vectors)
+    (datagrid-from-alist (cl-loop for v in vectors
+                                  collect (append v nil))
                          t extend-uneven)))
 
 (defun datagrid--from-csv-rows (rows headings)
@@ -550,12 +545,13 @@ Examples:
 HEADINGS is as in `datagrid-from-csv-file'. The first row sets the
 number of fields. A row with fewer fields is padded with nil. Signal
 an error for a row with more fields, naming the row."
-  (let ((width (length (car rows))))
-    (cl-loop for row in rows
-             for n from 1
-             when (> (length row) width)
-             do (error "CSV row %d has %d fields, but the first row has %d"
-                       n (length row) width))
+  (let ((width (length (car rows)))
+        (n 0))
+    (dolist (row rows)
+      (setq n (1+ n))
+      (when (> (length row) width)
+        (error "CSV row %d has %d fields, but the first row has %d"
+               n (length row) width)))
     (datagrid-from-alist (datagrid-safe-transpose rows) headings)))
 
 (defun datagrid-from-csv-buffer (buffer-or-name &optional headings)
@@ -646,17 +642,16 @@ are not preserved."
                          (append (datagrid-get-headings datagrid) nil)
                          ","))
       (insert "\n"))
-    (cl-loop for i from 0 below nrows
-             for phys-row = (datagrid--row-at datagrid i) do
-             (insert (mapconcat
-                      (lambda (j)
-                        (let* ((phys-col (datagrid--col-at datagrid j))
-                               (col (aref cols phys-col)))
-                          (datagrid--csv-quote-field
-                           (aref (datagrid-column-data col) phys-row))))
-                      (number-sequence 0 (1- ncols))
-                      ","))
-             (insert "\n"))))
+    (dotimes (i nrows)
+      (let ((phys-row (datagrid--row-at datagrid i)))
+        ;; string-join is fastest method I found.
+        (insert (string-join
+                 (cl-loop for j below ncols
+                          for col = (aref cols (datagrid--col-at datagrid j))
+                          collect (datagrid--csv-quote-field
+                                   (aref (datagrid-column-data col) phys-row)))
+                 ","))
+        (insert "\n")))))
 
 (defun datagrid-to-csv-file (datagrid file-path &optional headings)
   "Write DATAGRID to FILE-PATH as CSV.
@@ -756,19 +751,18 @@ not in DATAGRID."
      ((or (stringp fmt) (functionp fmt)) (make-list ncols fmt))
      ((consp fmt)
       (let ((fmts (make-vector ncols nil)))
-        (cl-loop
-         for entry in fmt
-         for cols = (car-safe entry)
-         for f = (cdr-safe entry)
-         do (unless (and (consp entry) (or (stringp f) (functionp f)))
+        (dolist (entry fmt)
+          (let ((cols (car-safe entry))
+                (f (cdr-safe entry)))
+            (unless (and (consp entry) (or (stringp f) (functionp f)))
               (error "Bad :format entry: %S" entry))
-         do (cl-loop for c in (ensure-list cols)
-                     for j = (datagrid--resolve-col datagrid c)
-                     do (unless (and (>= j 0) (< j ncols))
-                          (error "Column index out of range: %S" c))
-                     do (when (aref fmts j)
-                          (error "Column listed more than once: %S" c))
-                     do (aset fmts j f)))
+            (dolist (c (ensure-list cols))
+              (let ((j (datagrid--resolve-col datagrid c)))
+                (unless (and (>= j 0) (< j ncols))
+                  (error "Column index out of range: %S" c))
+                (when (aref fmts j)
+                  (error "Column listed more than once: %S" c))
+                (aset fmts j f)))))
         (append fmts nil)))
      (t (error "Bad :format value: %S" fmt)))))
 
@@ -948,23 +942,24 @@ numbers:
    \\='((\"age\" . string-to-number)
      ((\"q1\" \"q2\") . string-to-number)))"
   (datagrid--check datagrid)
-  (let ((ncols (datagrid--ncols datagrid))
-        (fns nil))
-    (cl-loop for (cols . fn) in converters
-             do (unless (functionp fn)
-                  (error "Not a function: %S" fn))
-             do (cl-loop for c in (if (listp cols) cols (list cols))
-                         for j = (datagrid--resolve-col datagrid c)
-                         do (unless (and (>= j 0) (< j ncols))
-                              (error "Column index out of range: %S" c))
-                         do (when (assq j fns)
-                              (error "Column listed more than once: %S" c))
-                         do (push (cons j fn) fns)))
+  (let* ((ncols (datagrid--ncols datagrid))
+         (fns (make-vector ncols nil)))
+    (dolist (entry converters)
+      (let ((fn (cdr entry)))
+        (unless (functionp fn)
+          (error "Not a function: %S" fn))
+        (dolist (c (ensure-list (car entry)))
+          (let ((j (datagrid--resolve-col datagrid c)))
+            (unless (and (>= j 0) (< j ncols))
+              (error "Column index out of range: %S" c))
+            (when (aref fns j)
+              (error "Column listed more than once: %S" c))
+            (aset fns j fn)))))
     (datagrid-make
      :columns (datagrid--materialize-columns
                datagrid
                (lambda (j data)
-                 (let ((fn (alist-get j fns)))
+                 (let ((fn (aref fns j)))
                    (if fn (cl-map 'vector fn data) data)))))))
 
 
@@ -1188,15 +1183,6 @@ Deprecated. Use `datagrid-pull' instead."
   (declare (obsolete datagrid-pull "1.1"))
   (datagrid-pull datagrid header-text))
 
-(defun datagrid--code-key-equal (a b)
-  "Return non-nil if code key A matches data value B.
-Compare with `string-equal' when both are strings or symbols, so
-\"Agree\" matches the symbol Agree, and with `equal' otherwise."
-  (if (and (or (stringp a) (symbolp a))
-           (or (stringp b) (symbolp b)))
-      (string-equal a b)
-    (equal a b)))
-
 (defun datagrid-column-decode (datagrid col &optional default missing)
   "Return column COL of DATAGRID decoded, as a vector.
 DATAGRID is the structure holding data vectors. COL is a
@@ -1228,21 +1214,34 @@ This function will output the following.
   [1 4 2]"
   (datagrid--check datagrid)
   (let* ((idx (datagrid--resolve-col datagrid col))
-         (cols (datagrid-columns datagrid))
-         (phys-col (datagrid--col-at datagrid idx))
-         (col (aref cols phys-col))
+         (column (aref (datagrid-columns datagrid)
+                       (datagrid--col-at datagrid idx)))
          (vec (datagrid-pull datagrid idx))
-         (code (datagrid-column-code col))
-         (coded-alist (when (and code
-                                 (listp code)
-                                 (cl-every #'consp code))
-                        (seq-map (lambda (x)
-                                   (cond
-                                    ((null x) missing)
-                                    (t (let ((hit (assoc x code #'datagrid--code-key-equal)))
-                                         (if hit (cdr hit) default)))))
-                                 vec))))
-    (if coded-alist (vconcat coded-alist) vec)))
+         (code (datagrid-column-code column)))
+    (if (not (and code (listp code) (cl-every #'consp code)))
+        vec
+      ;; A key matches a value by `string-equal' when both are strings
+      ;; or symbols, so "Agree" matches the symbol Agree, and by
+      ;; `equal' otherwise.  Hashing with `equal' after turning symbols
+      ;; into their names gives exactly those matches.  Keep the first
+      ;; pair for a key, as `assoc' would find it.
+      (let* ((table (make-hash-table :test #'equal :size (length code)))
+             (n (length vec))
+             (out (make-vector n nil)))
+        (dolist (pair code)
+          (let* ((key (car pair))
+                 (k (if (symbolp key) (symbol-name key) key)))
+            (unless (gethash k table)
+              (puthash k pair table))))
+        (dotimes (i n)
+          (let ((x (aref vec i)))
+            (aset out i
+                  (if (null x)
+                      missing
+                    (let ((hit (gethash (if (symbolp x) (symbol-name x) x)
+                                        table)))
+                      (if hit (cdr hit) default))))))
+        out))))
 
 (defun datagrid--pull-decoded (datagrid col code)
   "Return DATAGRID column COL as a vector, decoded when CODE is non-nil.
