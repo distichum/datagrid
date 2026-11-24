@@ -26,8 +26,8 @@
 ;; Datagrid transformation verbs that take a datagrid and return a
 ;; datagrid: head, mutate, rename, add-column, add-row, add-data,
 ;; set-headings, select, slice, remove-column, remove-row, sort,
-;; rows-patch, coalesce, pivot-wider, filter, plus the mask-based
-;; filter helpers (create-mask, filter-by-mask).
+;; rows-patch, coalesce, pivot-wider, pivot-longer, filter, plus the
+;; mask-based filter helpers (create-mask, filter-by-mask).
 
 ;; Verbs that are tightly coupled to reductions (summarize,
 ;; summarize-across, group-by, group-modify, count, distinct) live in
@@ -70,15 +70,14 @@ that have no headings, use `datagrid-column-coerce'."
   (unless (stringp new-heading)
     (error "NEW-HEADING must be a string: %S" new-heading))
   (let* ((n-rows (datagrid--nrows datagrid))
-         (col-vecs (mapcar
-                    (lambda (c)
-                      (datagrid-pull datagrid
-                                     (datagrid--resolve-col datagrid c)))
-                    source-cols))
+         (col-vecs (cl-loop for c in source-cols
+                            collect (datagrid-pull
+                                     datagrid
+                                     (datagrid--resolve-col datagrid c))))
          (new-data (make-vector n-rows nil)))
     (dotimes (r n-rows)
       (aset new-data r
-            (apply fn (mapcar (lambda (v) (aref v r)) col-vecs))))
+            (apply fn (cl-loop for v in col-vecs collect (aref v r)))))
     (let ((existing (cl-position new-heading
                                  (datagrid-get-headings datagrid)
                                  :test #'equal)))
@@ -125,8 +124,8 @@ length."
     (error "All added columns must be datagrid-column structs"))
   (let* ((col-len (datagrid--nrows datagrid))
          (materialized (datagrid--materialize-columns datagrid))
-         (truncd (mapcar (lambda (dg-c) (datagrid-column-set-length dg-c col-len))
-                         datagrid-columns)))
+         (truncd (cl-loop for dg-c in datagrid-columns
+                          collect (datagrid-column-set-length dg-c col-len))))
     (datagrid-make :columns (seq-concatenate 'vector materialized truncd))))
 
 (defun datagrid-add-row (datagrid &rest rows)
@@ -195,51 +194,31 @@ are respected (logical view, not physical)."
   (let ((grids (cl-remove-if #'null datagrids)))
     (unless grids
       (error "No datagrids given"))
-    (mapc #'datagrid--check grids)
-    (let ((total-rows (apply #'+ (mapcar #'datagrid--nrows grids)))
-          (heading-order nil)
-          (templates (make-hash-table :test #'equal))
-          (grid-maps nil))
+    (dolist (g grids)
+      (datagrid--check g))
+    (let ((total-rows (cl-loop for g in grids sum (datagrid--nrows g)))
+          (by-heading (make-hash-table :test #'equal))
+          (columns nil)
+          (offset 0))
       (dolist (g grids)
         (let* ((headings (datagrid-get-headings g))
-               (m (datagrid--build-index headings))
-               (ncols (length headings))
-               (j 0))
-          (while (< j ncols)
-            (let ((h (aref headings j)))
-              (unless (or (datagrid--empty-p h) (gethash h templates))
-                (let ((cols (datagrid-columns g))
-                      (phys (datagrid--col-at g j)))
-                  (puthash h (aref cols phys) templates)
-                  (push h heading-order))))
-            (setq j (1+ j)))
-          (push m grid-maps)))
-      (setq grid-maps (nreverse grid-maps))
-      (let ((headings (nreverse heading-order))
-            (out-cols nil))
-        (dolist (h headings)
-          (let ((out (make-vector total-rows nil))
-                (offset 0)
-                (gs grids)
-                (ms grid-maps))
-            (while gs
-              (let* ((g (car gs))
-                     (m (car ms))
-                     (nrows (datagrid--nrows g))
-                     (j (gethash h m)))
-                (when j
-                  (let ((src (datagrid-pull g j))
-                        (i 0))
-                    (while (< i nrows)
-                      (aset out (+ offset i) (aref src i))
-                      (setq i (1+ i)))))
-                (setq offset (+ offset nrows))
-                (setq gs (cdr gs))
-                (setq ms (cdr ms))))
-            (let ((new (datagrid-column-copy (gethash h templates))))
-              (setf (datagrid-column-data new) out)
-              (push new out-cols))))
-        (datagrid-make :columns (vconcat (nreverse out-cols)))))))
+               (first (datagrid--build-index headings)))
+          (dotimes (j (length headings))
+            ;; Skip empty headings and later repeats of a heading in G.
+            (when (eql j (gethash (aref headings j) first))
+              (let* ((h (aref headings j))
+                     (col (gethash h by-heading)))
+                ;; The first column seen with H is its template.
+                (unless col
+                  (setq col (datagrid-column-copy
+                             (aref (datagrid-columns g) (datagrid--col-at g j))))
+                  (setf (datagrid-column-data col) (make-vector total-rows nil))
+                  (puthash h col by-heading)
+                  (push col columns))
+                (cl-replace (datagrid-column-data col) (datagrid-pull g j)
+                            :start1 offset))))
+          (setq offset (+ offset (datagrid--nrows g)))))
+      (datagrid-make :columns (vconcat (nreverse columns))))))
 
 (defun datagrid-set-headings (datagrid heading-list)
   "Set all DATAGRID headings using HEADING-LIST.
@@ -269,8 +248,8 @@ col-order permutation. Composes with any existing col-order."
          (new-order (make-vector n 0)))
     (cl-loop for i from 0
              for c in cols
-             for logical = (datagrid--resolve-col datagrid c) do
-             (aset new-order i (datagrid--col-at datagrid logical)))
+             for logical = (datagrid--resolve-col datagrid c)
+             do (aset new-order i (datagrid--col-at datagrid logical)))
     (datagrid-make :columns (datagrid-columns datagrid)
                    :row-order (datagrid-row-order datagrid)
                    :col-order new-order)))
@@ -290,7 +269,8 @@ heading string."
   (datagrid--check datagrid)
   (let* ((src-cols (datagrid-columns datagrid))
          (ncols (datagrid--ncols datagrid))
-         (drop (mapcar (lambda (c) (datagrid--resolve-col datagrid c)) cols))
+         (drop (cl-loop for c in cols
+                        collect (datagrid--resolve-col datagrid c)))
          (kept (cl-loop for j from 0 below ncols
                         unless (memql j drop)
                         collect (aref src-cols
@@ -462,15 +442,15 @@ replaces `phone' with the first non-empty of
   (datagrid--check datagrid)
   (let* ((n-rows (datagrid--nrows datagrid))
          (mat (datagrid--materialize-columns datagrid))
-         (groups (mapcar (lambda (g)
-                           (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
-                                   g))
-                         col-groups))
+         (groups (cl-loop for g in col-groups
+                          collect (cl-loop for c in g
+                                           collect (datagrid--resolve-col
+                                                    datagrid c))))
          (drops (apply #'append (mapcar #'cdr groups))))
     (dolist (group groups)
       (let* ((target (car group))
-             (vecs (mapcar (lambda (i) (datagrid-column-data (aref mat i)))
-                           group))
+             (vecs (cl-loop for i in group
+                            collect (datagrid-column-data (aref mat i))))
              (out (make-vector n-rows nil))
              (new-col (datagrid-column-copy (aref mat target))))
         (dotimes (r n-rows)
@@ -510,8 +490,6 @@ holds the list of them, and a warning reports how many such cells
 there are.
 
 VALUES-FILL fills cells that have no value. The default is nil.
-
-This follows `pivot_wider' from the R package tidyr.
 
 Example:
 
@@ -584,6 +562,109 @@ Example:
                          "hold lists. Use :values-fn to combine them.")
                  multi)))
       (datagrid-make :columns (vconcat id-columns value-columns)))))
+
+(cl-defun datagrid-pivot-longer (datagrid cols
+                                          &key (headings-to "name")
+                                          (values-to "value")
+                                          values-drop-empty)
+  "Return DATAGRID reshaped from wide to long format.
+COLS is a list of column references, each a zero-based integer index
+or a heading string. Each row of DATAGRID becomes one row per column
+in COLS. A new column named HEADINGS-TO holds the heading of that
+column, and a new column named VALUES-TO holds its value. HEADINGS-TO
+defaults to \"name\" and VALUES-TO defaults to \"value\".
+
+The columns not in COLS identify a row, and their values repeat on
+each of its new rows. They come first in the result, followed by
+HEADINGS-TO and VALUES-TO, and they keep their heading, level of
+measurement, and coding. Rows appear in the order of DATAGRID's rows,
+and the new rows for one row appear in the order of COLS. HEADINGS-TO
+is nominal. VALUES-TO keeps the level of measurement and coding of
+COLS when every column in COLS has the same ones.
+
+When VALUES-DROP-EMPTY is non-nil, rows whose value is nil or the
+empty string are left out.
+
+Signal an error when COLS is empty, when a column in COLS has no
+heading, or when HEADINGS-TO or VALUES-TO is not a string or is the
+heading of another column in the result.
+
+This is the inverse of `datagrid-pivot-wider'.
+
+Example:
+
+  (datagrid-pivot-longer wide \\='(\"fte\" \"exp\")
+                         :headings-to \"metric\" :values-drop-empty t)"
+  (datagrid--check datagrid)
+  (unless cols
+    (error "No columns given"))
+  (dolist (h (list headings-to values-to))
+    (unless (stringp h)
+      (error "HEADINGS-TO and VALUES-TO must be strings: %S" h)))
+  (when (equal headings-to values-to)
+    (error "HEADINGS-TO and VALUES-TO are the same: %S" headings-to))
+  (let* ((src (datagrid-columns datagrid))
+         (pivot-idxs (delete-dups
+                      (cl-loop for c in cols
+                               collect (datagrid--resolve-col datagrid c))))
+         (id-idxs (cl-loop for j from 0 below (datagrid--ncols datagrid)
+                           unless (memql j pivot-idxs)
+                           collect j))
+         (pivot-cols (cl-loop for j in pivot-idxs
+                              collect (aref src (datagrid--col-at datagrid j))))
+         (labels (vconcat (mapcar #'datagrid-column-heading pivot-cols)))
+         (pivot-vecs (vconcat (cl-loop for j in pivot-idxs
+                                       collect (datagrid-pull datagrid j))))
+         ;; One (ROW . K) pair per result row: logical row ROW of
+         ;; DATAGRID and the Kth column of COLS.
+         (pairs (cl-loop
+                 for r from 0 below (datagrid--nrows datagrid)
+                 nconc (cl-loop
+                        for v across pivot-vecs
+                        for k from 0
+                        unless (and values-drop-empty
+                                    (datagrid--empty-p (aref v r)))
+                        collect (cons r k)))))
+    (cl-loop for h across labels
+             unless (and (stringp h) (not (string-empty-p h)))
+             do (error "Column to pivot has no heading: %S" h))
+    (let* ((id-columns
+            (cl-loop for j in id-idxs
+                     collect
+                     (let ((col (datagrid-column-copy
+                                 (aref src (datagrid--col-at datagrid j))))
+                           (vec (datagrid-pull datagrid j)))
+                       (when (member (datagrid-column-heading col)
+                                     (list headings-to values-to))
+                         (error "Column %S is already in the datagrid"
+                                (datagrid-column-heading col)))
+                       (setf (datagrid-column-data col)
+                             (vconcat (cl-loop for p in pairs
+                                               collect (aref vec (car p)))))
+                       col)))
+           (heading-column
+            (datagrid-column-make
+             :heading headings-to
+             :lom "nominal"
+             :data (vconcat (cl-loop for p in pairs
+                                     collect (aref labels (cdr p))))))
+           (first (car pivot-cols))
+           (shared (cl-every (lambda (c)
+                               (and (equal (datagrid-column-lom c)
+                                           (datagrid-column-lom first))
+                                    (equal (datagrid-column-code c)
+                                           (datagrid-column-code first))))
+                             (cdr pivot-cols)))
+           (value-column
+            (datagrid-column-make
+             :heading values-to
+             :lom (and shared (datagrid-column-lom first))
+             :code (and shared (copy-tree (datagrid-column-code first)))
+             :data (vconcat (cl-loop for p in pairs
+                                     collect (aref (aref pivot-vecs (cdr p))
+                                                   (car p)))))))
+      (datagrid-make
+       :columns (vconcat id-columns (list heading-column value-column))))))
 
 (defun datagrid-create-mask (datagrid pred col)
   "Create a mask for a DATAGRID column at COL.

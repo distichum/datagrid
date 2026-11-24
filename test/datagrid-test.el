@@ -2728,6 +2728,101 @@
     (should (equal (datagrid-to-alist dg t) before))))
 
 
+;;;; datagrid-pivot-longer
+
+(defun datagrid-test-wide ()
+  "Return a wide datagrid of ids, years, and two ratio metrics."
+  (datagrid-test-mk
+   (datagrid-column-make :heading "id" :data ["a" "b" "a"] :lom "nominal")
+   (datagrid-column-make :heading "year" :data [2024 2024 2025])
+   (datagrid-column-make :heading "fte" :data [10 20 11] :lom "ratio")
+   (datagrid-column-make :heading "exp" :data [100 200 nil] :lom "ratio")))
+
+(ert-deftest datagrid-test-pivot-longer-basic ()
+  (let ((out (datagrid-pivot-longer (datagrid-test-wide) '("fte" "exp"))))
+    (should (equal (datagrid-get-headings out) ["id" "year" "name" "value"]))
+    (should (equal (datagrid-pull out "id") ["a" "a" "b" "b" "a" "a"]))
+    (should (equal (datagrid-pull out "year")
+                   [2024 2024 2024 2024 2025 2025]))
+    (should (equal (datagrid-pull out "name")
+                   ["fte" "exp" "fte" "exp" "fte" "exp"]))
+    (should (equal (datagrid-pull out "value") [10 100 20 200 11 nil]))))
+
+(ert-deftest datagrid-test-pivot-longer-headings-and-drop-empty ()
+  (let ((out (datagrid-pivot-longer (datagrid-test-wide) '("fte" "exp")
+                                    :headings-to "metric"
+                                    :values-to "amount"
+                                    :values-drop-empty t)))
+    (should (equal (datagrid-get-headings out)
+                   ["id" "year" "metric" "amount"]))
+    (should (equal (datagrid-pull out "metric")
+                   ["fte" "exp" "fte" "exp" "fte"]))
+    (should (equal (datagrid-pull out "amount") [10 100 20 200 11]))))
+
+(ert-deftest datagrid-test-pivot-longer-integer-refs ()
+  (should (equal (datagrid-to-alist
+                  (datagrid-pivot-longer (datagrid-test-wide) '(2 3)))
+                 (datagrid-to-alist
+                  (datagrid-pivot-longer (datagrid-test-wide)
+                                         '("fte" "exp"))))))
+
+(ert-deftest datagrid-test-pivot-longer-cols-order ()
+  (let ((out (datagrid-pivot-longer (datagrid-test-wide) '("exp" "fte"))))
+    (should (equal (seq-take (datagrid-pull out "name") 2) ["exp" "fte"]))))
+
+(ert-deftest datagrid-test-pivot-longer-keeps-column-metadata ()
+  (let ((cols (datagrid-columns
+               (datagrid-pivot-longer (datagrid-test-wide) '("fte" "exp")))))
+    (should (equal (datagrid-column-lom (aref cols 0)) "nominal"))
+    (should (equal (datagrid-column-lom (aref cols 2)) "nominal"))
+    (should (equal (datagrid-column-lom (aref cols 3)) "ratio")))
+  (let ((cols (datagrid-columns
+               (datagrid-pivot-longer (datagrid-test-wide) '("year" "fte")))))
+    (should (null (datagrid-column-lom (aref cols 3))))))
+
+(ert-deftest datagrid-test-pivot-longer-respects-orders ()
+  (let* ((dg (datagrid-select
+              (datagrid-sort (datagrid-test-wide) '(:col "fte" :reverse t))
+              "fte" "id"))
+         (out (datagrid-pivot-longer dg '("fte"))))
+    (should (equal (datagrid-get-headings out) ["id" "name" "value"]))
+    (should (equal (datagrid-pull out "id") ["b" "a" "a"]))
+    (should (equal (datagrid-pull out "value") [20 11 10]))))
+
+(ert-deftest datagrid-test-pivot-longer-inverts-pivot-wider ()
+  (let* ((long (datagrid-select (datagrid-test-long)
+                                "id" "year" "metric" "value"))
+         (round-trip (datagrid-pivot-longer
+                      (datagrid-pivot-wider long "metric" "value")
+                      '("fte" "exp")
+                      :headings-to "metric" :values-drop-empty t)))
+    (should (equal (datagrid-to-alist
+                    (datagrid-sort round-trip "id" "year" "metric"))
+                   (datagrid-to-alist
+                    (datagrid-sort long "id" "year" "metric"))))))
+
+(ert-deftest datagrid-test-pivot-longer-errors ()
+  (let ((dg (datagrid-test-wide)))
+    (should-error (datagrid-pivot-longer dg nil))
+    (should-error (datagrid-pivot-longer dg '("nope")))
+    (should-error (datagrid-pivot-longer dg '("fte") :headings-to "id"))
+    (should-error (datagrid-pivot-longer dg '("fte") :values-to "year"))
+    (should-error (datagrid-pivot-longer dg '("fte")
+                                         :headings-to "x" :values-to "x"))
+    (should-error (datagrid-pivot-longer dg '("fte") :values-to 'v))
+    (should-error (datagrid-pivot-longer
+                   (datagrid-test-mk (datagrid-column-make :data [1 2])
+                                     (datagrid-column-make :heading "k"
+                                                           :data [3 4]))
+                   '(0)))))
+
+(ert-deftest datagrid-test-pivot-longer-does-not-mutate-source ()
+  (let* ((dg (datagrid-test-wide))
+         (before (datagrid-to-alist dg t)))
+    (datagrid-pivot-longer dg '("fte" "exp"))
+    (should (equal (datagrid-to-alist dg t) before))))
+
+
 
 ;;;; datagrid-group-modify
 
