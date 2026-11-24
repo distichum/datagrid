@@ -47,8 +47,8 @@ Note: row-level dedup walks all rows and hashes the cross-column key
 for each one, so it can be slow on large datagrids."
   (datagrid--check datagrid)
   (let* ((indices (if cols
-                      (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
-                              cols)
+                      (cl-loop for c in cols
+                               collect (datagrid--resolve-col datagrid c))
                     (number-sequence 0 (1- (datagrid--ncols datagrid)))))
          (kept (cl-loop for (_key . rows)
                         in (datagrid--group-rows datagrid indices)
@@ -358,42 +358,32 @@ one cell. Return a new datagrid with the COLS columns first (one row
 per group, in first-seen order), followed by the reduced columns in
 their original order."
   (datagrid--check datagrid)
-  (let* ((key-indices (mapcar (lambda (c) (datagrid--resolve-col datagrid c))
-                              cols))
-         (n-cols (datagrid--ncols datagrid))
-         (other-indices (cl-loop for i from 0 below n-cols
-                                 unless (memq i key-indices)
-                                 collect i))
-         (src-cols (datagrid-columns datagrid))
-         (group-rows (mapcar #'cdr (datagrid--group-rows datagrid
-                                                         key-indices)))
-         (key-cols
-          (cl-loop for ki in key-indices
-                   for src = (datagrid-pull datagrid ki)
-                   for proto = (aref src-cols (datagrid--col-at datagrid ki))
-                   collect (let ((new (datagrid-column-copy proto)))
-                             (setf (datagrid-column-data new)
-                                   (vconcat
-                                    (mapcar (lambda (rows)
-                                              (aref src (car rows)))
-                                            group-rows)))
-                             new)))
-         (reduced-cols
-          (cl-loop for oi in other-indices
-                   for src = (datagrid-pull datagrid oi)
-                   for proto = (aref src-cols (datagrid--col-at datagrid oi))
-                   collect (let ((new (datagrid-column-copy proto)))
-                             (setf (datagrid-column-data new)
-                                   (vconcat
-                                    (mapcar
-                                     (lambda (rows)
-                                       (funcall fn
-                                                (mapcar (lambda (r)
-                                                          (aref src r))
-                                                        rows)))
-                                     group-rows)))
-                             new))))
-    (datagrid-make :columns (vconcat (append key-cols reduced-cols)))))
+  (let* ((key-indices (cl-loop for c in cols
+                               collect (datagrid--resolve-col datagrid c)))
+         (out-indices (vconcat key-indices
+                               (cl-loop for i below (datagrid--ncols datagrid)
+                                        unless (memq i key-indices)
+                                        collect i)))
+         (groups (vconcat (datagrid--group-rows datagrid key-indices)))
+         (n-groups (length groups))
+         (columns (make-vector (length out-indices) nil)))
+    (dotimes (j (length out-indices))
+      (let* ((i (aref out-indices j))
+             (keyp (memq i key-indices))
+             (src (datagrid-pull datagrid i))
+             (data (make-vector n-groups nil))
+             (new (datagrid-column-copy
+                   (aref (datagrid-columns datagrid)
+                         (datagrid--col-at datagrid i)))))
+        (dotimes (g n-groups)
+          (let ((rows (cdr (aref groups g))))
+            (aset data g (if keyp
+                             (aref src (car rows))
+                           (funcall fn (cl-loop for r in rows
+                                                collect (aref src r)))))))
+        (setf (datagrid-column-data new) data)
+        (aset columns j new)))
+    (datagrid-make :columns columns)))
 
 (defun datagrid-group-modify (datagrid fn &rest key-cols)
   "Group DATAGRID rows by KEY-COLS, apply FN to each group, rbind results.
@@ -409,35 +399,35 @@ Return an empty datagrid when DATAGRID has no rows."
   (datagrid--check datagrid)
   (let* ((key-indices (cl-loop for c in key-cols
                                collect (datagrid--resolve-col datagrid c)))
-         (group-row-lists (mapcar #'cdr (datagrid--group-rows datagrid
-                                                              key-indices))))
-    (if (null group-row-lists)
+         (groups (vconcat (datagrid--group-rows datagrid key-indices)))
+         (n-groups (length groups)))
+    (if (zerop n-groups)
         (datagrid-make :columns (vector))
-      (let* ((results
-              (cl-loop for rows in group-row-lists
-                       for r = (funcall fn (apply #'datagrid-slice datagrid rows))
-                       unless (datagridp r)
-                       do (error "Group function returned %S, not a datagrid" r)
-                       collect r))
-             (proto (car results))
-             (proto-headings (datagrid-get-headings proto))
-             (proto-ncols (datagrid--ncols proto)))
-        (cl-loop for r in (cdr results)
-                 unless (and (= (datagrid--ncols r) proto-ncols)
-                             (equal (datagrid-get-headings r) proto-headings))
-                 do (error "Group results differ in column count or headings"))
-        (let ((out-cols
-               (cl-loop for j from 0 below proto-ncols
-                        for proto-col = (aref (datagrid-columns proto)
-                                              (datagrid--col-at proto j))
-                        collect
-                        (let ((new (datagrid-column-copy proto-col))
-                              (chunks (cl-loop for r in results
-                                               collect (datagrid-pull r j))))
-                          (setf (datagrid-column-data new)
-                                (apply #'vconcat chunks))
-                          new))))
-          (datagrid-make :columns (vconcat out-cols)))))))
+      (let ((results (make-vector n-groups nil)))
+        (dotimes (g n-groups)
+          (let* ((rows (cdr (aref groups g)))
+                 (r (funcall fn (apply #'datagrid-slice datagrid rows))))
+            (unless (datagridp r)
+              (error "Group function returned %S, not a datagrid" r))
+            (aset results g r)))
+        (let* ((proto (aref results 0))
+               (proto-headings (datagrid-get-headings proto))
+               (n-cols (datagrid--ncols proto))
+               (columns (make-vector n-cols nil)))
+          (dotimes (g n-groups)
+            (let ((r (aref results g)))
+              (unless (and (= (datagrid--ncols r) n-cols)
+                           (equal (datagrid-get-headings r) proto-headings))
+                (error "Group results differ in column count or headings"))))
+          (dotimes (j n-cols)
+            (let ((new (datagrid-column-copy
+                        (aref (datagrid-columns proto)
+                              (datagrid--col-at proto j)))))
+              (setf (datagrid-column-data new)
+                    (apply #'vconcat (cl-loop for r across results
+                                              collect (datagrid-pull r j))))
+              (aset columns j new)))
+          (datagrid-make :columns columns))))))
 
 
 ;;;; Statistical functions
@@ -472,8 +462,9 @@ descending. If CODE is non-nil, decode first."
   (let* ((vec (datagrid--pull-decoded datagrid col code))
          (counts (make-hash-table :test #'equal))
          result)
-    (cl-loop for item across vec
-             do (puthash item (1+ (gethash item counts 0)) counts))
+    (dotimes (i (length vec))
+      (let ((item (aref vec i)))
+        (puthash item (1+ (gethash item counts 0)) counts)))
     (maphash (lambda (k v) (push (cons k v) result)) counts)
     (nreverse (seq-sort-by #'cdr #'datagrid-unknown-type-sort result))))
 
@@ -559,7 +550,7 @@ deviation of normally distributed data."
          (median (datagrid-calc-function-wrapper "vmedian" nums)))
     (when median
       (datagrid-calc-function-wrapper
-       "vmedian" (mapcar (lambda (x) (abs (- x median))) nums)))))
+       "vmedian" (cl-loop for x in nums collect (abs (- x median)))))))
 
 
 ;;;; Summary reports

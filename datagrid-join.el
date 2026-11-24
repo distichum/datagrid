@@ -83,7 +83,8 @@ escalate with `_2', `_3', ... after SUFFIX."
 (defun datagrid--join-default-cols (dg2 on2)
   "Return the logical column indices of DG2 except the key column ON2."
   (cl-loop for i from 0 below (datagrid--ncols dg2)
-           unless (= i on2) collect i))
+           unless (= i on2)
+           collect i))
 
 (defun datagrid--join-setup (dg1 dg2 on cols suffix)
   "Resolve the ON, COLS and SUFFIX arguments of a projecting join.
@@ -107,7 +108,8 @@ element a logical dg2 row index or nil. Return a new datagrid
 with DG2's selected columns appended (heading, lom, code
 preserved; headings uniquified using SUFFIX)."
   (let* ((used (cl-loop for h across (datagrid-get-headings dg-base)
-                        when h collect h))
+                        when h
+                        collect h))
          (result dg-base))
     (dolist (idx cols result)
       (let* ((src (aref (datagrid-columns dg2) (datagrid--col-at dg2 idx)))
@@ -134,12 +136,10 @@ ON is the :on argument; KEEP-MATCHED non-nil keeps matched rows
          (on1 (car on))
          (on2 (cdr on))
          (lookup (datagrid--join-build-index (datagrid-pull dg2 on2)))
-         (mask (cl-map 'vector
-                       (lambda (k)
-                         (let ((m (and (not (datagrid--join-empty-p k))
-                                       (gethash k lookup))))
-                           (if keep-matched m (not m))))
-                       (datagrid-pull dg1 on1))))
+         (mask (cl-loop for k across (datagrid-pull dg1 on1)
+                        for m = (and (not (datagrid--join-empty-p k))
+                                     (gethash k lookup))
+                        collect (if keep-matched m (not m)))))
     (datagrid-filter-by-mask dg1 mask)))
 
 ;;;; Public API
@@ -177,9 +177,12 @@ defaulting to every DG2 column except the join key. SUFFIX
 disambiguates colliding headings and defaults to \"_2\"."
   (pcase-let* ((`(,suffix ,cols ,row-map . ,_)
                 (datagrid--join-setup dg1 dg2 on cols suffix))
-               (mask (cl-map 'vector (lambda (i) (if i t nil)) row-map))
+               (mask (cl-map 'vector (lambda (i) (if i t nil))
+                             row-map))
                (dg1-f (datagrid-filter-by-mask dg1 mask))
-               (rm-f (vconcat (cl-loop for i across row-map when i collect i))))
+               (rm-f (vconcat (cl-loop for i across row-map
+                                       when i
+                                       collect i))))
     (datagrid--join-project dg1-f dg2 cols rm-f suffix)))
 
 (cl-defun datagrid-full-join (dg1 dg2 &key on cols suffix)
@@ -211,8 +214,7 @@ disambiguates colliding headings and defaults to \"_2\"."
                (n-extra (length extras)))
     (if (zerop n-extra)
         left
-      (let* ((extras-vec (vconcat extras))
-             (left-cols (datagrid-columns left))
+      (let* ((left-cols (datagrid-columns left))
              (n-dg1 (datagrid--ncols dg1))
              (n-cols (datagrid--ncols left))
              (result (make-vector n-cols nil)))
@@ -222,15 +224,14 @@ disambiguates colliding headings and defaults to \"_2\"."
                  (extension
                   (cond
                    ((= j on1)
-                    (cl-map 'vector (lambda (i) (aref keys2 i)) extras-vec))
+                    (cl-loop for i in extras collect (aref keys2 i)))
                    ((< j n-dg1)
                     (make-vector n-extra nil))
                    (t
                     (let* ((proj-idx (- j n-dg1))
                            (src-idx (nth proj-idx cols))
                            (src-data (datagrid-pull dg2 src-idx)))
-                      (cl-map 'vector (lambda (i) (aref src-data i))
-                              extras-vec)))))
+                      (cl-loop for i in extras collect (aref src-data i))))))
                  (new-col (datagrid-column-copy proto)))
             (setf (datagrid-column-data new-col)
                   (vconcat orig-data extension))
