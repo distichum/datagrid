@@ -286,7 +286,8 @@ as with `datagrid-slice' and `datagrid-filter-by-mask'."
   (datagrid--check datagrid)
   (datagrid--slice-rows datagrid
                         (cl-loop for i from 0 below (datagrid--nrows datagrid)
-                                 unless (memql i indices) collect i)))
+                                 unless (memql i indices)
+                                 collect i)))
 
 (defun datagrid--sort-spec (spec)
   "Normalize a single sort SPEC into a plist.
@@ -326,8 +327,9 @@ DATAGRID."
          (sorted (seq-sort-by #'cdr pred indexed))
          (new-order (make-vector n 0)))
     (cl-loop for pair in sorted
-             for k from 0 do
-             (aset new-order k (datagrid--row-at datagrid (car pair))))
+             for k from 0
+             do (aset new-order k (datagrid--row-at
+                                   datagrid (car pair))))
     (datagrid-make :columns (datagrid-columns datagrid)
                    :row-order new-order
                    :col-order (datagrid-col-order datagrid))))
